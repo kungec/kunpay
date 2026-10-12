@@ -37,7 +37,7 @@ func (s *Server) setSession(w http.ResponseWriter, r *http.Request, userID int64
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   7 * 86400,
-		Secure:   isHTTPS(r),
+		Secure:   isHTTPSRequest(r),
 	})
 }
 
@@ -91,6 +91,12 @@ func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 		if u.Role != "admin" {
 			http.Error(w, "无权访问", http.StatusForbidden)
 			return
+		}
+		if wl := s.DB.MustSetting("admin_ip_whitelist"); wl != "" {
+			if !isAdminIPAllowed(clientIP(r), wl) {
+				http.Error(w, "IP 不在白名单中", http.StatusForbidden)
+				return
+			}
 		}
 		next(w, r)
 	}

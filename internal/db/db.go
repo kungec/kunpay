@@ -223,6 +223,7 @@ var defaultSettings = map[string]string{
 	"alert_email":     "",
 	"device_alert":    "0",
 	"merchant_notice": "",
+	"admin_ip_whitelist": "",
 	"demo_pid":        "1001",
 	"invite_open":     "1",
 	"footer_text":     "© 2026 KunPay. 保留所有权利.",

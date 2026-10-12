@@ -53,9 +53,9 @@ func (s *Server) Routes() http.Handler {
 
 	// 易支付兼容接口(根路径 + /epay/ 别名),带 IP 限频防刷
 	for _, prefix := range []string{"", "/epay/"} {
-		mux.Handle(prefix+"/submit.php", payRateLimitMiddleware(http.HandlerFunc(s.handleEpaySubmit)))
-		mux.Handle(prefix+"/mapi.php", payRateLimitMiddleware(http.HandlerFunc(s.handleEpayMapi)))
-		mux.Handle(prefix+"/api.php", payRateLimitMiddleware(http.HandlerFunc(s.handleEpayApi)))
+		mux.HandleFunc(prefix+"/submit.php", s.handleEpaySubmit)
+		mux.HandleFunc(prefix+"/mapi.php", s.handleEpayMapi)
+		mux.HandleFunc(prefix+"/api.php", s.handleEpayApi)
 	}
 
 	// 收银台
@@ -169,7 +169,7 @@ func (s *Server) Routes() http.Handler {
 		s.handleHome(w, r)
 	})
 
-	return securityHeaders(s.logMiddleware(mux))
+	return securityHeaders(limitBody(payRateLimitWrap(s.logMiddleware(mux))))
 }
 
 func (s *Server) logMiddleware(next http.Handler) http.Handler {

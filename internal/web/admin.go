@@ -771,7 +771,7 @@ func (s *Server) handleAdminSettingsSave(w http.ResponseWriter, r *http.Request)
 	_ = r.ParseForm()
 	keys := []string{"site_name", "site_title", "announcement", "kefu", "fee_rate", "order_timeout",
 		"money_offset", "register_open", "min_settle", "pay_notice", "invite_open", "footer_text", "poll_interval",
-		"site_url", "smtp_host", "smtp_port", "smtp_user", "smtp_pass", "smtp_tls", "smtp_from",
+		"site_url", "smtp_host", "smtp_port", "smtp_user", "smtp_pass", "smtp_tls", "smtp_from", "admin_ip_whitelist",
 		"alert_email", "device_alert", "merchant_notice"}
 	for _, k := range keys {
 		v := strings.TrimSpace(r.FormValue(k))
