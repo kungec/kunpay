@@ -116,6 +116,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /user/debug/notify", s.requireLogin(s.handleUserDebugNotify))
 	mux.HandleFunc("GET /user/orders/export.csv", s.requireLogin(s.handleUserOrdersExport))
 	mux.HandleFunc("GET /user/orders/{id}", s.requireLogin(s.handleUserOrderDetail))
+	mux.HandleFunc("POST /user/paylink", s.requireLogin(s.handleUserPayLink))
+	mux.HandleFunc("POST /user/orders/refund", s.requireLogin(s.requireCSRF(s.handleUserOrderRefund)))
+	mux.HandleFunc("POST /admin/orders/refund", s.requireAdmin(s.requireCSRF(s.handleAdminOrderRefund)))
 	mux.HandleFunc("GET /admin/orders/export.csv", s.requireAdmin(s.handleAdminOrdersExport))
 	mux.HandleFunc("GET /admin/orders/{id}", s.requireAdmin(s.handleAdminOrderDetail))
 

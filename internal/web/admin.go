@@ -1267,14 +1267,14 @@ func csvCell(f string) string {
 // handleAdminChannelStats 渠道成功率统计
 func (s *Server) handleAdminChannelStats(w http.ResponseWriter, r *http.Request) {
 	type chanStat struct {
-		Type     string
-		Name     string
-		Enabled  bool
-		Total    int64
-		Paid     int64
-		Expired  int64
-		Pending  int64
-		Rate     float64 // 成功率%
+		Type    string
+		Name    string
+		Enabled bool
+		Total   int64
+		Paid    int64
+		Expired int64
+		Pending int64
+		Rate    float64 // 成功率%
 	}
 	var stats []chanStat
 	rows, err := s.DB.Query(`SELECT c.type, c.name, c.enabled,
@@ -1291,7 +1291,9 @@ func (s *Server) handleAdminChannelStats(w http.ResponseWriter, r *http.Request)
 			var typ, name string
 			var enabled int
 			if rows.Scan(&typ, &name, &enabled, &cs.Total, &cs.Paid, &cs.Expired, &cs.Pending) == nil {
-				cs.Type = typ; cs.Name = name; cs.Enabled = enabled == 1
+				cs.Type = typ
+				cs.Name = name
+				cs.Enabled = enabled == 1
 				if cs.Total > 0 {
 					cs.Rate = float64(cs.Paid) / float64(cs.Total) * 100
 				}
@@ -1304,4 +1306,31 @@ func (s *Server) handleAdminChannelStats(w http.ResponseWriter, r *http.Request)
 	d["Title"] = "渠道成功率"
 	d["Stats"] = stats
 	s.render(w, "dash_admin_chanstats", http.StatusOK, d)
+}
+
+// handleAdminOrderRefund 管理员处理退款(标记退款+扣商户余额+发通知)
+func (s *Server) handleAdminOrderRefund(w http.ResponseWriter, r *http.Request) {
+	id := atoint64(r.FormValue("id"))
+	o := s.Store.OrderByID(id)
+	if o == nil || (o.Status != 1 && o.Status != 3) {
+		http.Redirect(w, r, "/admin/orders?msg="+urlEscape("订单不存在或未支付"), http.StatusFound)
+		return
+	}
+	refund := o.Money - o.Fee
+	if refund < 0 {
+		refund = 0
+	}
+	_, _ = s.DB.Exec("UPDATE orders SET status=4, buyer=buyer||' [退款]' WHERE id=? AND status IN(1,3)", o.ID)
+	// 扣回商户余额
+	merchant, _ := s.Store.UserByPid(o.Pid)
+	if merchant != nil && refund > 0 {
+		_, _ = s.DB.Exec("UPDATE users SET balance=balance-? WHERE id=? AND balance>=?", refund, merchant.ID, refund)
+		var bal int64
+		s.DB.QueryRow("SELECT balance FROM users WHERE id=?", merchant.ID).Scan(&bal)
+		s.DB.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
+			VALUES(?,?,?,?,?,?,?)`, merchant.ID, "refund", -refund, bal+refund, bal,
+			"订单退款 "+o.TradeNo, model.Now())
+	}
+	s.audit(r, "order.refund", o.TradeNo+" ¥"+service.MoneyStr(refund))
+	http.Redirect(w, r, "/admin/orders?msg="+urlEscape("退款成功,已扣回商户余额 ¥"+service.MoneyStr(refund)), http.StatusFound)
 }

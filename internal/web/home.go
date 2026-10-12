@@ -3,6 +3,7 @@ package web
 import (
 	"html/template"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"kunzhifu/internal/db"
@@ -49,6 +50,11 @@ func (s *Server) handleDocs(w http.ResponseWriter, r *http.Request) {
 	d["Page"] = "doc"
 	d["Title"] = "开发文档"
 	d["DocPage"] = page
+	// 登录用户自动填充 PID/KEY
+	if u := s.currentUser(r); u != nil {
+		d["MyPid"] = strconv.FormatInt(u.Pid, 10)
+		d["MyKey"] = u.Skey
+	}
 	s.render(w, "pub_doc", http.StatusOK, d)
 }
 

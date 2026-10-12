@@ -877,3 +877,68 @@ func (s *Server) handleUserOrderDetail(w http.ResponseWriter, r *http.Request) {
 	d["TypeName"] = typeName(o.Type)
 	s.render(w, "dash_user_orderdetail", http.StatusOK, d)
 }
+
+// ---------- 支付链接生成器 ----------
+
+// handleUserPayLink 创建可分享的收款链接
+func (s *Server) handleUserPayLink(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	_ = r.ParseForm()
+	typ := r.FormValue("type")
+	if !allowTypes[typ] {
+		typ = "alipay"
+	}
+	money := strings.TrimSpace(r.FormValue("money"))
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		name = "商品" + timeFormat(model.Now(), "01021504")
+	}
+	out := map[string]any{}
+	// 使用 API 调试同逻辑创建订单
+	testReq := &service.OrderReq{
+		Type: typ, OutTradeNo: "LINK" + timeFormat(model.Now(), "0102150405") + db.RandDigits(4),
+		NotifyURL: "", Name: name, Money: money, Sitename: u.Username, Device: "mobile",
+	}
+	o, err := s.Store.CreateOrder(u, testReq, clientIP(r))
+	if err != nil {
+		out["code"] = -1
+		out["msg"] = err.Error()
+		writeJSON(w, out)
+		return
+	}
+	out["code"] = 1
+	out["pay_url"] = "/pay/" + o.TradeNo
+	out["trade_no"] = o.TradeNo
+	out["full_url"] = s.absoluteURL(r) + "/pay/" + o.TradeNo
+	out["name"] = name
+	out["money"] = service.MoneyStr(o.PayMoney)
+	writeJSON(w, out)
+}
+
+// handleUserOrderRefund 商户提交退款申请(状态4)
+func (s *Server) handleUserOrderRefund(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	_ = r.ParseForm()
+	orderID := atoint64(r.FormValue("id"))
+	o := s.Store.OrderByID(orderID)
+	if o == nil || o.Pid != u.Pid {
+		http.Redirect(w, r, "/user/orders?err="+urlEscape("订单不存在"), http.StatusFound)
+		return
+	}
+	if o.Status != 1 && o.Status != 3 {
+		http.Redirect(w, r, "/user/orders?err="+urlEscape("仅已支付订单可退款"), http.StatusFound)
+		return
+	}
+	_, _ = s.DB.Exec("UPDATE orders SET status=4, buyer=buyer||' [退款]' WHERE id=? AND status IN(1,3)", o.ID)
+	// 扣回商户余额
+	refund := o.Money - o.Fee
+	if refund > 0 {
+		_, _ = s.DB.Exec("UPDATE users SET balance=balance-? WHERE id=?", refund, u.ID)
+		var bal int64
+		s.DB.QueryRow("SELECT balance FROM users WHERE id=?", u.ID).Scan(&bal)
+		s.DB.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
+			VALUES(?,?,?,?,?,?,?)`, u.ID, "refund", -refund, bal+refund, bal,
+			"订单退款 "+o.TradeNo, model.Now())
+	}
+	http.Redirect(w, r, "/user/orders?msg="+urlEscape("订单已退款,余额已扣减"), http.StatusFound)
+}

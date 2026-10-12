@@ -71,6 +71,8 @@ func statusName(s any) string {
 		return "已过期"
 	case 3:
 		return "手动补单"
+	case 4:
+		return "已退款"
 	}
 	return "未知"
 }

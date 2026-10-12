@@ -3,7 +3,7 @@
 {{if .FlashErr}}<div class="alert err">{{.FlashErr}}</div>{{end}}
 {{end}}
 
-{{define "badge"}}{{if eq . 1}}<span class="badge badge-green">支付成功</span>{{else if eq . 0}}<span class="badge badge-blue">待支付</span>{{else if eq . 2}}<span class="badge badge-gray">已过期</span>{{else if eq . 3}}<span class="badge badge-orange">手动补单</span>{{end}}{{end}}
+{{define "badge"}}{{if eq . 1}}<span class="badge badge-green">支付成功</span>{{else if eq . 0}}<span class="badge badge-blue">待支付</span>{{else if eq . 2}}<span class="badge badge-gray">已过期</span>{{else if eq . 3}}<span class="badge badge-orange">手动补单</span>{{else if eq . 4}}<span class="badge badge-red">已退款</span>{{end}}{{end}}
 
 {{define "pager"}}
 {{if gt .TotalPages 1}}

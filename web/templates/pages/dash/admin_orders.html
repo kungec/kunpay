@@ -54,6 +54,13 @@
             <input type="hidden" name="id" value="{{.ID}}">
             <button class="btn btn-sm btn-ghost" type="submit" title="向商户notify_url重发一次异步通知">重发通知</button>
           </form>
+          {{if eq .Status 1}}
+          <form method="post" action="/admin/orders/refund" data-confirm="确认退款?将扣回商户余额并发送通知。" style="display:inline">
+            <input type="hidden" name="_csrf" value="{{$.CSRF}}">
+            <input type="hidden" name="id" value="{{.ID}}">
+            <button class="btn btn-sm btn-danger" type="submit">退款</button>
+          </form>
+          {{end}}
           {{end}}
         </td>
       </tr>
