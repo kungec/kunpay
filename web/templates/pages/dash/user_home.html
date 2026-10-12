@@ -1,5 +1,38 @@
 {{define "content"}}
 {{template "flash" .}}
+{{if index .Settings "merchant_notice"}}<div class="alert info">📢 {{index .Settings "merchant_notice"}}</div>{{end}}
+<script>
+// 商户仪表盘到账实时提醒
+var _mchLastId = 0;
+(function initLastId() {
+  fetch('/api/poll?after=999999999999').then(r=>r.json()).then(j=>{
+    if(j.code===0 && j.max_id) _mchLastId = parseInt(j.max_id);
+  });
+})();
+setInterval(function() {
+  fetch('/api/poll?after=' + _mchLastId)
+    .then(r=>r.json())
+    .then(function(j) {
+      if (j.code === 1 && j.id > _mchLastId) {
+        _mchLastId = j.id;
+        if (window.toast) toast('💰 新订单到账 ¥' + j.money);
+        try {
+          var ctx = new (window.AudioContext||window.webkitAudioContext)();
+          var osc = ctx.createOscillator();
+          var gain = ctx.createGain();
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.frequency.value = 880; osc.type = 'sine';
+          gain.gain.setValueAtTime(0.3, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.8);
+          osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.8);
+        } catch(e) {}
+        // 刷新页面统计
+        if (location.pathname === '/user') setTimeout(function(){ location.reload(); }, 1500);
+      }
+    }).catch(function(){});
+}, 5000);
+</script>
+<div class="stat-cards s3">
 {{if .Notice}}<div class="alert info">📢 {{.Notice}}</div>{{end}}
 <div class="stat-cards s3">
   <div class="scard">

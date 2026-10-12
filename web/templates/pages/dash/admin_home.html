@@ -63,6 +63,33 @@
   </div>
 </div>
 <script>
+// 到账实时语音+提醒
+var _lastOrderId = 0;
+(function initLastId() {
+  fetch('/api/poll?after=999999999999').then(r=>r.json()).then(j=>{
+    if(j.code===0 && j.max_id) _lastOrderId = parseInt(j.max_id);
+  });
+})();
+setInterval(function() {
+  fetch('/api/poll?after=' + _lastOrderId)
+    .then(r=>r.json())
+    .then(function(j) {
+      if (j.code === 1 && j.id > _lastOrderId) {
+        _lastOrderId = j.id;
+        if (window.toast) toast('💰 新订单到账 ¥' + j.money + ' (' + j.trade_no + ')');
+        try {
+          var ctx = new (window.AudioContext||window.webkitAudioContext)();
+          var osc = ctx.createOscillator();
+          var gain = ctx.createGain();
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.frequency.value = 880; osc.type = 'sine';
+          gain.gain.setValueAtTime(0.3, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.8);
+          osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.8);
+        } catch(e) {}
+      }
+    }).catch(function(){});
+}, 5000);
 fetch('/admin/todo.json').then(function(r){return r.json()}).then(function(j){
   var box = document.getElementById('todoBox');
   if (!j) { box.textContent = '暂无待办'; return; }

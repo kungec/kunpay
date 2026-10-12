@@ -920,6 +920,36 @@ func (s *Server) handleAdminOrderNotify(w http.ResponseWriter, r *http.Request) 
 	http.Redirect(w, r, "/admin/orders?msg="+urlEscape("已重新发起异步通知"), http.StatusFound)
 }
 
+// lastOrderID 跟踪最新订单 ID(用于到账实时推送)
+// handleOrderPoll 到账实时轮询: 管理后台/商户仪表盘每 5 秒检查一次新支付订单
+// 参数 after=上次检查的最大订单ID,返回比它更新的已完成订单
+func (s *Server) handleOrderPoll(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	if u == nil {
+		writeJSON(w, map[string]any{"code": -1})
+		return
+	}
+	after := atoint64(r.FormValue("after"))
+	var pidFilter string
+	if u.Role != "admin" {
+		pidFilter = " AND pid=" + strconv.FormatInt(u.Pid, 10)
+	}
+	var id, money int64
+	var tradeNo, buyer string
+	err := s.DB.QueryRow(`SELECT id,trade_no,COALESCE(buyer,''),money FROM orders
+		WHERE status IN(1,3)`+pidFilter+` AND id>? ORDER BY id DESC LIMIT 1`, after).
+		Scan(&id, &tradeNo, &buyer, &money)
+	out := map[string]any{"code": 0, "max_id": after}
+	if err == nil {
+		out["code"] = 1
+		out["id"] = id
+		out["trade_no"] = tradeNo
+		out["money"] = service.MoneyStr(money)
+		out["buyer"] = buyer
+	}
+	writeJSON(w, out)
+}
+
 func (s *Server) handleAdminAudit(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.DB.Query(`SELECT id,admin_id,admin,action,detail,ip,created_at FROM audit_logs ORDER BY id DESC LIMIT 200`)
 	var logs []map[string]any

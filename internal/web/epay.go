@@ -294,6 +294,20 @@ func (s *Server) handleEpayApi(w http.ResponseWriter, r *http.Request) {
 		out["code"] = 1
 		out["msg"] = "查询订单列表成功！"
 		out["data"] = list
+	case "channels": // 查询可用渠道状态
+		chs, _ := s.Store.AllChannels()
+		chList := []map[string]any{}
+		for _, ch := range chs {
+			if ch.Enabled == 1 {
+				chList = append(chList, map[string]any{
+					"type": ch.Type, "name": ch.Name,
+					"min_money": service.MoneyStr(ch.MinMoney),
+					"max_money": service.MoneyStr(ch.MaxMoney),
+				})
+			}
+		}
+		out["code"] = 1
+		out["channels"] = chList
 	default:
 		out["code"] = -1
 		out["msg"] = "不支持的 act"

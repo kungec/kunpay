@@ -11,6 +11,7 @@
     <a href="/doc/api" class="{{if eq .DocPage "api"}}on{{end}}">[API] 查询商户信息</a>
     <a href="/doc/order" class="{{if eq .DocPage "order"}}on{{end}}">[API] 查询单个订单</a>
     <a href="/doc/orders" class="{{if eq .DocPage "orders"}}on{{end}}">[API] 批量查询订单</a>
+    <a href="/doc/channels" class="{{if eq .DocPage "channels"}}on{{end}}">[API] 查询渠道状态</a>
     <div class="grp">监控对接</div>
     <a href="/doc/monitor" class="{{if eq .DocPage "monitor"}}on{{end}}">监控APP对接</a>
   </aside>
@@ -232,6 +233,16 @@ header('Location: https://pay.example.com/submit.php?' . http_build_query($param
       <tr><td>订单列表</td><td><code>data</code></td><td>Array</td><td>字段同「查询单个订单」</td></tr>
     </table>
 
+    {{else if eq .DocPage "channels"}}
+    <h1>[API] 查询渠道状态</h1>
+    <p>URL地址:<span class="url-chip">/api.php?act=channels&amp;pid={商户ID}&amp;key={商户密钥}</span></p>
+    <p>返回当前平台开放的支付渠道列表(仅启用中的渠道)。</p>
+    <h3>返回结果</h3>
+    <table>
+      <tr><th>字段名</th><th>变量名</th><th>类型</th><th>描述</th></tr>
+      <tr><td>返回状态码</td><td><code>code</code></td><td>Int</td><td>1为成功</td></tr>
+      <tr><td>渠道列表</td><td><code>channels</code></td><td>Array</td><td>每项含 type/name/min_money/max_money</td></tr>
+    </table>
     {{else if eq .DocPage "monitor"}}
     <h1>监控APP对接</h1>
     <p>本平台通过「监控设备」接收收款到账通知。管理员在后台「监控设备」中添加设备获得 Token 后,在监控APP中配置即可。</p>

@@ -6,6 +6,7 @@
       <span class="tag">✦ 企业级免签约支付平台</span>
       <h1>专业可靠的<br><span class="hl">码支付解决方案</span></h1>
       <p class="desc">为企业和个人开发者提供安全、高效、便捷的免签约支付接入服务。无需复杂资质,快速集成,7×24 小时自动到账监控。</p>
+      {{if index .Settings "fee_rate"}}<p style="margin-top:10px"><span style="display:inline-flex;align-items:center;gap:6px;background:rgba(46,99,246,.08);border:1px solid #d9e4ff;border-radius:16px;padding:4px 14px;font-size:13px;color:var(--primary)">💰 全局费率仅 <b>{{index .Settings "fee_rate"}}%</b> · 行业最低</span></p>{{end}}
       <div class="feats">
         <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>银行级安全</span>
         <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>秒级到账</span>

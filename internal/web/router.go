@@ -101,6 +101,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /admin/logo/clear", s.requireAdmin(s.requireCSRF(s.handleAdminLogoClear)))
 	mux.HandleFunc("GET /admin/paylogs", s.requireAdmin(s.handleAdminPayLogs))
 	mux.HandleFunc("GET /admin/audit", s.requireAdmin(s.handleAdminAudit))
+	mux.HandleFunc("GET /api/poll", s.requireLogin(s.handleOrderPoll))
 	mux.HandleFunc("GET /admin/cleanup", s.requireAdmin(s.handleAdminCleanup))
 	mux.HandleFunc("POST /admin/cleanup/run", s.requireAdmin(s.requireCSRF(s.handleAdminCleanupRun)))
 	mux.HandleFunc("POST /admin/paylogs/match", s.requireAdmin(s.requireCSRF(s.handleAdminPayLogMatch)))
