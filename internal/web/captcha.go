@@ -54,7 +54,7 @@ func newCaptcha() (string, []byte) {
 	}
 	id := dbRandKey6()
 	code := randCaptchaCode(4)
-	captchaStore[id] = captchaEntry{code: code, exp: now.Add(5 * time.Minute)}
+	captchaStore[id] = captchaEntry{code: code, exp: now.Add(10 * time.Minute)}
 	captchaMu.Unlock()
 	png, err := drawCaptchaPNG(code)
 	if err != nil {
