@@ -6,7 +6,7 @@
   </div>
   <div class="table-wrap">
     <table class="tbl">
-      <tr><th>渠道</th><th>状态</th><th class="money">总订单</th><th class="money">已支付</th><th class="money">已过期</th><th class="money">待支付</th><th style="width:200px">成功率</th></tr>
+      <tr><th>渠道</th><th>状态</th><th class="money">总订单</th><th class="money">已支付</th><th class="money">已过期</th><th class="money">待支付</th><th>最近成功</th><th style="width:200px">成功率</th></tr>
       {{if .Stats}}
       {{range .Stats}}
       <tr>
@@ -16,6 +16,7 @@
         <td class="money" style="color:var(--success)">{{.Paid}}</td>
         <td class="money muted">{{.Expired}}</td>
         <td class="money">{{.Pending}}</td>
+        <td class="muted" style="font-size:12px">{{if gt .LastSuccess 0}}{{fdate .LastSuccess}}{{else}}—{{end}}</td>
         <td>
           {{if gt .Total 0}}
           <div style="display:flex;align-items:center;gap:8px">

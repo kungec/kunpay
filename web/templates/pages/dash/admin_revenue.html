@@ -1,0 +1,30 @@
+{{define "content"}}
+<div class="stat-cards s3">
+  <div class="scard">
+    <div class="ic b1"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+    <div><div class="l">今日手续费收入</div><div class="v" style="color:var(--success)">¥{{yuan .TodayFee}}</div><div class="d">{{.TodayOrders}} 笔订单</div></div>
+  </div>
+  <div class="scard">
+    <div class="ic b2"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+    <div><div class="l">本月手续费收入</div><div class="v" style="color:var(--success)">¥{{yuan .MonthFee}}</div><div class="d">{{.MonthOrders}} 笔成功订单</div></div>
+  </div>
+  <div class="scard">
+    <div class="ic b4"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></div>
+    <div><div class="l">累计手续费收入</div><div class="v" style="color:var(--warning)">¥{{yuan .TotalFee}}</div><div class="d">全平台历史总计</div></div>
+  </div>
+</div>
+<div class="card mt">
+  <div class="card-title">近 30 日收入趋势</div>
+  <div class="table-wrap">
+    <table class="tbl">
+      <tr><th>日期</th><th class="money">手续费收入</th></tr>
+      {{range .Revenue}}
+      <tr>
+        <td>{{.Date}}</td>
+        <td class="money">{{if gt .Fee 0}}<span style="color:var(--success)">¥{{yuan .Fee}}</span>{{else}}<span class="muted">—</span>{{end}}</td>
+      </tr>
+      {{end}}
+    </table>
+  </div>
+</div>
+{{end}}

@@ -1265,16 +1265,18 @@ func csvCell(f string) string {
 }
 
 // handleAdminChannelStats 渠道成功率统计
+// handleAdminChannelStats 渠道成功率统计
 func (s *Server) handleAdminChannelStats(w http.ResponseWriter, r *http.Request) {
 	type chanStat struct {
-		Type    string
-		Name    string
-		Enabled bool
-		Total   int64
-		Paid    int64
-		Expired int64
-		Pending int64
-		Rate    float64 // 成功率%
+		Type        string
+		Name        string
+		Enabled     bool
+		Total       int64
+		Paid        int64
+		Expired     int64
+		Pending     int64
+		Rate        float64 // 成功率%
+		LastSuccess int64
 	}
 	var stats []chanStat
 	rows, err := s.DB.Query(`SELECT c.type, c.name, c.enabled,
@@ -1297,6 +1299,7 @@ func (s *Server) handleAdminChannelStats(w http.ResponseWriter, r *http.Request)
 				if cs.Total > 0 {
 					cs.Rate = float64(cs.Paid) / float64(cs.Total) * 100
 				}
+				s.DB.QueryRow("SELECT COALESCE(MAX(endtime),0) FROM orders WHERE type=? AND status IN(1,3)", typ).Scan(&cs.LastSuccess)
 				stats = append(stats, cs)
 			}
 		}
@@ -1308,7 +1311,7 @@ func (s *Server) handleAdminChannelStats(w http.ResponseWriter, r *http.Request)
 	s.render(w, "dash_admin_chanstats", http.StatusOK, d)
 }
 
-// handleAdminOrderRefund 管理员处理退款(标记退款+扣商户余额+发通知)
+// handleAdminOrderRefund 管理员处理退款(标记退款+扣商户余额+审计)
 func (s *Server) handleAdminOrderRefund(w http.ResponseWriter, r *http.Request) {
 	id := atoint64(r.FormValue("id"))
 	o := s.Store.OrderByID(id)
@@ -1320,8 +1323,7 @@ func (s *Server) handleAdminOrderRefund(w http.ResponseWriter, r *http.Request) 
 	if refund < 0 {
 		refund = 0
 	}
-	_, _ = s.DB.Exec("UPDATE orders SET status=4, buyer=buyer||' [退款]' WHERE id=? AND status IN(1,3)", o.ID)
-	// 扣回商户余额
+	_, _ = s.DB.Exec("UPDATE orders SET status=4 WHERE id=? AND status IN(1,3)", o.ID)
 	merchant, _ := s.Store.UserByPid(o.Pid)
 	if merchant != nil && refund > 0 {
 		_, _ = s.DB.Exec("UPDATE users SET balance=balance-? WHERE id=? AND balance>=?", refund, merchant.ID, refund)
@@ -1333,4 +1335,40 @@ func (s *Server) handleAdminOrderRefund(w http.ResponseWriter, r *http.Request) 
 	}
 	s.audit(r, "order.refund", o.TradeNo+" ¥"+service.MoneyStr(refund))
 	http.Redirect(w, r, "/admin/orders?msg="+urlEscape("退款成功,已扣回商户余额 ¥"+service.MoneyStr(refund)), http.StatusFound)
+}
+
+// handleAdminRevenue 平台收入统计面板
+func (s *Server) handleAdminRevenue(w http.ResponseWriter, r *http.Request) {
+	dayStart := todayStart()
+	monthStart := time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0, 0, 0, time.Local).Unix()
+	var todayFee, monthFee, totalFee, todayOrders, monthOrders int64
+	s.DB.QueryRow("SELECT COALESCE(SUM(fee),0) FROM orders WHERE status IN(1,3) AND addtime>=?", dayStart).Scan(&todayFee)
+	s.DB.QueryRow("SELECT COALESCE(SUM(fee),0) FROM orders WHERE status IN(1,3) AND addtime>=?", monthStart).Scan(&monthFee)
+	s.DB.QueryRow("SELECT COALESCE(SUM(fee),0) FROM orders WHERE status IN(1,3)").Scan(&totalFee)
+	s.DB.QueryRow("SELECT COUNT(*) FROM orders WHERE status IN(1,3) AND addtime>=?", dayStart).Scan(&todayOrders)
+	s.DB.QueryRow("SELECT COUNT(*) FROM orders WHERE status IN(1,3) AND addtime>=?", monthStart).Scan(&monthOrders)
+
+	// 近30日收入趋势
+	type revDay struct {
+		Date string
+		Fee  int64
+	}
+	var rev []revDay
+	for i := 29; i >= 0; i-- {
+		start := dayStart - int64(i)*86400
+		var f int64
+		s.DB.QueryRow("SELECT COALESCE(SUM(fee),0) FROM orders WHERE status IN(1,3) AND addtime>=? AND addtime<?", start, start+86400).Scan(&f)
+		rev = append(rev, revDay{Date: timeFormat(start, "01-02"), Fee: f})
+	}
+
+	d := s.pageData(r)
+	d["Page"] = "admin_revenue"
+	d["Title"] = "平台收入"
+	d["TodayFee"] = todayFee
+	d["MonthFee"] = monthFee
+	d["TotalFee"] = totalFee
+	d["TodayOrders"] = todayOrders
+	d["MonthOrders"] = monthOrders
+	d["Revenue"] = rev
+	s.render(w, "dash_admin_revenue", http.StatusOK, d)
 }

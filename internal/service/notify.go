@@ -2,6 +2,7 @@ package service
 
 import (
 	crand "crypto/rand"
+	"fmt"
 	"log"
 	"math/big"
 	"net/http"
@@ -144,6 +145,7 @@ func (s *Store) RunBackground() {
 			s.retryNotifies()
 			s.cleanSessions()
 			s.checkDeviceAlerts()
+			s.checkLowBalance()
 			if time.Since(lastMaint) >= 6*time.Hour {
 				lastMaint = time.Now()
 				s.cleanOldLogs(90)
@@ -154,6 +156,35 @@ func (s *Store) RunBackground() {
 
 // AlertFn 由上层注入(发送告警邮件),为空时仅记录日志
 var AlertFn func(msg string)
+
+// checkLowBalance 商户余额低于阈值时邮件提醒(每商户每次离线周期只发一次)
+var lowBalanceAlerted sync.Map
+
+func (s *Store) checkLowBalance() {
+	var uid, balance int64
+	var username, email string
+	rows, err := s.DB.Query(`SELECT id,username,COALESCE(email,''),balance FROM users
+		WHERE role='user' AND status=1 AND balance < 1000 AND balance > 0 AND email != ''`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		if rows.Scan(&uid, &username, &email, &balance) == nil {
+			if balance < 1000 { // < ¥10
+				key := fmt.Sprintf("lowbal_%d", uid)
+				if _, ok := lowBalanceAlerted.Load(key); !ok {
+					lowBalanceAlerted.Store(key, time.Now())
+					if AlertFn != nil {
+						AlertFn(fmt.Sprintf("商户 %s 余额不足 ¥10.00,请及时充值。", username))
+					}
+				}
+			} else {
+				lowBalanceAlerted.Delete(fmt.Sprintf("lowbal_%d", uid))
+			}
+		}
+	}
+}
 
 // checkDeviceAlerts 监控设备离线超过 5 分钟时告警一次,恢复在线自动解除
 func (s *Store) checkDeviceAlerts() {

@@ -1,9 +1,11 @@
 package web
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	webfs "kunzhifu/web"
 )
@@ -19,6 +21,21 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /demo/create", s.handleDemoCreate)
 	mux.HandleFunc("GET /demo/done", s.handleDemoDone)
 	mux.HandleFunc("GET /check", s.handleOrderCheckPage)
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		var dbOK int
+		s.DB.QueryRow("SELECT 1").Scan(&dbOK)
+		st := "ok"
+		code := 200
+		if dbOK != 1 {
+			st = "db_error"
+			code = 503
+		}
+		w.WriteHeader(code)
+		json.NewEncoder(w).Encode(map[string]any{
+			"status": st, "time": time.Now().Format(time.RFC3339),
+		})
+	})
 	mux.HandleFunc("GET /receipt", s.handleOrderReceipt)
 
 	// 认证
@@ -105,6 +122,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/poll", s.requireLogin(s.handleOrderPoll))
 	mux.HandleFunc("GET /admin/cleanup", s.requireAdmin(s.handleAdminCleanup))
 	mux.HandleFunc("GET /admin/channelstats", s.requireAdmin(s.handleAdminChannelStats))
+	mux.HandleFunc("GET /admin/revenue", s.requireAdmin(s.handleAdminRevenue))
 	mux.HandleFunc("POST /admin/cleanup/run", s.requireAdmin(s.requireCSRF(s.handleAdminCleanupRun)))
 	mux.HandleFunc("POST /admin/paylogs/match", s.requireAdmin(s.requireCSRF(s.handleAdminPayLogMatch)))
 	mux.HandleFunc("POST /admin/orders/notify", s.requireAdmin(s.requireCSRF(s.handleAdminOrderNotify)))
