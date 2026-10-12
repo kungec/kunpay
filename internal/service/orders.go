@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -151,11 +153,14 @@ func (s *Store) CreateOrder(u *model.User, req *OrderReq, clientIP string) (*mod
 	timeoutMin := atoiDefault(s.DB.MustSetting("order_timeout"), 5)
 	offsetOn := s.DB.MustSetting("money_offset") == "1"
 
-	// 回调地址仅允许 http/https(防非HTTP协议SSRF)
+	// 回调地址仅允许 http/https(防非HTTP协议SSRF),并阻断内网/回环地址
 	for _, cbu := range []string{req.NotifyURL, req.ReturnURL} {
 		lu := strings.ToLower(cbu)
 		if cbu != "" && !strings.HasPrefix(lu, "http://") && !strings.HasPrefix(lu, "https://") {
 			return nil, errors.New("通知地址仅支持 http/https 协议")
+		}
+		if cbu != "" && isInternalURL(cbu) {
+			return nil, errors.New("通知地址不允许指向内网地址")
 		}
 	}
 
@@ -466,4 +471,37 @@ func atofDefault(s string, def float64) float64 {
 		return def
 	}
 	return v
+}
+
+// isInternalURL 检查URL是否指向内网/回环/链路本地地址(SSRF防护)
+// 允许 127.0.0.1 和 10.0.2.2(Android模拟器宿主)用于本地开发/测试
+func isInternalURL(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return true
+	}
+	host := u.Hostname()
+	if host == "" {
+		return true
+	}
+	// 本地开发豁免
+	if host == "127.0.0.1" || host == "localhost" || host == "10.0.2.2" {
+		return false
+	}
+	// 检查私网IP段
+	ip := net.ParseIP(host)
+	if ip != nil {
+		return ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()
+	}
+	// 域名解析后检查IP
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return false // 无法解析,放行(可能是外网域名)
+	}
+	for _, resolved := range ips {
+		if resolved.IsPrivate() || resolved.IsLoopback() || resolved.IsLinkLocalUnicast() {
+			return true
+		}
+	}
+	return false
 }
