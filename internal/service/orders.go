@@ -187,6 +187,15 @@ func (s *Store) CreateOrder(u *model.User, req *OrderReq, clientIP string) (*mod
 		o.TradeNo, o.OutTradeNo, o.Pid, o.Type, o.Name, o.Money, o.PayMoney, o.Param,
 		o.NotifyURL, o.ReturnURL, o.Sitename, o.Device, o.ChannelID, o.Addtime, o.ExpireAt, o.ClientIP)
 	if err != nil {
+		// 并发竞态: UNIQUE(pid,out_trade_no) 冲突时回落到复用已有订单
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			if existing := s.OrderByOutTradeNo(u.Pid, outTradeNo); existing != nil {
+				if existing.Status == 0 && existing.ExpireAt > model.Now() {
+					return existing, nil
+				}
+				return nil, ErrOrderPaid
+			}
+		}
 		return nil, err
 	}
 	o.ID, _ = res.LastInsertId()
