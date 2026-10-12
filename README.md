@@ -11,6 +11,16 @@
 
 > ⚠️ **免责声明**:本项目仅供学习研究。支付业务受严格监管,请勿用于违法违规场景,正式商用请自行评估合规风险并取得相关资质。详见 [LICENSE](LICENSE) 附加条款。
 
+## ⬇ 快速下载
+
+| 下载 | 说明 |
+|---|---|
+| [**📱 安卓监控APP (APK)**](https://github.com/kungec/kunpay/releases/download/v1.0.0/KunPayMonitor.apk) | 自动监听微信/支付宝/QQ收款通知,安装即用 |
+| [**💻 Windows 监控助手**](https://github.com/kungec/kunpay/releases/download/v1.0.0/KunPayMonitor_win64.zip) | 心跳保活 + 手动上报控制台 |
+| **🖥 平台主程序** | [Linux](https://github.com/kungec/kunpay/releases/download/v1.0.0/kunpay_linux_amd64.tar.gz) · [Windows](https://github.com/kungec/kunpay/releases/download/v1.0.0/kunpay_windows_amd64.zip) · [macOS](https://github.com/kungec/kunpay/releases/download/v1.0.0/kunpay_darwin_arm64.tar.gz) |
+
+> 更多版本与源码见 [Releases](https://github.com/kungec/kunpay/releases) 页面。
+
 ## 云端挂机
 
 监控不依赖家里开机:把安卓监控APP跑在**云手机**上实现 7×24 自动监听,Windows/macOS 监控助手注册为系统服务跑在云服务器做心跳保活;平台内置**主备设备自动接管**——主设备离线 5 分钟,备份设备自动接管匹配,双保险不掉单。
