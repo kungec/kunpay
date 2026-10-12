@@ -151,6 +151,14 @@ func (s *Store) CreateOrder(u *model.User, req *OrderReq, clientIP string) (*mod
 	timeoutMin := atoiDefault(s.DB.MustSetting("order_timeout"), 5)
 	offsetOn := s.DB.MustSetting("money_offset") == "1"
 
+	// 回调地址仅允许 http/https(防非HTTP协议SSRF)
+	for _, cbu := range []string{req.NotifyURL, req.ReturnURL} {
+		lu := strings.ToLower(cbu)
+		if cbu != "" && !strings.HasPrefix(lu, "http://") && !strings.HasPrefix(lu, "https://") {
+			return nil, errors.New("通知地址仅支持 http/https 协议")
+		}
+	}
+
 	now := model.Now()
 	o := &model.Order{
 		TradeNo:    genTradeNo(),

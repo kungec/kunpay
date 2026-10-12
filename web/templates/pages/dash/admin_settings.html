@@ -109,6 +109,16 @@
       <input type="hidden" name="_csrf" value="{{.CSRF}}">
       <div class="form-row">
         <div class="form-item">
+          <label>站点对外地址(用于邮件中的链接)</label>
+          <input class="input" type="text" name="site_url" value="{{index .S "site_url"}}" placeholder="https://pay.example.com">
+        </div>
+        <div class="form-item" style="max-width:230px">
+          <label>&nbsp;</label>
+          <div class="muted" style="font-size:12px">找回密码等邮件链接将使用此地址,防止Host注入</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
           <label>SMTP 服务器</label>
           <input class="input" type="text" name="smtp_host" value="{{index .S "smtp_host"}}" placeholder="smtp.qq.com">
         </div>

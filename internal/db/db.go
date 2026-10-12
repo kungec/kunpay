@@ -213,6 +213,7 @@ var defaultSettings = map[string]string{
 	"auto_settle":     "0",
 	"pay_notice":      "扫码后请输入上方金额付款,付款完成后本页面会自动跳转。",
 	"poll_interval":   "3",
+	"site_url":        "",
 	"smtp_host":       "",
 	"smtp_port":       "465",
 	"smtp_user":       "",

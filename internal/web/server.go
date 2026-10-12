@@ -327,6 +327,14 @@ func baseName(p string) string {
 	return p
 }
 
+// baseURL 站点对外地址: 优先取系统设置 site_url(防 Host 头注入),未配置回落请求推断
+func (s *Server) baseURL(r *http.Request) string {
+	if u := strings.TrimRight(s.DB.MustSetting("site_url"), "/"); u != "" {
+		return u
+	}
+	return s.absoluteURL(r)
+}
+
 // InjectAlert 将设备离线告警接入邮件通道(按设置开关与告警邮箱)
 func (s *Server) InjectAlert() {
 	service.AlertFn = func(msg string) {

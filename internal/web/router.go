@@ -120,10 +120,17 @@ func (s *Server) Routes() http.Handler {
 		http.Redirect(w, r, "/static/img/favicon.svg", http.StatusFound)
 	})
 
-	// 运行时上传目录(收款码)
+	// 运行时上传目录(收款码): 仅允许访问具体文件,禁用目录列表
 	if s.DataDir != "" {
 		fs := http.FileServer(http.Dir(s.DataDir))
-		mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", fs))
+		mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			p := r.URL.Path
+			if p == "" || p == "/" || strings.HasSuffix(p, "/") {
+				http.NotFound(w, r) // 禁用目录列表
+				return
+			}
+			fs.ServeHTTP(w, r)
+		})))
 	}
 
 	// 兜底 404

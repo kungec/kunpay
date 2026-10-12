@@ -114,7 +114,7 @@ func (a *App) saveConfig(path string) {
 // ---------- 协议 ----------
 
 func (a *App) doHeartbeat() (bool, string) {
-	cfg := a.snapshot().cfg
+	cfg := a.snapshotCfg()
 	if cfg.Server == "" || cfg.Token == "" {
 		return false, "请先配置平台地址与设备Token"
 	}
@@ -139,7 +139,7 @@ func (a *App) doHeartbeat() (bool, string) {
 }
 
 func (a *App) doPush(typ, money, content string) (bool, string) {
-	cfg := a.snapshot().cfg
+	cfg := a.snapshotCfg()
 	if cfg.Server == "" || cfg.Token == "" {
 		return false, "请先配置平台地址与设备Token"
 	}
@@ -176,10 +176,10 @@ func (a *App) heartbeatLoop() {
 
 // ---------- HTTP ----------
 
-func (a *App) snapshot() App {
+func (a *App) snapshotCfg() Config {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return *a
+	return a.cfg
 }
 
 func (a *App) addLog(e LogEntry) {
@@ -206,21 +206,27 @@ func (a *App) handleConsole(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleStatus(w http.ResponseWriter, r *http.Request) {
-	s := a.snapshot()
+	a.mu.Lock()
+	cfg := a.cfg
+	logs := a.logs
+	pushCount := a.pushCount
+	hbOK, hbErr, hbLast := a.hbOK, a.hbErr, a.hbLast
+	startAt := a.startAt
+	a.mu.Unlock()
 	hostname, _ := os.Hostname()
 	writeJSON(w, map[string]any{
-		"server": s.cfg.Server, "token_set": s.cfg.Token != "",
-		"token_mask": maskToken(s.cfg.Token),
-		"hb_ok":      s.hbOK, "hb_err": s.hbErr,
+		"server": cfg.Server, "token_set": cfg.Token != "",
+		"token_mask": maskToken(cfg.Token),
+		"hb_ok":      hbOK, "hb_err": hbErr,
 		"hb_last": func() string {
-			if s.hbLast.IsZero() {
+			if hbLast.IsZero() {
 				return ""
 			}
-			return s.hbLast.Format("15:04:05")
+			return hbLast.Format("15:04:05")
 		}(),
-		"logs": s.logs, "push_count": s.pushCount,
+		"logs": logs, "push_count": pushCount,
 		"device": hostname, "os": runtime.GOOS + "/" + runtime.GOARCH,
-		"uptime_min": int(time.Since(s.startAt).Minutes()),
+		"uptime_min": int(time.Since(startAt).Minutes()),
 	})
 }
 

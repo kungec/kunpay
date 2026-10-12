@@ -569,7 +569,7 @@ func (s *Server) handleUserReportExport(w http.ResponseWriter, r *http.Request) 
 			if i > 0 {
 				bw.WriteString(",")
 			}
-			bw.WriteString(`"` + strings.ReplaceAll(f, `"`, `""`) + `"`)
+			bw.WriteString(csvCell(f))
 		}
 		bw.WriteString("\n")
 	}
@@ -692,7 +692,7 @@ func (s *Server) handleUserSettleExport(w http.ResponseWriter, r *http.Request) 
 			if i > 0 {
 				bw.WriteString(",")
 			}
-			bw.WriteString(`"` + strings.ReplaceAll(f, `"`, `""`) + `"`)
+			bw.WriteString(csvCell(f))
 		}
 		bw.WriteString("\n")
 	}
@@ -718,6 +718,11 @@ func (s *Server) handleUserAvatarUpload(w http.ResponseWriter, r *http.Request) 
 		http.Redirect(w, r, "/user/settings?err="+urlEscape("仅支持 png/jpg/gif/webp 图片"), http.StatusFound)
 		return
 	}
+	if !validImageMagic(file, ext) {
+		http.Redirect(w, r, "/user/settings?err="+urlEscape("图片内容与格式不符"), http.StatusFound)
+		return
+	}
+	_, _ = file.Seek(0, 0)
 	// 清理旧头像文件
 	if old := u.Avatar; strings.HasPrefix(old, "/uploads/") {
 		_ = os.Remove(filepath.Join(s.DataDir, filepath.Base(old)))

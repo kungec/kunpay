@@ -21,7 +21,7 @@ var (
 	reEmail    = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
 )
 
-func (s *Server) setSession(w http.ResponseWriter, userID int64) {
+func (s *Server) setSession(w http.ResponseWriter, r *http.Request, userID int64) {
 	token := db.RandKey(32)
 	now := model.Now()
 	_, err := s.DB.Exec("INSERT INTO sessions(token,user_id,expires_at,created_at) VALUES(?,?,?,?)",
@@ -37,6 +37,7 @@ func (s *Server) setSession(w http.ResponseWriter, userID int64) {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   7 * 86400,
+		Secure:   isHTTPS(r),
 	})
 }
 
@@ -246,7 +247,7 @@ func (s *Server) handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 	}
 	uid, _ := res.LastInsertId()
 	// 邀请人奖励(可选): 不做资金奖励,仅记录
-	s.setSession(w, uid)
+	s.setSession(w, r, uid)
 	http.Redirect(w, r, "/user", http.StatusFound)
 }
 
@@ -302,6 +303,8 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 	password := r.FormValue("password")
 
 	if locked, remain := loginLocked(clientIP(r), username); locked {
+		// IP 维度锁定
+
 		d := s.pageData(r)
 		d["Page"] = "login"
 		d["Error"] = "尝试次数过多,请 " + strconv.Itoa(int(remain.Minutes())+1) + " 分钟后再试"
@@ -317,11 +320,18 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 		s.render(w, "pub_login", http.StatusOK, d)
 		return
 	}
+	// 用户名维度锁定: 防止伪造 X-Forwarded-For 绕过 IP 锁定
+	if locked, remain := loginLocked("u", username); locked {
+		d["Error"] = "尝试次数过多,请 " + strconv.Itoa(int(remain.Minutes())+1) + " 分钟后再试"
+		s.render(w, "pub_login", http.StatusTooManyRequests, d)
+		return
+	}
 	failMsg := "用户名或密码错误"
 
 	u, err := s.Store.UserByUsername(username)
 	if err != nil || u == nil {
 		recordLoginFail(clientIP(r), username)
+		recordLoginFail("u", username)
 		d["Error"] = failMsg
 		s.newCaptchaData(d)
 		s.render(w, "pub_login", http.StatusOK, d)
@@ -329,6 +339,7 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 	}
 	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil {
 		recordLoginFail(clientIP(r), username)
+		recordLoginFail("u", username)
 		d["Error"] = failMsg
 		s.newCaptchaData(d)
 		s.render(w, "pub_login", http.StatusOK, d)
@@ -342,7 +353,7 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 	loginFails.Delete(loginKey(clientIP(r), username))
 	_, _ = s.DB.Exec("UPDATE users SET last_login_at=?, last_login_ip=? WHERE id=?",
 		model.Now(), clientIP(r), u.ID)
-	s.setSession(w, u.ID)
+	s.setSession(w, r, u.ID)
 	next := r.FormValue("next")
 	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
 		next = "/user"
@@ -504,4 +515,12 @@ func failCaptcha(s *Server, w http.ResponseWriter, r *http.Request) {
 
 func htmlEscape(s string) string {
 	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&#34;").Replace(s)
+}
+
+// isHTTPS 判断当前请求是否走 HTTPS(直连TLS或反代X-Forwarded-Proto)
+func isHTTPS(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }

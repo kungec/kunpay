@@ -410,6 +410,11 @@ func (s *Server) handleAdminChannelsItemAdd(w http.ResponseWriter, r *http.Reque
 		http.Redirect(w, r, "/admin/channels?err="+urlEscape("仅支持 png/jpg/gif/webp 图片"), http.StatusFound)
 		return
 	}
+	if !validImageMagic(file, ext) {
+		http.Redirect(w, r, "/admin/channels?err="+urlEscape("图片内容与格式不符"), http.StatusFound)
+		return
+	}
+	_, _ = file.Seek(0, 0)
 	name := strings.TrimSpace(r.FormValue("name"))
 	if name == "" {
 		name = "收款码" + strconv.Itoa(int(model.Now())%1000)
@@ -559,7 +564,7 @@ func (s *Server) exportOrdersCSV(w http.ResponseWriter, where string, args []any
 			if i > 0 {
 				bw.WriteString(",")
 			}
-			bw.WriteString(`"` + strings.ReplaceAll(f, `"`, `""`) + `"`)
+			bw.WriteString(csvCell(f))
 		}
 		bw.WriteString("\n")
 	}
@@ -766,7 +771,7 @@ func (s *Server) handleAdminSettingsSave(w http.ResponseWriter, r *http.Request)
 	_ = r.ParseForm()
 	keys := []string{"site_name", "site_title", "announcement", "kefu", "fee_rate", "order_timeout",
 		"money_offset", "register_open", "min_settle", "pay_notice", "invite_open", "footer_text", "poll_interval",
-		"smtp_host", "smtp_port", "smtp_user", "smtp_pass", "smtp_tls", "smtp_from",
+		"site_url", "smtp_host", "smtp_port", "smtp_user", "smtp_pass", "smtp_tls", "smtp_from",
 		"alert_email", "device_alert", "merchant_notice"}
 	for _, k := range keys {
 		v := strings.TrimSpace(r.FormValue(k))
@@ -1023,10 +1028,15 @@ func (s *Server) handleAdminLogoUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if ext != ".png" && ext != ".jpg" && ext != ".jpeg" && ext != ".svg" && ext != ".webp" {
-		http.Redirect(w, r, "/admin/settings?err="+urlEscape("仅支持 png/jpg/svg/webp"), http.StatusFound)
+	if ext != ".png" && ext != ".jpg" && ext != ".jpeg" && ext != ".webp" {
+		http.Redirect(w, r, "/admin/settings?err="+urlEscape("仅支持 png/jpg/webp(SVG因安全原因不支持)"), http.StatusFound)
 		return
 	}
+	if !validImageMagic(file, ext) {
+		http.Redirect(w, r, "/admin/settings?err="+urlEscape("图片内容与格式不符"), http.StatusFound)
+		return
+	}
+	_, _ = file.Seek(0, 0)
 	fn := "site_logo_" + db.RandKey(6) + ext
 	dst, err := os.Create(filepath.Join(s.DataDir, fn))
 	if err != nil {
@@ -1212,4 +1222,14 @@ func (s *Server) handleAdminCleanupRun(w http.ResponseWriter, r *http.Request) {
 	s.audit(r, "data.cleanup", fmt.Sprintf("保留%d天 分类[%s] 清理%d条", days, strings.Join(actions, ","), total))
 	http.Redirect(w, r, "/admin/cleanup?days="+strconv.FormatInt(days, 10)+
 		"&msg="+urlEscape(fmt.Sprintf("清理完成,共删除 %d 条数据", total)), http.StatusFound)
+}
+
+// csvCell CSV单元格: 引号转义 + 公式注入防护(=/+/-/@/Tab开头前置单引号)
+func csvCell(f string) string {
+	if strings.HasPrefix(f, "=") || strings.HasPrefix(f, "+") ||
+		strings.HasPrefix(f, "-") || strings.HasPrefix(f, "@") ||
+		strings.HasPrefix(f, "\t") || strings.HasPrefix(f, "\r") {
+		f = "'" + f
+	}
+	return `"` + strings.ReplaceAll(f, `"`, `""`) + `"`
 }

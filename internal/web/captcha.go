@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
+	"io"
 	"math"
 	"math/rand"
 	"net/http"
@@ -212,5 +213,25 @@ func NewCaptchaForTest() (string, []byte) {
 	return id, png
 }
 
-func LastCodeForTest() string { return lastCode }
+func LastCodeForTest() string                   { return lastCode }
 func VerifyCaptchaForTest(id, code string) bool { return verifyCaptcha(id, code) }
+
+// validImageMagic 校验上传图片魔数与扩展名一致(防伪装文件)
+func validImageMagic(r io.Reader, ext string) bool {
+	head := make([]byte, 12)
+	n, err := io.ReadFull(r, head)
+	if err != nil && n < 3 {
+		return false
+	}
+	switch ext {
+	case ".png":
+		return n >= 8 && head[0] == 0x89 && head[1] == 'P' && head[2] == 'N' && head[3] == 'G'
+	case ".jpg", ".jpeg":
+		return n >= 3 && head[0] == 0xFF && head[1] == 0xD8 && head[2] == 0xFF
+	case ".gif":
+		return n >= 6 && string(head[:3]) == "GIF"
+	case ".webp":
+		return n >= 12 && string(head[:4]) == "RIFF" && string(head[8:12]) == "WEBP"
+	}
+	return false
+}
