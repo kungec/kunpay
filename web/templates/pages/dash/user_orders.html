@@ -30,7 +30,7 @@
       {{if .Orders}}
       {{range .Orders}}
       <tr>
-        <td class="mono copyable" onclick="copyText('{{.TradeNo}}','已复制')" title="点击复制">{{.TradeNo}}</td>
+        <td class="mono"><a href="/user/orders/{{.ID}}" title="查看详情">{{.TradeNo}}</a></td>
         <td class="mono muted">{{.OutTradeNo}}</td>
         <td>{{.Name}}</td>
         <td>{{.TypeName}}</td>

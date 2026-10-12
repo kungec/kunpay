@@ -819,3 +819,61 @@ func (s *Server) handleUserDebugNotify(w http.ResponseWriter, r *http.Request) {
 	out["response"] = rr
 	writeJSON(w, out)
 }
+
+// handleUserOrderDetail 商户订单详情(仅本人订单): 信息 + 通知投递记录 + 到账流水
+func (s *Server) handleUserOrderDetail(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	id := atoint64(r.PathValue("id"))
+	o := s.Store.OrderByID(id)
+	if o == nil || o.Pid != u.Pid {
+		renderMsg(s, w, r, "订单不存在", "订单不存在或无权查看", http.StatusNotFound)
+		return
+	}
+	type notifyView struct {
+		ID        int64
+		URL       string
+		Response  string
+		OK        bool
+		CreatedAt int64
+	}
+	var notifies []notifyView
+	nRows, err := s.DB.Query("SELECT id,url,response,ok,created_at FROM notify_logs WHERE order_id=? ORDER BY id ASC", o.ID)
+	if err == nil {
+		defer nRows.Close()
+		for nRows.Next() {
+			var n notifyView
+			var ok int
+			if nRows.Scan(&n.ID, &n.URL, &n.Response, &ok, &n.CreatedAt) == nil {
+				n.OK = ok == 1
+				notifies = append(notifies, n)
+			}
+		}
+	}
+	type payView struct {
+		Device    string
+		Type      string
+		Money     int64
+		Content   string
+		CreatedAt int64
+	}
+	var pays []payView
+	pRows, err := s.DB.Query(`SELECT COALESCE(d.name,''),p.type,p.money,p.content,p.created_at
+		FROM pay_logs p LEFT JOIN devices d ON d.id=p.device_id WHERE p.order_id=? ORDER BY p.id ASC`, o.ID)
+	if err == nil {
+		defer pRows.Close()
+		for pRows.Next() {
+			var p payView
+			if pRows.Scan(&p.Device, &p.Type, &p.Money, &p.Content, &p.CreatedAt) == nil {
+				pays = append(pays, p)
+			}
+		}
+	}
+	d := s.pageData(r)
+	d["Page"] = "user_orderdetail"
+	d["Title"] = "订单详情"
+	d["Order"] = o
+	d["Notifies"] = notifies
+	d["Pays"] = pays
+	d["TypeName"] = typeName(o.Type)
+	s.render(w, "dash_user_orderdetail", http.StatusOK, d)
+}

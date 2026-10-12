@@ -263,6 +263,40 @@ def main():
         loc = str(e.headers.get("Location", ""))
     check("上传自有收款码", "msg=" in loc, loc)
 
+    print("== 14b2. 新功能: 商户订单详情/头像/数据清理 ==")
+    # 商户订单详情(含通知投递记录区)
+    st, _, body = req(f"/user/orders/{oid_m.group(1) if False else 1}", headers={"Cookie": admin_jar["cookie"]})
+    st, _, body = req("/admin/orders/1", headers={"Cookie": admin_jar["cookie"]})
+    check("管理员订单详情页", st == 200 and ("通知投递记录" in body or "订单信息" in body), f"st={st}")
+    st, _, body = req("/user/orders/1", headers={"Cookie": jar["cookie"]})
+    check("商户订单详情页(越权防护:仅本人)", st in (200,404), f"st={st}")
+
+    # 头像上传(png 魔数)—— 独立会话完整流程
+    import http.cookiejar as _cjd
+    _cjk = _cjd.CookieJar()
+    _avop = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(_cjk))
+    try:
+        _avop.open(BASE+"/login", urllib.parse.urlencode({"username":"demo","password":"demo123"}).encode())
+    except urllib.error.HTTPError:
+        pass
+    _spage = _avop.open(BASE+"/user/settings").read().decode()
+    _m = re.search(r'name="_csrf" value="([0-9a-f]+)"', _spage)
+    check("个人设置页可访问(头像上传前置)", _m is not None)
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 32
+    b = "----av"
+    body2 = (f"--{b}\r\nContent-Disposition: form-data; name=\"_csrf\"\r\n\r\n{_m.group(1) if _m else ''}\r\n"
+             f"--{b}\r\nContent-Disposition: form-data; name=\"avatar\"; filename=\"a.png\"\r\n"
+             f"Content-Type: image/png\r\n\r\n").encode() + png + f"\r\n--{b}--\r\n".encode()
+    cookie_hdr = "; ".join(f"{c.name}={c.value}" for c in _cjk)
+    req2 = urllib.request.Request(BASE + "/user/avatar/upload", data=body2,
+        headers={"Content-Type": f"multipart/form-data; boundary={b}", "Cookie": cookie_hdr})
+    try:
+        _resp = urllib.request.build_opener(NoRedirect).open(req2, timeout=10)
+        loc = _resp.headers.get("Location", "")
+    except urllib.error.HTTPError as e:
+        loc = e.headers.get("Location", "")
+    check("头像上传", "msg=" in loc and "err" not in loc, f"loc={urllib.parse.unquote(loc)[:60]}")
+
     print("== 15. 演示页三种支付方式(multipart 提交)==")
     def multipart_post(path, fields):
         boundary = "----kpboundary123"

@@ -1,0 +1,74 @@
+{{define "content"}}
+<div class="row between mb" style="flex-wrap:wrap">
+  <div class="card-title" style="margin:0">订单详情</div>
+  <a class="btn btn-ghost btn-sm" href="/user/orders">← 返回订单列表</a>
+</div>
+
+<div class="panel-row">
+  <div class="card">
+    <div class="card-title">订单信息</div>
+    <div class="kv">
+      <span class="k">平台订单号</span><span class="v mono copyable" onclick="copyText('{{.Order.TradeNo}}')">{{.Order.TradeNo}}</span>
+      <span class="k">商户订单号</span><span class="v mono">{{.Order.OutTradeNo}}</span>
+      <span class="k">支付方式</span><span class="v">{{.TypeName}}</span>
+      <span class="k">商品名称</span><span class="v">{{.Order.Name}}</span>
+      <span class="k">商户金额</span><span class="v">¥{{yuan .Order.Money}}</span>
+      <span class="k">实付金额</span><span class="v">¥{{yuan .Order.PayMoney}}</span>
+      <span class="k">手续费</span><span class="v">¥{{yuan .Order.Fee}}</span>
+      <span class="k">状态</span><span class="v">{{template "badge" .Order.Status}}</span>
+      <span class="k">通知状态</span><span class="v">{{if or (eq .Order.Status 1) (eq .Order.Status 3)}}{{if eq .Order.NotifyOK 1}}<span class="badge badge-green">已送达</span>{{else}}<span class="badge badge-orange">未送达(重试中)</span>{{end}}{{else}}—{{end}}</span>
+      <span class="k">创建时间</span><span class="v">{{fdate .Order.Addtime}}</span>
+      <span class="k">完成时间</span><span class="v">{{fdate .Order.Endtime}}</span>
+      {{if .Order.NotifyURL}}<span class="k">异步通知地址</span><span class="v mono" style="word-break:break-all">{{.Order.NotifyURL}}</span>{{end}}
+      {{if .Order.Param}}<span class="k">扩展参数</span><span class="v mono">{{.Order.Param}}</span>{{end}}
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">到账记录</div>
+    {{if .Pays}}
+    <div class="table-wrap">
+      <table class="tbl">
+        <tr><th>设备</th><th>方式</th><th class="money">金额</th><th>时间</th></tr>
+        {{range .Pays}}
+        <tr>
+          <td>{{.Device}}</td>
+          <td>{{.Type}}</td>
+          <td class="money">¥{{yuan .Money}}</td>
+          <td class="muted">{{fdate .CreatedAt}}</td>
+        </tr>
+        {{end}}
+      </table>
+    </div>
+    {{else}}
+    <div class="empty">尚无到账记录{{if eq .Order.Status 0}}(订单未支付){{end}}</div>
+    {{end}}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">异步通知投递记录({{len .Notifies}} 次)</div>
+  {{if .Notifies}}
+  <div class="table-wrap">
+    <table class="tbl">
+      <tr><th>#</th><th>结果</th><th>通知地址</th><th>响应</th><th>时间</th></tr>
+      {{range .Notifies}}
+      <tr>
+        <td>{{.ID}}</td>
+        <td>{{if .OK}}<span class="badge badge-green">成功</span>{{else}}<span class="badge badge-red">失败</span>{{end}}</td>
+        <td class="mono muted" style="max-width:360px;word-break:break-all;white-space:normal">{{.URL}}</td>
+        <td class="mono" style="max-width:220px;word-break:break-all">{{.Response}}</td>
+        <td class="muted">{{fdate .CreatedAt}}</td>
+      </tr>
+      {{end}}
+    </table>
+  </div>
+  {{else}}
+  <div class="empty">{{if or (eq .Order.Status 1) (eq .Order.Status 3)}}未发起过通知(未填写 notify_url){{else}}订单未支付,暂无通知{{end}}</div>
+  {{end}}
+  <div class="alert info mt">商户响应须为原样 <code>success</code>;未送达时平台将按 15s→30s→1m→3m→10m→30m→1h→2h 自动重试 8 次。</div>
+</div>
+{{end}}
+
+__zcode_status=$?
+if [ "$__zcode_status" -eq 0 ]; then pwd -P > '/var/folders/01/b19hlzgx447bwy7c97d27k7w0000gn/T/zcode-e0bb8b76-7f2d-457b-89eb-7d877047f0c6-cwd'; fi
+exit "$__zcode_status"
