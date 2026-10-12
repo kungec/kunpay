@@ -1,0 +1,59 @@
+{{define "content"}}
+{{template "flash" .}}
+<form class="search-bar" method="get" action="/user/report">
+  <input class="input" type="date" name="date" value="{{.Date}}" max="{{.Today}}">
+  <button class="btn btn-primary" type="submit">查看对账单</button>
+  <a class="btn btn-ghost" href="/user/report/export.csv?date={{.Date}}">⬇ 导出当日成功订单</a>
+</form>
+<div style="margin-top:-46px;text-align:right">
+  <form method="post" action="/user/report/mail" style="display:inline">
+    <input type="hidden" name="_csrf" value="{{.CSRF}}">
+    <input type="hidden" name="date" value="{{.Date}}">
+    <button class="btn btn-ghost btn-sm" type="submit" title="发送到个人设置中填写的邮箱,需管理员已配置SMTP">✉ 发送到邮箱</button>
+  </form>
+</div>
+
+<div class="stat-cards s3">
+  <div class="scard">
+    <div class="ic b1"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+    <div><div class="l">当日订单</div><div class="v">{{index .Stats "OkOrders"}} <small>/ {{index .Stats "TotalOrders"}} 笔</small></div><div class="d">成功 / 全部</div></div>
+  </div>
+  <div class="scard">
+    <div class="ic b2"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+    <div><div class="l">成功交易额</div><div class="v">¥{{yuan (index .Stats "OkMoney")}}</div><div class="d">含手续费</div></div>
+  </div>
+  <div class="scard">
+    <div class="ic b3"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+    <div><div class="l">净入账</div><div class="v">¥{{yuan (index .Stats "Income")}}</div><div class="d">手续费 ¥{{yuan (index .Stats "FeeSum")}}</div></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="row between mb">
+    <div class="card-title" style="margin:0">当日明细({{.Date}})</div>
+  </div>
+  <div class="table-wrap">
+    <table class="tbl">
+      <tr><th>平台订单号</th><th>商户订单号</th><th>方式</th><th>商品</th><th class="money">金额</th><th class="money">实付</th><th class="money">手续费</th><th class="money">净入账</th><th>状态</th><th>完成时间</th></tr>
+      {{if .Orders}}
+      {{range .Orders}}
+      <tr>
+        <td class="mono copyable" onclick="copyText('{{.TradeNo}}','已复制')">{{.TradeNo}}</td>
+        <td class="mono muted">{{.OutTradeNo}}</td>
+        <td>{{.TypeName}}</td>
+        <td>{{.Name}}</td>
+        <td class="money">¥{{yuan .Money}}</td>
+        <td class="money muted">¥{{yuan .PayMoney}}</td>
+        <td class="money muted">¥{{yuan .Fee}}</td>
+        <td class="money" style="color:var(--success)">¥{{yuan (minus .Money .Fee)}}</td>
+        <td>{{template "badge" .Status}}</td>
+        <td class="muted">{{fdate .Endtime}}</td>
+      </tr>
+      {{end}}
+      {{else}}
+      <tr><td colspan="10"><div class="empty">该日暂无订单</div></td></tr>
+      {{end}}
+    </table>
+  </div>
+</div>
+{{end}}

@@ -1,0 +1,77 @@
+{{define "content"}}
+<div class="stat-cards">
+  <div class="scard">
+    <div class="ic b1"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+    <div><div class="l">今日订单</div><div class="v">{{index .Stats "TodayOk"}} <small>/ {{index .Stats "TodayOrders"}} 笔</small></div><div class="d">成功 / 总数</div></div>
+  </div>
+  <div class="scard">
+    <div class="ic b2"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+    <div><div class="l">今日成交额</div><div class="v">¥{{yuan (index .Stats "TodayMoney")}}</div><div class="d">全部订单 {{index .Stats "TotalOrders"}} 笔</div></div>
+  </div>
+  <div class="scard">
+    <div class="ic b3"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+    <div><div class="l">商户总数</div><div class="v">{{index .Stats "TotalUsers"}}</div><div class="d">今日新增 {{index .Stats "TodayNewUsers"}}</div></div>
+  </div>
+  <div class="scard">
+    <div class="ic b4"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></div>
+    <div><div class="l">监控设备</div><div class="v">{{index .Stats "DevOnline"}} <small>/ {{index .Stats "DevTotal"}} 在线</small></div><div class="d">2 分钟内有心跳视为在线</div></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">近 7 日全平台成交趋势</div>
+  <div class="chart-box"><canvas class="kbar-chart" data-labels="{{json (daysLabels .Days)}}" data-values="{{json (daysValues .Days)}}"></canvas></div>
+</div>
+
+<div class="panel-row mt">
+  <div class="card">
+    <div class="card-title">待办事项</div>
+    <div id="todoBox">加载中...</div>
+  </div>
+  <div class="card">
+    <div class="card-title">平台信息</div>
+    <div class="kv">
+      <span class="k">站点名称</span><span class="v">{{index .Settings "site_name"}}</span>
+      <span class="k">全局费率</span><span class="v">{{index .Settings "fee_rate"}}%</span>
+      <span class="k">订单超时</span><span class="v">{{index .Settings "order_timeout"}} 分钟</span>
+      <span class="k">金额尾数</span><span class="v">{{if eq (index .Settings "money_offset") "1"}}已开启{{else}}已关闭{{end}}</span>
+      <span class="k">开放注册</span><span class="v">{{if eq (index .Settings "register_open") "1"}}是{{else}}否{{end}}</span>
+    </div>
+    <a class="btn btn-outline btn-sm mt" href="/admin/settings">前往设置 →</a>
+  </div>
+</div>
+
+<div class="card mt">
+  <div class="card-title">商户交易排行(近 7 日)</div>
+  <div class="table-wrap">
+    <table class="tbl">
+      <tr><th>排名</th><th>商户</th><th>PID</th><th class="money">成功笔数</th><th class="money">交易额</th></tr>
+      {{if .TopMerchants}}
+      {{range $i, $m := .TopMerchants}}
+      <tr>
+        <td>{{addInt $i 1}}</td>
+        <td><b>{{$m.Username}}</b></td>
+        <td class="mono">{{$m.Pid}}</td>
+        <td class="money">{{$m.Count}} 笔</td>
+        <td class="money" style="color:var(--primary)">¥{{yuan $m.Money}}</td>
+      </tr>
+      {{end}}
+      {{else}}
+      <tr><td colspan="5"><div class="empty">近 7 日暂无成交</div></td></tr>
+      {{end}}
+    </table>
+  </div>
+</div>
+<script>
+fetch('/admin/todo.json').then(function(r){return r.json()}).then(function(j){
+  var box = document.getElementById('todoBox');
+  if (!j) { box.textContent = '暂无待办'; return; }
+  var html = '';
+  if (j.pending_settles > 0) html += '<div class="alert info" style="margin-bottom:10px">有 <b>' + j.pending_settles + '</b> 笔提现申请待审核 <a href="/admin/settles">去处理 →</a></div>';
+  if (j.pending_orders > 0) html += '<div class="alert info" style="margin-bottom:10px">有 <b>' + j.pending_orders + '</b> 笔订单待支付(可能在等待买家付款)</div>';
+  if (j.unmatched > 0) html += '<div class="alert err" style="margin-bottom:10px">有 <b>' + j.unmatched + '</b> 条到账流水未匹配到订单 <a href="/admin/paylogs">去查看 →</a></div>';
+  if (j.dev_offline > 0) html += '<div class="alert err" style="margin-bottom:10px">有 <b>' + j.dev_offline + '</b> 台监控设备离线 <a href="/admin/devices">去查看 →</a></div>';
+  box.innerHTML = html || '<div class="empty">一切正常,暂无待办事项 🎉</div>';
+}).catch(function(){ document.getElementById('todoBox').textContent = '加载失败'; });
+</script>
+{{end}}

@@ -1,0 +1,17 @@
+services:
+  kunpay:
+    build: .
+    container_name: kunpay
+    restart: always
+    ports:
+      - "8080:8080"
+    volumes:
+      - kunpay_data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  kunpay_data:

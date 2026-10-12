@@ -1,0 +1,31 @@
+{{define "content"}}
+{{template "flash" .}}
+<div class="card">
+  <div class="row between mb" style="flex-wrap:wrap">
+    <div class="card-title" style="margin:0">商户自有通道 - {{.Merchant.Username}} <span class="mono muted">(PID {{.Merchant.Pid}})</span></div>
+    <a class="btn btn-ghost btn-sm" href="/admin/users">← 返回用户管理</a>
+  </div>
+  {{if .Rotating}}
+  <div class="alert info">轮询中: {{range .Rotating}}{{.}} {{end}}</div>
+  {{end}}
+  <div class="table-wrap">
+    <table class="tbl">
+      <tr><th>ID</th><th>通道</th><th>备注</th><th>收款码</th><th>状态</th></tr>
+      {{if .Items}}
+      {{range .Items}}
+      <tr>
+        <td>{{.ID}}</td>
+        <td>{{.TypeName}}</td>
+        <td>{{.Name}}</td>
+        <td><a href="{{.Qrcode}}" target="_blank"><img src="{{.Qrcode}}" alt="码" style="width:44px;height:44px;border-radius:8px;object-fit:cover;border:1px solid var(--border)"></a></td>
+        <td>{{if .Enabled}}<span class="badge badge-green">启用</span>{{else}}<span class="badge badge-gray">停用</span>{{end}}</td>
+      </tr>
+      {{end}}
+      {{else}}
+      <tr><td colspan="5"><div class="empty">该商户没有绑定自有收款码(收银台使用平台通道)</div></td></tr>
+      {{end}}
+    </table>
+  </div>
+  <div class="alert info mt">商户自有码优先展示;此页面为只读视图,平台渠道与监控设备配置不变。</div>
+</div>
+{{end}}

@@ -1,0 +1,29 @@
+{{define "content"}}
+<div class="card">
+  <div class="row between mb">
+    <div class="card-title" style="margin:0">资金明细</div>
+    <span>当前余额 <b style="color:var(--primary)">¥{{yuan .Balance}}</b></span>
+  </div>
+  <div class="table-wrap">
+    <table class="tbl">
+      <tr><th>#</th><th>类型</th><th class="money">变动金额</th><th class="money">变动前</th><th class="money">变动后</th><th>备注</th><th>时间</th></tr>
+      {{if .Logs}}
+      {{range .Logs}}
+      <tr>
+        <td>{{.ID}}</td>
+        <td>{{if eq .Type "order"}}<span class="badge badge-green">订单入账</span>{{else if eq .Type "settle"}}<span class="badge badge-blue">提现支出</span>{{else if eq .Type "reject"}}<span class="badge badge-orange">提现退回</span>{{else}}<span class="badge badge-gray">调整</span>{{end}}</td>
+        <td class="money" style="color:{{if ge .Amount 0}}var(--success){{else}}var(--danger){{end}}">{{signedYuan .Amount}}</td>
+        <td class="money muted">¥{{yuan .Before}}</td>
+        <td class="money">¥{{yuan .After}}</td>
+        <td class="muted">{{.Memo}}</td>
+        <td class="muted">{{fdate .CreatedAt}}</td>
+      </tr>
+      {{end}}
+      {{else}}
+      <tr><td colspan="7"><div class="empty">暂无资金变动记录</div></td></tr>
+      {{end}}
+    </table>
+  </div>
+  {{template "pager" dict "TotalPages" .TotalPages "PageNo" .PageNo "Query" "" "Prev" (addInt .PageNo -1) "Next" (addInt .PageNo 1)}}
+</div>
+{{end}}

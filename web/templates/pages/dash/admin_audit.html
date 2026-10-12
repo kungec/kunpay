@@ -1,0 +1,28 @@
+{{define "content"}}
+<div class="card">
+  <div class="card-title">管理员操作日志(最近 200 条)</div>
+  <div class="table-wrap">
+    <table class="tbl">
+      <tr><th>#</th><th>管理员</th><th>操作</th><th>详情</th><th>IP</th><th>时间</th></tr>
+      {{if .Logs}}
+      {{range .Logs}}
+      <tr>
+        <td>{{.ID}}</td>
+        <td><b>{{.Admin}}</b></td>
+        <td><span class="badge badge-blue">{{.Action}}</span></td>
+        <td class="muted" style="white-space:normal">{{.Detail}}</td>
+        <td class="mono muted">{{.IP}}</td>
+        <td class="muted">{{fdate .CreatedAt}}</td>
+      </tr>
+      {{end}}
+      {{else}}
+      <tr><td colspan="6"><div class="empty">暂无操作记录</div></td></tr>
+      {{end}}
+    </table>
+  </div>
+</div>
+{{end}}
+
+__zcode_status=$?
+if [ "$__zcode_status" -eq 0 ]; then pwd -P > '/var/folders/01/b19hlzgx447bwy7c97d27k7w0000gn/T/zcode-b2293a29-c700-4203-a339-419a109482a2-cwd'; fi
+exit "$__zcode_status"

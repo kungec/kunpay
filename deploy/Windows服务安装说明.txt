@@ -1,0 +1,21 @@
+KunPay Windows 服务化部署说明
+================================
+
+方式一(推荐): 使用 NSSM 将程序注册为 Windows 服务
+  1. 下载 nssm: https://nssm.cc/download
+  2. 管理员 CMD 执行:
+       nssm install KunPay C:\kunpay\kunpay.exe
+       nssm set KunPay AppDirectory C:\kunpay
+       nssm set KunPay AppParameters -port 8080
+       nssm start KunPay
+  3. 卸载服务: nssm stop KunPay && nssm remove KunPay confirm
+
+方式二: 任务计划程序
+  1. Win+R 运行 taskschd.msc
+  2. 创建基本任务 -> 触发器选"计算机启动时" -> 操作选启动 kunpay.exe
+  3. 勾选"使用最高权限运行"
+
+注意:
+  - 数据库 kunpay.db 与 data 目录在程序运行目录,迁移时整体拷贝
+  - 建议配合 IIS/Caddy 反向代理 + HTTPS 对外提供服务
+  - 端口占用时更换: kunpay.exe -port 8081

@@ -1,0 +1,260 @@
+{{define "content"}}
+<div class="doc-layout">
+  <aside class="doc-side">
+    <div class="grp">易支付接口</div>
+    <a href="/doc/submit" class="{{if eq .DocPage "submit"}}on{{end}}">页面跳转支付</a>
+    <a href="/doc/mapi" class="{{if eq .DocPage "mapi"}}on{{end}}">API接口支付</a>
+    <a href="/doc/notify" class="{{if eq .DocPage "notify"}}on{{end}}">支付结果通知</a>
+    <a href="/doc/md5" class="{{if eq .DocPage "md5"}}on{{end}}">签名方式</a>
+    <a href="/doc/paytype" class="{{if eq .DocPage "paytype"}}on{{end}}">支付方式</a>
+    <a href="/doc/device" class="{{if eq .DocPage "device"}}on{{end}}">设备列表</a>
+    <a href="/doc/api" class="{{if eq .DocPage "api"}}on{{end}}">[API] 查询商户信息</a>
+    <a href="/doc/order" class="{{if eq .DocPage "order"}}on{{end}}">[API] 查询单个订单</a>
+    <a href="/doc/orders" class="{{if eq .DocPage "orders"}}on{{end}}">[API] 批量查询订单</a>
+    <div class="grp">监控对接</div>
+    <a href="/doc/monitor" class="{{if eq .DocPage "monitor"}}on{{end}}">监控APP对接</a>
+  </aside>
+
+  <div class="doc-body">
+    {{if eq .DocPage "submit"}}
+    <h1>页面跳转支付</h1>
+    <p>此接口可用于用户前台直接发起支付,使用 form 表单跳转或拼接成 URL 跳转。</p>
+    <h2>请求地址</h2>
+    <p><span class="url-chip">POST /submit.php</span> <span class="muted">(同时兼容 GET 方式与 /epay/submit.php 别名)</span></p>
+    <h3>请求参数</h3>
+    <table>
+      <tr><th>字段名</th><th>变量名</th><th>必填</th><th>类型</th><th>示例值</th><th>描述</th></tr>
+      <tr><td>商户ID</td><td><code>pid</code></td><td>是</td><td>Int</td><td>1001</td><td>商户的唯一标识符</td></tr>
+      <tr><td>支付方式</td><td><code>type</code></td><td>是</td><td>String</td><td>alipay</td><td>支付方式列表(alipay/wxpay/qqpay)</td></tr>
+      <tr><td>商户订单号</td><td><code>out_trade_no</code></td><td>是</td><td>String</td><td>20160806151343349</td><td>商户系统内部的订单号</td></tr>
+      <tr><td>异步通知地址</td><td><code>notify_url</code></td><td>否</td><td>String</td><td>http://www.pay.com/notify.php</td><td>服务器异步通知地址</td></tr>
+      <tr><td>跳转通知地址</td><td><code>return_url</code></td><td>否</td><td>String</td><td>http://www.pay.com/return.php</td><td>页面跳转通知地址</td></tr>
+      <tr><td>商品名称</td><td><code>name</code></td><td>是</td><td>String</td><td>VIP</td><td>商品名称,超过 127 字节自动截取</td></tr>
+      <tr><td>商品金额</td><td><code>money</code></td><td>是</td><td>String</td><td>1.00</td><td>金额,单位元,最多两位小数</td></tr>
+      <tr><td>网站名称</td><td><code>sitename</code></td><td>否</td><td>String</td><td>测试网站</td><td>网站名称</td></tr>
+      <tr><td>业务扩展参数</td><td><code>param</code></td><td>否</td><td>String</td><td>没有请留空</td><td>支付后原样返回</td></tr>
+      <tr><td>用户IP地址</td><td><code>clientip</code></td><td>否</td><td>String</td><td>192.168.1.100</td><td>用户发起支付的IP地址</td></tr>
+      <tr><td>设备类型</td><td><code>device</code></td><td>否</td><td>String</td><td>pc</td><td>默认为 pc</td></tr>
+      <tr><td>签名字符串</td><td><code>sign</code></td><td>是</td><td>String</td><td>202cb962ac59...</td><td>签名算法见「签名方式」</td></tr>
+      <tr><td>签名类型</td><td><code>sign_type</code></td><td>否</td><td>String</td><td>MD5</td><td>默认为 MD5</td></tr>
+    </table>
+    <h2>返回结果</h2>
+    <p>验签成功后,浏览器将被 302 跳转到本平台收银台页面 <code>/pay/{订单号}</code>,买家在收银台扫码完成支付。</p>
+
+    {{else if eq .DocPage "mapi"}}
+    <h1>API接口支付</h1>
+    <p>此接口用于服务器后端发起支付请求,直接返回支付跳转链接与二维码,由商户自行渲染收银页面。</p>
+    <h2>请求地址</h2>
+    <p><span class="url-chip">POST /mapi.php</span> <span class="muted">(同时兼容 GET 方式)</span></p>
+    <h3>请求参数</h3>
+    <p>请求参数与「页面跳转支付」完全一致(<code>pid</code>、<code>type</code>、<code>out_trade_no</code>、<code>notify_url</code>、<code>return_url</code>、<code>name</code>、<code>money</code>、<code>param</code>、<code>device</code>、<code>sign</code>、<code>sign_type</code>)。</p>
+    <h3>返回结果(JSON)</h3>
+    <table>
+      <tr><th>字段名</th><th>类型</th><th>示例值</th><th>描述</th></tr>
+      <tr><td>返回状态码</td><td><code>code</code></td><td>1</td><td>1 为成功,其它为失败</td></tr>
+      <tr><td>返回信息</td><td><code>msg</code></td><td>成功</td><td>失败时返回原因</td></tr>
+      <tr><td>订单号</td><td><code>trade_no</code></td><td>20260806151343349</td><td>平台支付订单号</td></tr>
+      <tr><td>支付跳转URL</td><td><code>payurl</code></td><td>https://xxx/pay/xxx</td><td>收银台跳转地址</td></tr>
+      <tr><td>二维码链接</td><td><code>qrcode</code></td><td>https://xxx/pay/xxx</td><td>二维码内容(与收银台一致)</td></tr>
+      <tr><td>二维码图片</td><td><code>img</code></td><td>data:image/png;base64,...</td><td>二维码 base64 图片,可直接展示</td></tr>
+      <tr><td>支付金额</td><td><code>money</code></td><td>1.36</td><td>买家实际应付金额(含尾数偏移),请以此金额展示</td></tr>
+    </table>
+    <h3>返回示例</h3>
+    <pre><code>{
+  "code": 1,
+  "msg": "成功",
+  "trade_no": "20261012142704303043",
+  "payurl": "https://pay.example.com/pay/20261012142704303043",
+  "qrcode": "https://pay.example.com/pay/20261012142704303043",
+  "img": "data:image/png;base64,iVBORw0KGgo...",
+  "money": "1.36"
+}</code></pre>
+
+    {{else if eq .DocPage "notify"}}
+    <h1>支付结果通知</h1>
+    <p>通知类型:服务器异步通知(<code>notify_url</code>)、页面跳转通知(<code>return_url</code>)。</p>
+    <p>请求方式:GET(参数同时携带签名,商户需验签)。</p>
+    <h3>请求参数</h3>
+    <table>
+      <tr><th>字段名</th><th>变量名</th><th>必填</th><th>类型</th><th>示例值</th><th>描述</th></tr>
+      <tr><td>商户ID</td><td><code>pid</code></td><td>是</td><td>Int</td><td>1001</td><td>商户唯一标识</td></tr>
+      <tr><td>平台订单号</td><td><code>trade_no</code></td><td>是</td><td>String</td><td>2026080622555342651</td><td>平台订单号</td></tr>
+      <tr><td>商户订单号</td><td><code>out_trade_no</code></td><td>是</td><td>String</td><td>20160806151343349</td><td>商户系统内部订单号</td></tr>
+      <tr><td>支付方式</td><td><code>type</code></td><td>是</td><td>String</td><td>alipay</td><td>支付方式列表</td></tr>
+      <tr><td>商品名称</td><td><code>name</code></td><td>是</td><td>String</td><td>VIP会员</td><td>商品名称</td></tr>
+      <tr><td>商品金额</td><td><code>money</code></td><td>是</td><td>String</td><td>1.00</td><td>商品金额(商户提交金额)</td></tr>
+      <tr><td>支付状态</td><td><code>trade_status</code></td><td>是</td><td>String</td><td>TRADE_SUCCESS</td><td>只有 TRADE_SUCCESS 是成功</td></tr>
+      <tr><td>业务扩展参数</td><td><code>param</code></td><td>否</td><td>String</td><td></td><td>原样返回</td></tr>
+      <tr><td>签名字符串</td><td><code>sign</code></td><td>是</td><td>String</td><td>202cb962...</td><td>签名</td></tr>
+      <tr><td>签名类型</td><td><code>sign_type</code></td><td>是</td><td>String</td><td>MD5</td><td>默认 MD5</td></tr>
+    </table>
+    <h2>应答要求</h2>
+    <p>收到异步通知后,请输出纯文本 <code>success</code>(不区分大小写,不要包含任何多余字符)表示接收成功。</p>
+    <p>未收到 success 应答时,系统将按 <code>15s → 30s → 1m → 3m → 10m → 30m → 1h → 2h</code> 的间隔自动重试,最多 8 次。通知结果可在商户中心「订单列表」中查看通知状态。</p>
+    <h2>页面跳转通知</h2>
+    <p>买家支付成功后,收银台会引导浏览器跳转到 <code>return_url</code> 并携带与异步通知相同的参数。跳转通知不保证送达(买家可能中途关闭浏览器),业务请以异步通知为准。</p>
+
+    {{else if eq .DocPage "md5"}}
+    <h1>MD5 签名算法</h1>
+    <p>1、将发送或接收到的所有参数按照参数名 ASCII 码从小到大排序(a-z),<code>sign</code>、<code>sign_type</code> 和空值不参与签名!</p>
+    <p>2、将排序后的参数拼接成 URL 键值对格式,例如 <code>a=b&amp;c=d&amp;e=f</code>,参数值不要进行 URL 编码。</p>
+    <p>3、再将拼接好的字符串与商户密钥 KEY 拼接后进行 MD5 加密,得出 sign 签名参数:<code>sign = md5(a=b&amp;c=d&amp;e=f + KEY)</code>,结果为小写。</p>
+    <h2>PHP 示例</h2>
+    <pre><code>&lt;?php
+function getSign($params, $key) {
+    // 1. 过滤空值和签名参数
+    $params = array_filter($params, function ($v, $k) {
+        return $v !== '' &amp;&amp; $v !== null &amp;&amp; $k != 'sign' &amp;&amp; $k != 'sign_type';
+    }, ARRAY_FILTER_USE_BOTH);
+    // 2. 按参数名 ASCII 升序排序
+    ksort($params);
+    // 3. 拼接键值对
+    $str = '';
+    foreach ($params as $k =&gt; $v) {
+        $str .= "{$k}={$v}&amp;";
+    }
+    $str = rtrim($str, '&amp;');
+    // 4. 拼接密钥后 MD5
+    return md5($str . $key);
+}
+
+$params = [
+    'pid'          =&gt; '1001',
+    'type'         =&gt; 'alipay',
+    'out_trade_no' =&gt; '20240101123456',
+    'notify_url'   =&gt; 'http://www.example.com/notify.php',
+    'return_url'   =&gt; 'http://www.example.com/return.php',
+    'name'         =&gt; '测试商品',
+    'money'        =&gt; '1.00',
+];
+$key  = '你的商户密钥';
+$params['sign']      = getSign($params, $key);
+$params['sign_type'] = 'MD5';
+
+// 发起支付: 跳转方式
+header('Location: https://pay.example.com/submit.php?' . http_build_query($params));</code></pre>
+    <h2>注意事项</h2>
+    <p>· 参数值不要进行 URL 编码;· MD5 结果为小写;· 密钥请妥善保管,泄露后请立即在商户中心重置。</p>
+
+    {{else if eq .DocPage "paytype"}}
+    <h1>支付方式列表</h1>
+    <table>
+      <tr><th>调用值</th><th>描述</th></tr>
+      <tr><td><code>alipay</code></td><td>支付宝</td></tr>
+      <tr><td><code>wxpay</code></td><td>微信支付</td></tr>
+      <tr><td><code>qqpay</code></td><td>QQ钱包</td></tr>
+    </table>
+    <p class="muted">实际可用支付方式以管理员在「渠道管理」中开启的渠道为准。</p>
+
+    {{else if eq .DocPage "device"}}
+    <h1>设备类型列表</h1>
+    <table>
+      <tr><th>调用值</th><th>描述</th></tr>
+      <tr><td><code>pc</code></td><td>电脑浏览器</td></tr>
+      <tr><td><code>mobile</code></td><td>手机浏览器</td></tr>
+      <tr><td><code>qq</code></td><td>手机QQ内浏览器</td></tr>
+      <tr><td><code>wechat</code></td><td>微信内浏览器</td></tr>
+      <tr><td><code>alipay</code></td><td>支付宝客户端</td></tr>
+    </table>
+
+    {{else if eq .DocPage "api"}}
+    <h1>[API] 查询商户信息</h1>
+    <p>URL地址:<span class="url-chip">/api.php?act=query&amp;pid={商户ID}&amp;key={商户密钥}</span></p>
+    <h3>请求参数</h3>
+    <table>
+      <tr><th>字段名</th><th>变量名</th><th>必填</th><th>类型</th><th>示例值</th><th>描述</th></tr>
+      <tr><td>操作类型</td><td><code>act</code></td><td>是</td><td>String</td><td>query</td><td>此API固定值</td></tr>
+      <tr><td>商户ID</td><td><code>pid</code></td><td>是</td><td>Int</td><td>1001</td><td></td></tr>
+      <tr><td>商户密钥</td><td><code>key</code></td><td>是</td><td>String(32)</td><td>89unJUB8...</td><td></td></tr>
+    </table>
+    <h3>返回结果</h3>
+    <table>
+      <tr><th>字段名</th><th>变量名</th><th>类型</th><th>描述</th></tr>
+      <tr><td>返回状态码</td><td><code>code</code></td><td>Int</td><td>1为成功,其它为失败</td></tr>
+      <tr><td>商户ID</td><td><code>pid</code></td><td>Int</td><td>商户ID</td></tr>
+      <tr><td>商户密钥</td><td><code>key</code></td><td>String</td><td>商户密钥</td></tr>
+      <tr><td>商户状态</td><td><code>active</code></td><td>Int</td><td>1为正常,0为封禁</td></tr>
+      <tr><td>商户余额</td><td><code>money</code></td><td>String</td><td>商户余额</td></tr>
+      <tr><td>结算方式</td><td><code>type</code></td><td>Int</td><td>1:支付宝,2:微信,3:QQ,4:银行卡</td></tr>
+      <tr><td>结算账号</td><td><code>account</code></td><td>String</td><td>结算账号</td></tr>
+      <tr><td>结算姓名</td><td><code>username</code></td><td>String</td><td>结算姓名</td></tr>
+      <tr><td>订单总数</td><td><code>orders</code></td><td>Int</td><td>订单总数统计</td></tr>
+      <tr><td>今日订单</td><td><code>order_today</code></td><td>Int</td><td>今日成功订单数</td></tr>
+      <tr><td>昨日订单</td><td><code>order_lastday</code></td><td>Int</td><td>昨日成功订单数</td></tr>
+    </table>
+
+    {{else if eq .DocPage "order"}}
+    <h1>[API] 查询单个订单</h1>
+    <p>URL地址:<span class="url-chip">/api.php?act=order&amp;pid={商户ID}&amp;key={商户密钥}&amp;out_trade_no={商户订单号}</span></p>
+    <h3>请求参数</h3>
+    <table>
+      <tr><th>字段名</th><th>变量名</th><th>必填</th><th>类型</th><th>示例值</th><th>描述</th></tr>
+      <tr><td>操作类型</td><td><code>act</code></td><td>是</td><td>String</td><td>order</td><td>此API固定值</td></tr>
+      <tr><td>商户ID</td><td><code>pid</code></td><td>是</td><td>Int</td><td>1001</td><td></td></tr>
+      <tr><td>商户密钥</td><td><code>key</code></td><td>是</td><td>String(32)</td><td>89unJUB8...</td><td></td></tr>
+      <tr><td>平台订单号</td><td><code>trade_no</code></td><td>二选一</td><td>String</td><td>2026080622555342651</td><td>与 out_trade_no 二选一,同时传入以此为准</td></tr>
+      <tr><td>商户订单号</td><td><code>out_trade_no</code></td><td>二选一</td><td>String</td><td>20160806151343349</td><td>商户系统内部订单号</td></tr>
+    </table>
+    <h3>返回结果</h3>
+    <table>
+      <tr><th>字段名</th><th>变量名</th><th>类型</th><th>描述</th></tr>
+      <tr><td>返回状态码</td><td><code>code</code></td><td>Int</td><td>1为成功,其它为失败</td></tr>
+      <tr><td>平台订单号</td><td><code>trade_no</code></td><td>String</td><td>平台订单号</td></tr>
+      <tr><td>商户订单号</td><td><code>out_trade_no</code></td><td>String</td><td>商户内部订单号</td></tr>
+      <tr><td>支付方式</td><td><code>type</code></td><td>String</td><td>支付方式</td></tr>
+      <tr><td>商户ID</td><td><code>pid</code></td><td>Int</td><td>商户ID</td></tr>
+      <tr><td>创建时间</td><td><code>addtime</code></td><td>String</td><td>2026-08-06 22:55:52</td></tr>
+      <tr><td>完成时间</td><td><code>endtime</code></td><td>String</td><td>未支付为空</td></tr>
+      <tr><td>商品名称</td><td><code>name</code></td><td>String</td><td>商品名称</td></tr>
+      <tr><td>商品金额</td><td><code>money</code></td><td>String</td><td>金额</td></tr>
+      <tr><td>支付状态</td><td><code>status</code></td><td>Int</td><td>1为支付成功,0为未支付</td></tr>
+      <tr><td>扩展参数</td><td><code>param</code></td><td>String</td><td>原样返回</td></tr>
+      <tr><td>支付者</td><td><code>buyer</code></td><td>String</td><td>匹配来源说明</td></tr>
+    </table>
+
+    {{else if eq .DocPage "orders"}}
+    <h1>[API] 批量查询订单</h1>
+    <p>URL地址:<span class="url-chip">/api.php?act=orders&amp;pid={商户ID}&amp;key={商户密钥}</span></p>
+    <h3>请求参数</h3>
+    <table>
+      <tr><th>字段名</th><th>变量名</th><th>必填</th><th>类型</th><th>示例值</th><th>描述</th></tr>
+      <tr><td>操作类型</td><td><code>act</code></td><td>是</td><td>String</td><td>orders</td><td>此API固定值</td></tr>
+      <tr><td>商户ID</td><td><code>pid</code></td><td>是</td><td>Int</td><td>1001</td><td></td></tr>
+      <tr><td>商户密钥</td><td><code>key</code></td><td>是</td><td>String(32)</td><td>89unJUB8...</td><td></td></tr>
+      <tr><td>查询订单数量</td><td><code>limit</code></td><td>否</td><td>Int</td><td>20</td><td>返回数量,最大 50</td></tr>
+      <tr><td>页码</td><td><code>page</code></td><td>否</td><td>Int</td><td>1</td><td>当前查询页码</td></tr>
+    </table>
+    <h3>返回结果</h3>
+    <table>
+      <tr><th>字段名</th><th>变量名</th><th>类型</th><th>描述</th></tr>
+      <tr><td>返回状态码</td><td><code>code</code></td><td>Int</td><td>1为成功,其它为失败</td></tr>
+      <tr><td>返回信息</td><td><code>msg</code></td><td>String</td><td>查询订单列表成功!</td></tr>
+      <tr><td>订单列表</td><td><code>data</code></td><td>Array</td><td>字段同「查询单个订单」</td></tr>
+    </table>
+
+    {{else if eq .DocPage "monitor"}}
+    <h1>监控APP对接</h1>
+    <p>本平台通过「监控设备」接收收款到账通知。管理员在后台「监控设备」中添加设备获得 Token 后,在监控APP中配置即可。</p>
+    <h2>方式一:平台自有协议</h2>
+    <p>心跳地址:<span class="url-chip">GET /monitor/heart?token={设备Token}</span></p>
+    <p>推送地址:<span class="url-chip">GET /monitor/push?token={设备Token}&amp;type={alipay|wxpay}&amp;money={金额}&amp;content={通知内容}</span></p>
+    <h2>方式二:V免签(vmq)兼容协议</h2>
+    <p>兼容 V免签监控APP,直接填入本平台地址与设备 Token 即可:</p>
+    <p>心跳地址:<span class="url-chip">GET /appHeart?t={时间戳}&amp;sign={md5(t+Token)}</span></p>
+    <p>推送地址:<span class="url-chip">GET /appPushV?t={时间戳}&amp;sign={md5(t+Token)}&amp;type={alipay|wxpay}&amp;money={金额}&amp;content={通知内容}</span></p>
+    <h2>返回格式</h2>
+    <pre><code>{"code": 1, "msg": "心跳成功"}
+{"code": 1, "msg": "已匹配订单 20261012142704303043"}
+{"code": 2, "msg": "已记录,未匹配到订单"}
+{"code": -1, "msg": "设备token无效"}</code></pre>
+    <h2>匹配规则</h2>
+    <p>· 优先从推送内容中识别平台订单号精确匹配;· 否则按「支付方式 + 到账金额」精确匹配最早的待支付订单;· 为避免同额冲突,整数金额下单时会自动追加随机小数尾数(可在系统设置关闭);· 订单超时(默认 5 分钟)后不再参与匹配。</p>
+    <h2>收款码轮询</h2>
+    <p>商户中心「我的通道」中,同一支付方式可绑定多个自己的收款码:绑定 ≥2 个并启用后即可开启轮询,订单将按"最久未使用优先"轮流使用各个收款码,实现多码分摊收款。停用/删除导致启用码不足 2 个时轮询自动关闭;未绑定自有码的通道回落平台收款码。</p>
+    {{else}}
+    <h1>开发文档</h1>
+    <p>请从左侧选择要查看的接口文档。</p>
+    {{end}}
+  </div>
+</div>
+{{end}}

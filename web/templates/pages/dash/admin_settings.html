@@ -1,0 +1,180 @@
+{{define "content"}}
+{{template "flash" .}}
+<div class="panel-row">
+  <div class="card">
+    <div class="card-title">基础设置</div>
+    <form method="post" action="/admin/settings/save">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <div class="form-row">
+        <div class="form-item">
+          <label>站点名称</label>
+          <input class="input" type="text" name="site_name" value="{{index .S "site_name"}}">
+        </div>
+        <div class="form-item">
+          <label>站点标题</label>
+          <input class="input" type="text" name="site_title" value="{{index .S "site_title"}}">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>全局费率 %</label>
+          <input class="input" type="number" step="0.01" min="0" max="100" name="fee_rate" value="{{index .S "fee_rate"}}">
+        </div>
+        <div class="form-item">
+          <label>订单超时(分钟)</label>
+          <input class="input" type="number" min="1" max="60" name="order_timeout" value="{{index .S "order_timeout"}}">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>最低提现金额(元)</label>
+          <input class="input" type="number" step="0.01" min="0.01" name="min_settle" value="{{index .S "min_settle"}}">
+        </div>
+        <div class="form-item">
+          <label>客服联系方式</label>
+          <input class="input" type="text" name="kefu" value="{{index .S "kefu"}}" placeholder="如 QQ: 123456">
+        </div>
+        <div class="form-item">
+          <label>收银台轮询间隔(秒,1~30)</label>
+          <input class="input" type="number" min="1" max="30" name="poll_interval" value="{{index .S "poll_interval"}}">
+        </div>
+      </div>
+      <div class="form-item">
+        <label>收银台公告</label>
+        <input class="input" type="text" name="announcement" value="{{index .S "announcement"}}">
+      </div>
+      <div class="form-item">
+        <label>收银台支付提示</label>
+        <input class="input" type="text" name="pay_notice" value="{{index .S "pay_notice"}}">
+      </div>
+      <div class="form-item">
+        <label>页脚文字</label>
+        <input class="input" type="text" name="footer_text" value="{{index .S "footer_text"}}">
+      </div>
+      <div class="form-item">
+        <label>商户中心公告(留空不显示)</label>
+        <input class="input" type="text" name="merchant_notice" value="{{index .S "merchant_notice"}}" placeholder="显示在商户首页顶部">
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>告警通知邮箱(配合设备离线告警)</label>
+          <input class="input" type="email" name="alert_email" value="{{index .S "alert_email"}}" placeholder="接收告警的邮箱">
+        </div>
+        <div class="form-item">
+          <label>设备离线告警(需已配置SMTP)</label>
+          <label class="row" style="gap:8px;margin:0"><input type="checkbox" name="device_alert" {{if eq (index .S "device_alert") "1"}}checked{{end}}> 设备离线超过5分钟发邮件提醒</label>
+        </div>
+      </div>
+      <div class="form-item">
+        <label class="row" style="gap:8px"><input type="checkbox" name="money_offset" {{if eq (index .S "money_offset") "1"}}checked{{end}}> 金额尾数偏移(强烈建议开启,防止同额订单无法区分)</label>
+        <label class="row" style="gap:8px"><input type="checkbox" name="register_open" {{if eq (index .S "register_open") "1"}}checked{{end}}> 开放商户注册</label>
+        <label class="row" style="gap:8px"><input type="checkbox" name="invite_open" {{if eq (index .S "invite_open") "1"}}checked{{end}}> 启用邀请码(填写时校验)</label>
+      </div>
+      <button class="btn btn-primary" type="submit">保存全部设置</button>
+    </form>
+  </div>
+  <div class="card">
+    <div class="card-title">运营提示</div>
+    <p class="muted" style="line-height:2.1;font-size:13px">
+      · <b>金额尾数偏移</b>:开启后,整数金额订单会自动追加 0.01~0.99 的随机尾数,保证同一时刻待支付订单金额唯一,监控到账可精确匹配;<br>
+      · <b>订单超时</b>:超时未支付的订单自动作废,不再参与匹配;<br>
+      · <b>全局费率</b>:可在「用户管理」中为单个商户设置专属费率,0 表示跟随全局;<br>
+      · <b>收款码</b>:在「渠道管理」中上传,收银台将展示给买家扫码付款;<br>
+      · <b>监控设备</b>:在「监控设备」中添加并配置到监控APP后,收款到账将自动推送匹配。
+    </p>
+    <div class="card-title mt">品牌 Logo(白标)</div>
+    <div class="row mb" style="gap:14px">
+      {{if index .S "site_logo"}}
+      <img src="{{index .S "site_logo"}}" alt="Logo" style="height:44px;border-radius:10px;border:1px solid var(--border)">
+      <form method="post" action="/admin/logo/clear" data-confirm="恢复默认 Logo?">
+        <input type="hidden" name="_csrf" value="{{.CSRF}}">
+        <button class="btn btn-ghost btn-sm" type="submit">恢复默认</button>
+      </form>
+      {{end}}
+    </div>
+    <form method="post" action="/admin/logo/upload" enctype="multipart/form-data" class="row" style="gap:8px">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <label class="file-upload">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span>上传品牌 Logo</span>
+        <span class="fu-name">建议方形 png/svg,≤2MB</span>
+        <input type="file" name="logo" accept="image/png,image/jpeg,image/svg+xml,image/webp" required onchange="this.closest('form').querySelector('.fu-name').textContent = this.files[0] ? this.files[0].name : '建议方形 png/svg'">
+      </label>
+      <button class="btn btn-primary btn-sm" type="submit">上传</button>
+    </form>
+    <p class="muted" style="font-size:12px;margin-top:8px">上传后站点导航与收银台将展示您的品牌 Logo,实现白标运营。</p>
+    <div class="card-title mt">邮件通知 (SMTP)</div>
+    <p class="muted" style="font-size:12.5px;margin-bottom:12px">配置后,结算提现的打款/拒绝结果会自动邮件通知商户(商户需在个人设置填写邮箱)。QQ 邮箱举例: smtp.qq.com / 465 / SSL,密码填授权码。</p>
+    <form method="post" action="/admin/settings/save">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <div class="form-row">
+        <div class="form-item">
+          <label>SMTP 服务器</label>
+          <input class="input" type="text" name="smtp_host" value="{{index .S "smtp_host"}}" placeholder="smtp.qq.com">
+        </div>
+        <div class="form-item" style="max-width:130px">
+          <label>端口</label>
+          <input class="input" type="number" name="smtp_port" value="{{index .S "smtp_port"}}">
+        </div>
+        <div class="form-item" style="max-width:150px">
+          <label>加密方式</label>
+          <select class="input" name="smtp_tls">
+            <option value="ssl" {{if eq (index .S "smtp_tls") "ssl"}}selected{{end}}>SSL(465)</option>
+            <option value="starttls" {{if eq (index .S "smtp_tls") "starttls"}}selected{{end}}>STARTTLS(587)</option>
+            <option value="none" {{if eq (index .S "smtp_tls") "none"}}selected{{end}}>不加密(25)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>账号(发件邮箱)</label>
+          <input class="input" type="text" name="smtp_user" value="{{index .S "smtp_user"}}" placeholder="noreply@example.com">
+        </div>
+        <div class="form-item">
+          <label>密码/授权码</label>
+          <input class="input" type="password" name="smtp_pass" value="{{index .S "smtp_pass"}}">
+        </div>
+        <div class="form-item">
+          <label>发件人显示(选填)</label>
+          <input class="input" type="text" name="smtp_from" value="{{index .S "smtp_from"}}" placeholder="缺省同账号">
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" type="submit">保存 SMTP 设置</button>
+    </form>
+    <form method="post" action="/admin/mail/test" class="row mt" style="gap:8px">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <input class="input" type="email" name="to" placeholder="测试收件邮箱" style="flex:1;min-width:180px" required>
+      <button class="btn btn-outline btn-sm" type="submit">发送测试邮件</button>
+    </form>
+    <div class="card-title mt">系统信息</div>
+    <div class="kv">
+      <span class="k">数据库大小</span><span class="v">{{divSize .DBSize}} MB</span>
+      <span class="k">平台已运行</span><span class="v">{{.UptimeH}} 小时</span>
+      <span class="k">运行环境</span><span class="v mono">{{.GoVersion}}</span>
+    </div>
+    <div class="card-title mt">数据库备份</div>
+    <form method="post" action="/admin/backup/create" data-confirm="创建备份期间可能有短暂写入延迟,确定继续?">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <button class="btn btn-primary btn-sm" type="submit">立即创建备份</button>
+    </form>
+    {{if .Backups}}
+    <div class="table-wrap mt">
+      <table class="tbl">
+        <tr><th>备份文件</th><th class="money">大小</th><th>时间</th><th>操作</th></tr>
+        {{range .Backups}}
+        <tr>
+          <td class="mono">{{.Name}}</td>
+          <td class="money muted">{{divSize .Size}} MB</td>
+          <td class="muted">{{fdate .ModTime}}</td>
+          <td><a class="btn btn-sm btn-outline" href="/admin/backup/download?file={{.Name}}">下载</a></td>
+        </tr>
+        {{end}}
+      </table>
+    </div>
+    {{else}}
+    <p class="muted mt" style="font-size:12.5px">暂无备份。备份为在线快照,不影响业务;建议每周下载一次并异地保存。</p>
+    {{end}}
+    <div class="alert err mt">安全提醒:管理员默认密码为 admin123,请立即在个人设置中修改!</div>
+  </div>
+</div>
+{{end}}

@@ -1,0 +1,62 @@
+{{define "content"}}
+<div class="row between mb" style="flex-wrap:wrap">
+  <span></span>
+  <label class="row" style="gap:7px;font-size:12.5px;color:var(--text-3);cursor:pointer">
+    <input type="checkbox" id="autoRf" data-key="{{`""" + key + """`}}"> 30秒自动刷新
+  </label>
+</div>
+{{template "flash" .}}
+<div class="card">
+  <div class="row between mb">
+    <div class="card-title" style="margin:0">到账流水(最近 100 条)</div>
+    <span class="muted" style="font-size:12.5px">未匹配的到账可在行内填入平台订单号手动匹配(金额须一致)</span>
+  </div>
+  <div class="table-wrap">
+    <table class="tbl">
+      <tr><th>#</th><th>设备</th><th>方式</th><th class="money">到账金额</th><th>通知内容</th><th>匹配订单</th><th>时间</th></tr>
+      {{if .Logs}}
+      {{range .Logs}}
+      <tr>
+        <td>{{.ID}}</td>
+        <td>{{if .DeviceName}}{{.DeviceName}}{{else}}#{{.DeviceID}}{{end}}</td>
+        <td>{{.TypeName}}</td>
+        <td class="money">¥{{yuan .Money}}</td>
+        <td class="muted" style="max-width:320px;white-space:normal">{{.Content}}</td>
+        <td>
+          {{if gt .OrderID 0}}<span class="badge badge-green">已匹配 #{{.OrderID}}</span>
+          {{else}}
+          <form class="row" style="gap:5px;flex-wrap:nowrap" method="post" action="/admin/paylogs/match">
+            <input type="hidden" name="_csrf" value="{{$.CSRF}}">
+            <input type="hidden" name="id" value="{{.ID}}">
+            <input class="input" type="text" name="trade_no" placeholder="平台订单号" style="width:150px;padding:5px 8px;font-size:12px" required>
+            <button class="btn btn-sm btn-outline" type="submit">匹配</button>
+          </form>
+          {{end}}
+        </td>
+        <td class="muted">{{fdate .CreatedAt}}</td>
+      </tr>
+      {{end}}
+      {{else}}
+      <tr><td colspan="7"><div class="empty">暂无到账流水,监控APP上报后显示在这里</div></td></tr>
+      {{end}}
+    </table>
+  </div>
+</div>
+{{end}}
+
+<script>
+(function () {
+  var ck = document.getElementById('autoRf');
+  if (!ck) return;
+  var key = ck.getAttribute('data-key');
+  ck.checked = localStorage.getItem(key) === '1';
+  var tick = function () {
+    if (ck.checked) { location.reload(); }
+  };
+  ck.addEventListener('change', function () {
+    localStorage.setItem(key, ck.checked ? '1' : '0');
+    if (ck.checked) { setTimeout(tick, 1000); }
+  });
+  if (ck.checked) { setInterval(tick, 30000); }
+})();
+</script>

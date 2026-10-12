@@ -1,0 +1,12 @@
+{{define "content"}}
+<div class="auth-page" style="min-height:calc(100vh - 64px)">
+  <div class="auth-card" style="text-align:center">
+    <h2>{{.Title}}</h2>
+    <p class="muted" style="margin:18px 0 26px;line-height:1.9">{{.Msg}}</p>
+    <div class="row" style="justify-content:center">
+      <a class="btn btn-primary" href="/">返回首页</a>
+      <a class="btn btn-ghost" href="/login">登录</a>
+    </div>
+  </div>
+</div>
+{{end}}

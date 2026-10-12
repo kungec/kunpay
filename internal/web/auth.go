@@ -1,0 +1,458 @@
+package web
+
+import (
+	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"golang.org/x/crypto/bcrypt"
+
+	"kunzhifu/internal/db"
+	"kunzhifu/internal/model"
+)
+
+const sessionCookie = "kunpay_sid"
+
+var (
+	reUsername = regexp.MustCompile(`^[a-zA-Z0-9_]{3,20}$`)
+	reEmail    = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
+)
+
+func (s *Server) setSession(w http.ResponseWriter, userID int64) {
+	token := db.RandKey(32)
+	now := model.Now()
+	_, err := s.DB.Exec("INSERT INTO sessions(token,user_id,expires_at,created_at) VALUES(?,?,?,?)",
+		token, userID, now+7*86400, now)
+	if err != nil {
+		http.Error(w, "创建会话失败", 500)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookie,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   7 * 86400,
+	})
+}
+
+func (s *Server) clearSession(w http.ResponseWriter, r *http.Request) {
+	if c, err := r.Cookie(sessionCookie); err == nil {
+		_, _ = s.DB.Exec("DELETE FROM sessions WHERE token=?", c.Value)
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: sessionCookie, Value: "", Path: "/", HttpOnly: true,
+		SameSite: http.SameSiteLaxMode, MaxAge: -1,
+	})
+}
+
+func (s *Server) currentUser(r *http.Request) *model.User {
+	c, err := r.Cookie(sessionCookie)
+	if err != nil || c.Value == "" {
+		return nil
+	}
+	var userID int64
+	var expires int64
+	err = s.DB.QueryRow("SELECT user_id,expires_at FROM sessions WHERE token=?", c.Value).Scan(&userID, &expires)
+	if err != nil || expires < model.Now() {
+		return nil
+	}
+	u, _ := s.Store.UserByID(userID)
+	if u == nil || u.Status != 1 {
+		return nil
+	}
+	return u
+}
+
+// requireLogin 包装: 未登录跳转 /login
+func (s *Server) requireLogin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.currentUser(r) == nil {
+			http.Redirect(w, r, "/login?next="+r.URL.Path, http.StatusFound)
+			return
+		}
+		next(w, r)
+	}
+}
+
+// requireAdmin 包装: 需要管理员
+func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		u := s.currentUser(r)
+		if u == nil {
+			http.Redirect(w, r, "/login?next="+r.URL.Path, http.StatusFound)
+			return
+		}
+		if u.Role != "admin" {
+			http.Error(w, "无权访问", http.StatusForbidden)
+			return
+		}
+		next(w, r)
+	}
+}
+
+// requireCSRF 包装: 校验 POST 表单 CSRF
+func (s *Server) requireCSRF(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && !s.checkCSRF(r) {
+			http.Error(w, "会话已过期,请刷新页面重试", http.StatusForbidden)
+			return
+		}
+		next(w, r)
+	}
+}
+
+func clientIP(r *http.Request) string {
+	if xf := r.Header.Get("X-Real-IP"); xf != "" {
+		return strings.TrimSpace(strings.Split(xf, ",")[0])
+	}
+	if xf := r.Header.Get("X-Forwarded-For"); xf != "" {
+		return strings.TrimSpace(strings.Split(xf, ",")[0])
+	}
+	host := r.RemoteAddr
+	if i := strings.LastIndexByte(host, ':'); i > 0 {
+		host = host[:i]
+	}
+	return host
+}
+
+// ---- 注册 ----
+
+func (s *Server) handleRegisterPage(w http.ResponseWriter, r *http.Request) {
+	if s.currentUser(r) != nil {
+		http.Redirect(w, r, "/user", http.StatusFound)
+		return
+	}
+	if s.DB.MustSetting("register_open") != "1" {
+		s.render(w, "pub_message", http.StatusOK, map[string]any{
+			"Page": "message", "Title": "暂未开放注册",
+			"Msg": "系统暂未开放注册,请联系管理员。", "Settings": s.pageData(r)["Settings"],
+		})
+		return
+	}
+	d := s.pageData(r)
+	d["Page"] = "register"
+	s.render(w, "pub_register", http.StatusOK, d)
+}
+
+// 注册防滥用: 同一 IP 每小时最多注册 5 个账号
+var regCounts sync.Map // ip -> *regCount
+
+type regCount struct {
+	n      int
+	window time.Time
+}
+
+func registerAllowed(ip string) bool {
+	v, _ := regCounts.LoadOrStore(ip, &regCount{window: time.Now()})
+	rc := v.(*regCount)
+	if time.Since(rc.window) > time.Hour {
+		rc.n = 0
+		rc.window = time.Now()
+	}
+	rc.n++
+	return rc.n <= 5
+}
+
+func (s *Server) handleRegisterPost(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	if !registerAllowed(clientIP(r)) {
+		d := s.pageData(r)
+		d["Page"] = "register"
+		d["Error"] = "该 IP 注册过于频繁,请稍后再试"
+		s.render(w, "pub_register", http.StatusTooManyRequests, d)
+		return
+	}
+	username := strings.TrimSpace(r.FormValue("username"))
+	email := strings.TrimSpace(r.FormValue("email"))
+	password := r.FormValue("password")
+	password2 := r.FormValue("password2")
+	qq := strings.TrimSpace(r.FormValue("qq"))
+	invite := strings.TrimSpace(r.FormValue("invite_code"))
+
+	fail := func(msg string) {
+		d := s.pageData(r)
+		d["Page"] = "register"
+		d["Error"] = msg
+		d["Form"] = map[string]string{"username": username, "email": email, "qq": qq}
+		s.render(w, "pub_register", http.StatusOK, d)
+	}
+
+	if s.DB.MustSetting("register_open") != "1" {
+		fail("系统暂未开放注册")
+		return
+	}
+	if !reUsername.MatchString(username) {
+		fail("用户名须为 3-20 位字母、数字或下划线")
+		return
+	}
+	if email != "" && !reEmail.MatchString(email) {
+		fail("邮箱格式不正确")
+		return
+	}
+	if len(password) < 6 {
+		fail("密码长度至少 6 位")
+		return
+	}
+	if password != password2 {
+		fail("两次输入的密码不一致")
+		return
+	}
+	if s.DB.MustSetting("invite_open") == "1" && invite != "" {
+		var n int
+		_ = s.DB.QueryRow("SELECT COUNT(*) FROM users WHERE invite_code=?", invite).Scan(&n)
+		if n == 0 {
+			fail("邀请码无效")
+			return
+		}
+	}
+	if exists, _ := s.Store.UserByUsername(username); exists != nil {
+		fail("用户名已被注册")
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		fail("注册失败,请稍后再试")
+		return
+	}
+	// 分配递增 PID
+	var maxPid int64
+	_ = s.DB.QueryRow("SELECT MAX(pid) FROM users").Scan(&maxPid)
+	newPid := maxPid + 1
+	if newPid < 1001 {
+		newPid = 1001
+	}
+	var inviter int64
+	if invite != "" {
+		_ = s.DB.QueryRow("SELECT id FROM users WHERE invite_code=?", invite).Scan(&inviter)
+	}
+	res, err := s.DB.Exec(`INSERT INTO users(username,email,password_hash,qq,role,status,pid,skey,invite_code,invited_by,created_at)
+		VALUES(?,?,?,?,'user',1,?,?,?,?,?)`,
+		username, email, string(hash), qq, newPid, db.RandKey(32), db.RandKey(8), inviter, model.Now())
+	if err != nil {
+		fail("注册失败: 用户名或邮箱可能已被占用")
+		return
+	}
+	uid, _ := res.LastInsertId()
+	// 邀请人奖励(可选): 不做资金奖励,仅记录
+	s.setSession(w, uid)
+	http.Redirect(w, r, "/user", http.StatusFound)
+}
+
+// ---- 登录 ----
+
+func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
+	if s.currentUser(r) != nil {
+		http.Redirect(w, r, "/user", http.StatusFound)
+		return
+	}
+	d := s.pageData(r)
+	d["Page"] = "login"
+	s.render(w, "pub_login", http.StatusOK, d)
+}
+
+// 登录防爆破: 同一 IP+用户名 15 分钟内失败 5 次则锁定 15 分钟
+var loginFails sync.Map // key -> *failState
+
+type failState struct {
+	count    int
+	lockedAt time.Time
+}
+
+func loginKey(ip, username string) string { return ip + "|" + username }
+
+func loginLocked(ip, username string) (bool, time.Duration) {
+	if v, ok := loginFails.Load(loginKey(ip, username)); ok {
+		fs := v.(*failState)
+		if fs.count >= 5 && time.Since(fs.lockedAt) < 15*time.Minute {
+			return true, 15*time.Minute - time.Since(fs.lockedAt)
+		}
+		if fs.count >= 5 {
+			fs.count = 0 // 锁定期结束,重新计数
+		}
+	}
+	return false, 0
+}
+
+func recordLoginFail(ip, username string) {
+	key := loginKey(ip, username)
+	v, _ := loginFails.LoadOrStore(key, &failState{})
+	fs := v.(*failState)
+	fs.count++
+	if fs.count == 1 {
+		fs.lockedAt = time.Now()
+	}
+}
+
+func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	username := strings.TrimSpace(r.FormValue("username"))
+	password := r.FormValue("password")
+
+	if locked, remain := loginLocked(clientIP(r), username); locked {
+		d := s.pageData(r)
+		d["Page"] = "login"
+		d["Error"] = "尝试次数过多,请 " + strconv.Itoa(int(remain.Minutes())+1) + " 分钟后再试"
+		s.render(w, "pub_login", http.StatusTooManyRequests, d)
+		return
+	}
+
+	d := s.pageData(r)
+	d["Page"] = "login"
+	failMsg := "用户名或密码错误"
+
+	u, err := s.Store.UserByUsername(username)
+	if err != nil || u == nil {
+		recordLoginFail(clientIP(r), username)
+		d["Error"] = failMsg
+		s.render(w, "pub_login", http.StatusOK, d)
+		return
+	}
+	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil {
+		recordLoginFail(clientIP(r), username)
+		d["Error"] = failMsg
+		s.render(w, "pub_login", http.StatusOK, d)
+		return
+	}
+	if u.Status != 1 {
+		d["Error"] = "账号已被封禁,请联系管理员"
+		s.render(w, "pub_login", http.StatusOK, d)
+		return
+	}
+	loginFails.Delete(loginKey(clientIP(r), username))
+	_, _ = s.DB.Exec("UPDATE users SET last_login_at=?, last_login_ip=? WHERE id=?",
+		model.Now(), clientIP(r), u.ID)
+	s.setSession(w, u.ID)
+	next := r.FormValue("next")
+	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
+		next = "/user"
+	}
+	http.Redirect(w, r, next, http.StatusFound)
+}
+
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	s.clearSession(w, r)
+	http.Redirect(w, r, "/login", http.StatusFound)
+}
+
+// ---- 修改密码辅助 ----
+
+func hashPassword(pw string) string {
+	h, _ := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost)
+	return string(h)
+}
+
+// ---------- 忘记密码(邮件重置) ----------
+
+var resetCounts sync.Map // ip -> *regCount (复用计数结构)
+
+func resetAllowed(ip string) bool {
+	v, _ := resetCounts.LoadOrStore(ip, &regCount{window: time.Now()})
+	rc := v.(*regCount)
+	if time.Since(rc.window) > time.Hour {
+		rc.n = 0
+		rc.window = time.Now()
+	}
+	rc.n++
+	return rc.n <= 3
+}
+
+func (s *Server) handleForgotPage(w http.ResponseWriter, r *http.Request) {
+	d := s.pageData(r)
+	d["Page"] = "forgot"
+	d["Done"] = false
+	s.render(w, "pub_forgot", http.StatusOK, d)
+}
+
+func (s *Server) handleForgotPost(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	account := strings.TrimSpace(r.FormValue("account"))
+	d := s.pageData(r)
+	d["Page"] = "forgot"
+	if !resetAllowed(clientIP(r)) {
+		d["Msg"] = "请求过于频繁,请稍后再试"
+		d["Done"] = true
+		s.render(w, "pub_forgot", http.StatusOK, d)
+		return
+	}
+	// 防枚举: 无论账号是否存在都显示同一提示
+	generic := "如果该账号存在且已绑定邮箱,重置链接已发送,请在 15 分钟内完成重置。"
+	var userID int64
+	var email string
+	err := s.DB.QueryRow("SELECT id,COALESCE(NULLIF(email,''),'') FROM users WHERE username=? OR email=?",
+		account, account).Scan(&userID, &email)
+	if err != nil || email == "" || s.smtpConf().Host == "" {
+		d["Msg"] = generic
+		d["Done"] = true
+		s.render(w, "pub_forgot", http.StatusOK, d)
+		return
+	}
+	token := db.RandKey(32)
+	_, _ = s.DB.Exec("INSERT INTO pwd_resets(token,user_id,expires_at,created_at) VALUES(?,?,?,?)",
+		token, userID, model.Now()+900, model.Now())
+	resetURL := s.absoluteURL(r) + "/reset?token=" + token
+	subject := "【" + s.DB.MustSetting("site_name") + "】密码重置"
+	body := mailHTML("重置登录密码", []string{
+		"您(或他人)正在重置账号 <b>" + htmlEscape(account) + "</b> 的登录密码。",
+		"点击下方链接设置新密码(15 分钟内有效):",
+		`<a href="` + resetURL + `" style="word-break:break-all;color:#2e63f6">` + resetURL + `</a>`,
+		"如非本人操作,请忽略本邮件,密码不会变更。",
+	})
+	if err := s.SendMail(email, subject, body); err != nil {
+		d["Msg"] = "邮件发送失败,请联系管理员。"
+		d["Done"] = true
+		s.render(w, "pub_forgot", http.StatusOK, d)
+		return
+	}
+	d["Msg"] = generic
+	d["Done"] = true
+	s.render(w, "pub_forgot", http.StatusOK, d)
+}
+
+func (s *Server) handleResetPage(w http.ResponseWriter, r *http.Request) {
+	token := r.FormValue("token")
+	var userID int64
+	err := s.DB.QueryRow("SELECT user_id FROM pwd_resets WHERE token=? AND expires_at>?", token, model.Now()).Scan(&userID)
+	if err != nil {
+		renderMsg(s, w, r, "链接无效", "重置链接无效或已过期,请重新发起找回密码。", http.StatusOK)
+		return
+	}
+	d := s.pageData(r)
+	d["Page"] = "reset"
+	d["Token"] = token
+	s.render(w, "pub_reset", http.StatusOK, d)
+}
+
+func (s *Server) handleResetPost(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	token := r.FormValue("token")
+	password := r.FormValue("password")
+	password2 := r.FormValue("password2")
+	var userID int64
+	err := s.DB.QueryRow("SELECT user_id FROM pwd_resets WHERE token=? AND expires_at>?", token, model.Now()).Scan(&userID)
+	if err != nil {
+		renderMsg(s, w, r, "链接无效", "重置链接无效或已过期,请重新发起找回密码。", http.StatusOK)
+		return
+	}
+	if len(password) < 6 || password != password2 {
+		d := s.pageData(r)
+		d["Page"] = "reset"
+		d["Token"] = token
+		d["Error"] = "密码长度至少 6 位且两次输入一致"
+		s.render(w, "pub_reset", http.StatusOK, d)
+		return
+	}
+	_, _ = s.DB.Exec("UPDATE users SET password_hash=? WHERE id=?", hashPassword(password), userID)
+	_, _ = s.DB.Exec("DELETE FROM pwd_resets WHERE token=?", token)
+	// 安全: 重置密码后踢掉该用户所有会话
+	_, _ = s.DB.Exec("DELETE FROM sessions WHERE user_id=?", userID)
+	http.Redirect(w, r, "/login", http.StatusFound)
+}
+
+func htmlEscape(s string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&#34;").Replace(s)
+}

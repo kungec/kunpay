@@ -1,0 +1,30 @@
+{{define "content"}}
+{{template "flash" .}}
+<div class="alert info">选择要清理的数据分类,按<strong>保留天数</strong>删除更早的数据。资金明细涉及财务凭证请谨慎;清理不可恢复,建议先在"数据库备份"中创建备份。</div>
+<div class="card">
+  <div class="card-title">清理配置</div>
+  <form method="get" action="/admin/cleanup" class="row" style="gap:10px">
+    <label style="margin:0;color:var(--text-2)">保留天数</label>
+    <input class="input" type="number" name="days" min="1" max="3650" value="{{.Days}}" style="width:110px">
+    <button class="btn btn-ghost btn-sm" type="submit">刷新统计</button>
+  </form>
+  <form method="post" action="/admin/cleanup/run" class="mt" data-confirm="清理操作不可恢复,确定执行?">
+    <input type="hidden" name="_csrf" value="{{.CSRF}}">
+    <input type="hidden" name="days" value="{{.Days}}">
+    <div class="table-wrap">
+      <table class="tbl">
+        <tr><th style="width:44px">选择</th><th>数据分类</th><th>说明</th><th class="money">可清理数量</th></tr>
+        {{range .Targets}}
+        <tr>
+          <td><input type="checkbox" name="targets" value="{{.Key}}" {{if eq .Key "sessions"}}checked{{end}}{{if eq .Key "pwd_resets"}}checked{{end}}></td>
+          <td><b>{{.Name}}</b></td>
+          <td class="muted">{{.Desc}}</td>
+          <td class="money">{{.Count}} 条</td>
+        </tr>
+        {{end}}
+      </table>
+    </div>
+    <button class="btn btn-danger mt" type="submit">执行清理</button>
+  </form>
+</div>
+{{end}}

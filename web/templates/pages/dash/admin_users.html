@@ -1,0 +1,103 @@
+{{define "content"}}
+{{template "flash" .}}
+<div class="card">
+  <form class="search-bar" method="get" action="/admin/users">
+    <input class="input" type="text" name="kw" placeholder="用户名 / 邮箱 / PID" value="{{.Kw}}">
+    <button class="btn btn-primary" type="submit">搜索</button>
+  </form>
+  <div class="table-wrap">
+    <table class="tbl">
+      <tr><th>PID</th><th>用户名</th><th>邮箱</th><th>QQ</th><th class="money">余额</th><th>费率</th><th>状态</th><th>注册时间</th><th>最后登录</th><th>操作</th></tr>
+      {{if .Users}}
+      {{range .Users}}
+      <tr>
+        <td class="mono">{{.Pid}}</td>
+        <td><b>{{.Username}}</b>{{if eq .Role "admin"}} <span class="badge badge-blue">管理员</span>{{end}}</td>
+        <td class="muted">{{.Email}}</td>
+        <td>{{.QQ}}</td>
+        <td class="money">¥{{yuan .Balance}}</td>
+        <td>{{if gt .Rate 0.0}}{{printf "%.2f" .Rate}}%{{else}}<span class="muted">全局</span>{{end}}</td>
+        <td>{{if eq .Status 1}}<span class="badge badge-green">正常</span>{{else}}<span class="badge badge-red">封禁</span>{{end}}</td>
+        <td class="muted">{{shortdate .CreatedAt}}</td>
+        <td class="muted">{{fdate .LastLogin}}</td>
+        <td>
+          <div class="actions-cell">
+            {{if ne .Role "admin"}}
+            <form method="post" action="/admin/users/save" data-confirm="确定要{{if eq .Status 1}}封禁{{else}}解封{{end}}用户 {{.Username}} 吗?" style="display:inline">
+              <input type="hidden" name="_csrf" value="{{$.CSRF}}">
+              <input type="hidden" name="id" value="{{.ID}}">
+              <input type="hidden" name="action" value="toggle">
+              <button class="btn btn-sm {{if eq .Status 1}}btn-danger{{else}}btn-success{{end}}" type="submit">{{if eq .Status 1}}封禁{{else}}解封{{end}}</button>
+            </form>
+            {{end}}
+            <button class="btn btn-sm btn-ghost" onclick="openUserDlg({{.ID}},'{{.Username}}',{{.Rate}},'{{.Skey}}')">更多</button>
+          </div>
+        </td>
+      </tr>
+      {{end}}
+      {{else}}
+      <tr><td colspan="10"><div class="empty">没有找到用户</div></td></tr>
+      {{end}}
+    </table>
+  </div>
+  {{template "pager" dict "TotalPages" .TotalPages "PageNo" .PageNo "Query" (pagerQuery (print "kw=" .Kw)) "Prev" (addInt .PageNo -1) "Next" (addInt .PageNo 1)}}
+</div>
+
+<div class="dlg-mask" id="userDlg">
+  <div class="dlg">
+    <h3>用户管理 - <span id="udName"></span></h3>
+    <div class="kv mb">
+      <span class="k">商户密钥</span><span class="v mono" id="udKey"></span>
+    </div>
+    <form method="post" action="/admin/users/save" id="udFormRate">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <input type="hidden" name="id" id="udIdRate">
+      <input type="hidden" name="action" value="rate">
+      <div class="form-item">
+        <label>专属费率 %(0 = 跟随全局)</label>
+        <input class="input" type="number" step="0.01" min="0" max="100" name="rate" id="udRate">
+      </div>
+      <button class="btn btn-primary btn-sm" type="submit">保存费率</button>
+    </form>
+    <hr style="border:none;border-top:1px dashed var(--border);margin:18px 0">
+    <form method="post" action="/admin/users/save" id="udFormBal">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <input type="hidden" name="id" id="udIdBal">
+      <input type="hidden" name="action" value="balance">
+      <div class="form-item">
+        <label>调整余额(元,正数增加/负数扣减)</label>
+        <input class="input" type="text" name="amount" placeholder="如 10.00 或 -5.00" required>
+      </div>
+      <button class="btn btn-primary btn-sm" type="submit">调整余额</button>
+    </form>
+    <hr style="border:none;border-top:1px dashed var(--border);margin:18px 0">
+    <div class="row" style="flex-wrap:wrap;gap:10px">
+      <a class="btn btn-outline btn-sm" id="udChanLink" href="#">查看自有通道</a>
+      <form method="post" action="/admin/users/save" data-confirm="重置后旧密钥立即失效,确定继续吗?">
+        <input type="hidden" name="_csrf" value="{{.CSRF}}">
+        <input type="hidden" name="id" id="udIdKey">
+        <input type="hidden" name="action" value="resetkey">
+        <button class="btn btn-ghost btn-sm" type="submit">重置密钥</button>
+      </form>
+      <form method="post" action="/admin/users/save" data-confirm="确定要重置该用户密码吗?">
+        <input type="hidden" name="_csrf" value="{{.CSRF}}">
+        <input type="hidden" name="id" id="udIdPw">
+        <input type="hidden" name="action" value="password">
+        <input type="hidden" name="password" value="Kunpay123">
+        <button class="btn btn-ghost btn-sm" type="submit">重置密码为 Kunpay123</button>
+      </form>
+    </div>
+    <div class="dlg-foot"><button class="btn btn-ghost" onclick="document.getElementById('userDlg').classList.remove('show')">关闭</button></div>
+  </div>
+</div>
+<script>
+function openUserDlg(id, name, rate, skey) {
+  document.getElementById('udName').textContent = name;
+  document.getElementById('udKey').textContent = skey;
+  document.getElementById('udRate').value = rate;
+  ['udIdRate','udIdBal','udIdKey','udIdPw'].forEach(function(x){ document.getElementById(x).value = id; });
+  document.getElementById('udChanLink').href = '/admin/users/' + id + '/channels';
+  document.getElementById('userDlg').classList.add('show');
+}
+</script>
+{{end}}

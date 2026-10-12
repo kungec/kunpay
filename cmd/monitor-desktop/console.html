@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KunPay 监控助手</title>
+<style>
+:root {
+  --primary: #2e63f6; --primary-dark: #2458e8; --primary-light: #eaf0ff;
+  --success: #1fa56f; --danger: #e5484d; --warning: #e5920b;
+  --text: #1f2329; --text2: #4e5969; --text3: #86909c;
+  --border: #e5e6eb; --card: #fff; --radius: 14px;
+  --shadow: 0 2px 12px rgba(31,35,41,.06); --shadow-lg: 0 12px 40px rgba(30,80,224,.14);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: linear-gradient(160deg, #eef3ff 0%, #f5f7fb 45%, #f2f4f9 100%);
+  min-height: 100vh; color: var(--text); font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+@keyframes pageIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes itemIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(31,165,111,.4);} 50% { box-shadow: 0 0 0 6px rgba(31,165,111,0);} }
+.wrap { max-width: 860px; margin: 0 auto; padding: 26px 18px 60px; }
+
+/* 头部 */
+.hero {
+  background: linear-gradient(120deg, #2e63f6 0%, #5b8bff 100%);
+  border-radius: 20px; padding: 28px 30px; color: #fff; margin-bottom: 20px;
+  box-shadow: 0 14px 40px rgba(46, 99, 246, .35);
+  display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap;
+  animation: pageIn .45s cubic-bezier(.22,.68,.35,1) both;
+}
+.hero .logo { display: flex; align-items: center; gap: 13px; }
+.hero .logo .ic {
+  width: 46px; height: 46px; border-radius: 13px; background: rgba(255,255,255,.18);
+  display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);
+}
+.hero h1 { font-size: 21px; letter-spacing: .5px; }
+.hero p { opacity: .85; font-size: 12.5px; margin-top: 3px; }
+.hero .badge {
+  background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.35);
+  padding: 8px 16px; border-radius: 24px; font-size: 13px; display: flex; align-items: center; gap: 8px;
+  backdrop-filter: blur(4px);
+}
+.dot { width: 9px; height: 9px; border-radius: 50%; background: #9aa7b8; }
+.dot.on { background: #35e0a1; animation: pulse 1.8s infinite; }
+.dot.off { background: #ffd479; }
+
+/* 卡片 */
+.card {
+  background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 22px; margin-bottom: 18px; border: 1px solid #eef1f7;
+  animation: itemIn .45s ease both;
+}
+.card:nth-of-type(1) { animation-delay: .06s; }
+.card:nth-of-type(2) { animation-delay: .12s; }
+.card:nth-of-type(3) { animation-delay: .18s; }
+.card-title { font-size: 15.5px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.card-title::before { content: ""; width: 4px; height: 15px; background: var(--primary); border-radius: 2px; }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.stat { background: #f8faff; border: 1px solid #e8eeff; border-radius: 12px; padding: 14px 16px; }
+.stat .l { color: var(--text3); font-size: 12.5px; }
+.stat .v { font-size: 17px; font-weight: 700; margin-top: 4px; word-break: break-all; }
+.stat .v.ok { color: var(--success); }
+.stat .v.err { color: var(--warning); font-weight: 500; font-size: 13.5px; line-height: 1.5; }
+
+label { display: block; font-size: 13px; color: var(--text2); margin: 0 0 7px; }
+.input {
+  width: 100%; padding: 10px 13px; border: 1.5px solid var(--border); border-radius: 9px;
+  font-size: 14px; outline: none; transition: all .15s; background: #fff; font-family: inherit;
+}
+.input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(46,99,246,.12); }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.form-item { margin-bottom: 14px; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 10px 20px; border-radius: 9px; border: 1px solid transparent;
+  font-size: 14px; font-weight: 500; cursor: pointer; transition: all .18s; white-space: nowrap;
+  background: #f2f3f5; color: var(--text2); user-select: none;
+}
+.btn:hover { background: #e8eaef; box-shadow: 0 2px 8px rgba(31,35,41,.08); }
+.btn:active { transform: translateY(1px); }
+.btn-primary { background: linear-gradient(135deg, #4478ff, #2e63f6); color: #fff; box-shadow: 0 4px 12px rgba(46,99,246,.25); }
+.btn-primary:hover { box-shadow: 0 6px 16px rgba(46,99,246,.35); transform: translateY(-1px); }
+.btn-ghost { background: #fff; border-color: var(--border); }
+.btn-ghost:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+.btn[disabled] { opacity: .55; cursor: not-allowed; transform: none !important; }
+
+.toast {
+  position: fixed; top: 22px; left: 50%; transform: translateX(-50%) translateY(-8px);
+  background: #1f2329; color: #fff; padding: 11px 22px; border-radius: 10px; font-size: 13.5px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.22); opacity: 0; transition: all .22s; z-index: 99; pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.ok { background: #17a05f; } .toast.err { background: #e5484d; }
+
+/* 日志 */
+.logs { max-height: 300px; overflow-y: auto; }
+.log-item { display: flex; gap: 10px; padding: 10px 4px; border-bottom: 1px solid #f2f3f5; font-size: 13px; align-items: baseline; }
+.log-item:last-child { border-bottom: 0; }
+.log-item .t { color: var(--text3); font-family: ui-monospace, Menlo, monospace; flex: none; }
+.log-item .tag { flex: none; padding: 1px 9px; border-radius: 12px; font-size: 11.5px; }
+.tag.ok { background: #e8f7f0; color: var(--success); }
+.tag.err { background: #fdebec; color: var(--danger); }
+.log-item .d { color: var(--text2); word-break: break-all; }
+.empty { text-align: center; color: var(--text3); padding: 34px 0; }
+
+.foot { text-align: center; color: var(--text3); font-size: 12px; margin-top: 8px; line-height: 1.9; }
+@media (max-width: 640px) {
+  .grid2 { grid-template-columns: 1fr; }
+  .hero { padding: 22px 20px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <div class="logo">
+      <div class="ic">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="3"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+      </div>
+      <div>
+        <h1>KunPay 监控助手</h1>
+        <p id="osInfo">设备监控终端 · 心跳保活 · 手动/模拟到账上报</p>
+      </div>
+    </div>
+    <div class="badge"><span class="dot" id="hbDot"></span><span id="hbText">检测中...</span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">设备状态</div>
+    <div class="grid2">
+      <div class="stat"><div class="l">最近心跳</div><div class="v" id="hbLast">—</div></div>
+      <div class="stat"><div class="l">心跳结果</div><div class="v" id="hbResult">—</div></div>
+      <div class="stat"><div class="l">本机设备名</div><div class="v" id="deviceName">—</div></div>
+      <div class="stat"><div class="l">已成功上报</div><div class="v" id="pushCount">0 笔</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">设备绑定</div>
+    <div class="form-item">
+      <label>平台地址(如 https://pay.example.com)</label>
+      <input class="input" id="server" placeholder="http://localhost:8787">
+    </div>
+    <div class="form-item">
+      <label>设备Token(平台后台「监控设备」中创建并复制)</label>
+      <input class="input" id="token" placeholder="设备Token">
+    </div>
+    <div class="row">
+      <button class="btn btn-primary" id="btnSave" onclick="saveConfig()">保存并测试连接</button>
+      <button class="btn btn-ghost" onclick="heartbeatNow()">立即心跳</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">到账上报</div>
+    <div class="row" style="margin-bottom:14px">
+      <select class="input" id="pushType" style="width:120px">
+        <option value="alipay">支付宝</option>
+        <option value="wxpay">微信</option>
+        <option value="qqpay">QQ钱包</option>
+      </select>
+      <input class="input" id="pushMoney" placeholder="金额,如 1.36" style="flex:1;min-width:120px">
+      <input class="input" id="pushContent" placeholder="备注(选填)" style="flex:1.4;min-width:140px">
+      <button class="btn btn-primary" onclick="manualPush()">上报</button>
+    </div>
+    <div class="row">
+      <button class="btn btn-ghost" onclick="simulate()">🎲 模拟一笔随机到账</button>
+      <span class="foot" style="text-align:left;margin:0">模拟到账随机生成金额与支付方式,用于全链路测试(需平台有待支付订单才会匹配)</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">操作日志</div>
+    <div class="logs" id="logBox"><div class="empty">暂无操作记录</div></div>
+  </div>
+
+  <div class="foot">
+    心跳每 30 秒自动发送,保持本程序运行即可让设备在平台保持在线<br>
+    手机端请使用 KunPay Monitor 安卓APP(自动监听微信/支付宝/QQ收款通知)
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + (type || '');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.className = 'toast', 2400);
+}
+async function api(path, body) {
+  const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
+  const r = await fetch(path, opt);
+  return r.json();
+}
+async function refresh() {
+  try {
+    const s = await api('/api/status');
+    document.getElementById('osInfo').textContent = s.device + ' · ' + s.os + ' · 已运行 ' + s.uptime_min + ' 分钟';
+    const dot = document.getElementById('hbDot'), txt = document.getElementById('hbText');
+    if (s.hb_ok) { dot.className = 'dot on'; txt.textContent = '设备在线'; }
+    else if (s.hb_err) { dot.className = 'dot off'; txt.textContent = s.hb_err.length > 18 ? '连接异常' : s.hb_err; }
+    else { dot.className = 'dot'; txt.textContent = '未连接'; }
+    document.getElementById('hbLast').textContent = s.hb_last || '—';
+    const hr = document.getElementById('hbResult');
+    if (s.hb_err) { hr.textContent = s.hb_err; hr.className = 'v err'; }
+    else if (s.hb_last) { hr.textContent = '✓ 心跳正常'; hr.className = 'v ok'; }
+    else { hr.textContent = '—'; hr.className = 'v'; }
+    document.getElementById('deviceName').textContent = s.device;
+    document.getElementById('pushCount').textContent = s.push_count + ' 笔';
+    if (document.activeElement.id !== 'server' && s.server) document.getElementById('server').value = s.server;
+    if (document.activeElement.id !== 'token' && s.token_set) document.getElementById('token').placeholder = s.token_mask;
+    const box = document.getElementById('logBox');
+    if (s.logs && s.logs.length) {
+      box.innerHTML = s.logs.map(l =>
+        `<div class="log-item"><span class="t">${l.time}</span>` +
+        `<span class="tag ${l.ok ? 'ok' : 'err'}">${l.ok ? '成功' : '失败'}</span>` +
+        `<span class="d">${l.detail.replace(/</g, '&lt;')}</span></div>`).join('');
+    } else {
+      box.innerHTML = '<div class="empty">暂无操作记录</div>';
+    }
+  } catch (e) {}
+}
+async function saveConfig() {
+  const btn = document.getElementById('btnSave');
+  btn.disabled = true; btn.textContent = '测试中...';
+  try {
+    const j = await api('/api/config', {
+      server: document.getElementById('server').value.trim(),
+      token: document.getElementById('token').value.trim()
+    });
+    toast(j.msg, j.ok ? 'ok' : 'err');
+  } catch (e) { toast('操作失败', 'err'); }
+  btn.disabled = false; btn.textContent = '保存并测试连接';
+  refresh();
+}
+async function heartbeatNow() {
+  const j = await api('/api/heartbeat', {});
+  toast(j.msg, j.ok ? 'ok' : 'err');
+  refresh();
+}
+async function manualPush() {
+  const money = document.getElementById('pushMoney').value.trim();
+  if (!money || parseFloat(money) <= 0) { toast('请输入正确金额', 'err'); return; }
+  const j = await api('/api/push', {
+    type: document.getElementById('pushType').value,
+    money, content: document.getElementById('pushContent').value.trim()
+  });
+  toast(j.msg, j.ok ? 'ok' : 'err');
+  refresh();
+}
+async function simulate() {
+  const j = await api('/api/simulate', {});
+  toast(j.msg, j.ok ? 'ok' : 'err');
+  refresh();
+}
+refresh();
+setInterval(refresh, 8000);
+</script>
+</body>
+</html>

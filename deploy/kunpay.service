@@ -1,0 +1,23 @@
+# KunPay systemd 服务单元 (Linux)
+# 安装: 
+#   1. 将 kunpay 上传到 /opt/kunpay/ 并 chmod +x
+#   2. 复制本文件到 /etc/systemd/system/kunpay.service
+#   3. systemctl daemon-reload && systemctl enable --now kunpay
+[Unit]
+Description=KunPay 码支付系统
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/kunpay
+ExecStart=/opt/kunpay/kunpay -port 8080
+Restart=always
+RestartSec=3
+# 安全加固
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

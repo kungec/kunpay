@@ -1,0 +1,95 @@
+{{define "base"}}<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{if .Title}}{{.Title}} - {{end}}{{index .Settings "site_name"}}</title>
+<link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/css/style.css?v=20261012">
+</head>
+<body>
+<nav class="pub-nav">
+  <div class="inner">    <a class="logo" href="/">
+      {{if index .Settings "site_logo"}}<img src="{{index .Settings "site_logo"}}" alt="logo" style="height:30px;width:auto">{{else}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="3"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg>{{end}}
+      {{index .Settings "site_name"}}
+    </a>
+    <div class="menu">
+      <a href="/" class="{{if eq .Page "home"}}on{{end}}">首页</a>
+      <a href="/doc" class="{{if eq .Page "doc"}}on{{end}}">开发文档</a>
+      <a href="/demo" class="{{if eq .Page "demo"}}on{{end}}">支付测试</a>
+    </div>
+    <div class="acts">
+      {{if .Me}}
+        <a class="btn btn-primary" href="/user">进入商户中心</a>
+      {{else}}
+        <a class="btn btn-ghost" href="/login">登录</a>
+        <a class="btn btn-primary" href="/register">立即接入</a>
+      {{end}}
+      <button class="kp-menu-btn" id="kpNavBtn" aria-label="打开菜单" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="m-panel">
+    <a href="/" class="{{if eq .Page "home"}}on{{end}}">首页</a>
+    <a href="/doc" class="{{if eq .Page "doc"}}on{{end}}">开发文档</a>
+    <a href="/demo" class="{{if eq .Page "demo"}}on{{end}}">支付测试</a>
+    {{if .Me}}
+    <a href="/user">进入商户中心</a>
+    <div class="m-acts"><a class="btn btn-ghost" href="/logout">退出登录</a></div>
+    {{else}}
+    <div class="m-acts">
+      <a class="btn btn-ghost" href="/login">登录</a>
+      <a class="btn btn-primary" href="/register">立即接入</a>
+    </div>
+    {{end}}
+  </div>
+</nav>
+{{template "content" .}}
+<footer class="pub">
+  <div class="cols">
+    <div class="about">
+      <div class="logo" style="font-size:18px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="24" height="24"><rect x="2" y="5" width="20" height="14" rx="3"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg>
+        {{index .Settings "site_name"}}
+      </div>
+      <p>专业可靠的免签约码支付解决方案,为企业和个人开发者提供安全、高效、便捷的支付接入服务。</p>
+    </div>
+    <div>
+      <h5>产品服务</h5>
+      <ul>
+        <li><a href="/demo">支付测试</a></li>
+        <li><a href="/doc">开发文档</a></li>
+        <li><a href="/user">商户中心</a></li>
+      </ul>
+    </div>
+    <div>
+      <h5>接入支持</h5>
+      <ul>
+        <li><a href="/doc/submit">页面跳转支付</a></li>
+        <li><a href="/doc/mapi">API接口支付</a></li>
+        <li><a href="/doc/notify">支付结果通知</a></li>
+        <li><a href="/doc/md5">签名方式</a></li>
+      </ul>
+    </div>
+    <div>
+      <h5>常见问题</h5>
+      <ul>
+        <li><a href="/doc/paytype">支付方式</a></li>
+        <li><a href="/doc/api">查询接口</a></li>
+        <li><a href="/doc/device">设备类型</a></li>
+      </ul>
+    </div>
+    <div>
+      <h5>联系我们</h5>
+      <ul>
+        {{if index .Settings "kefu"}}<li><a href="#">客服QQ: {{index .Settings "kefu"}}</a></li>{{end}}
+        <li><a href="/login">商务合作</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="copy">{{index .Settings "footer_text"}}</div>
+</footer>
+<script src="/static/js/app.js?v=20261012"></script>
+</body>
+</html>{{end}}

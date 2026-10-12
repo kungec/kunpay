@@ -1,0 +1,27 @@
+{{define "content"}}
+<div class="auth-page" style="min-height:calc(100vh - 64px)">
+  <div class="auth-card">
+    <div class="slogan">但行前路,不负韶华!</div>
+    <h2>登录{{index .Settings "site_name"}}</h2>
+    <div class="sub">欢迎回来,请登录您的商户账号</div>
+    {{if .Error}}<div class="alert err">{{.Error}}</div>{{end}}
+    <form method="post" action="/login">
+      <input type="hidden" name="next" value="{{.Next}}">
+      <div class="form-item">
+        <input class="input" type="text" name="username" placeholder="请输入用户名" required value="{{if .Form}}{{.Form.username}}{{end}}">
+      </div>
+      <div class="form-item">
+        <input class="input" type="password" name="password" placeholder="请输入密码" required>
+      </div>
+      <button class="btn btn-primary" style="width:100%;padding:12px" type="submit">登 录</button>
+    </form>
+    <div class="auth-foot">
+      还没有账号? <a href="/register">立即注册</a>
+      <span style="margin:0 8px;color:var(--border)">|</span>
+      <a href="/forgot">忘记密码</a>
+      <span style="margin:0 8px;color:var(--border)">|</span>
+      <a href="/">返回首页</a>
+    </div>
+  </div>
+</div>
+{{end}}

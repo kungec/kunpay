@@ -1,0 +1,70 @@
+{{define "content"}}
+{{template "flash" .}}
+<div class="panel-row">
+  <div class="card">
+    <div class="card-title">申请提现</div>
+    <div class="alert info">可结算余额 <b style="font-size:16px">¥{{yuan .Me.Balance}}</b> · 最低提现 ¥{{yuan .MinSettle}}</div>
+    <form method="post" action="/user/settle/apply">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <div class="form-item">
+        <label>提现金额(元)</label>
+        <input class="input" type="number" step="0.01" name="amount" placeholder="请输入提现金额" required>
+      </div>
+      <div class="form-item">
+        <label>收款方式</label>
+        <input class="input" value="{{settlename .Me.SettleType}}" disabled>
+      </div>
+      <div class="form-item">
+        <label>收款账号</label>
+        <input class="input" value="{{.Me.SettleAccount}}" disabled>
+      </div>
+      <div class="form-item">
+        <label>收款人姓名</label>
+        <input class="input" value="{{.Me.SettleName}}" disabled>
+      </div>
+      {{if or (eq .Me.SettleAccount "") (eq .Me.SettleName "")}}
+      <div class="alert err">请先在 <a href="/user/settings">个人设置</a> 中完善结算收款信息</div>
+      {{end}}
+      <button class="btn btn-primary" type="submit" style="width:100%">提交提现申请</button>
+    </form>
+  </div>
+  <div class="card">
+    <div class="card-title">结算说明</div>
+    <p class="muted" style="line-height:2;font-size:13px">
+      · 每笔订单支付成功后,扣除手续费即实时计入可结算余额;<br>
+      · 手续费费率 {{if gt .Me.Rate 0.0}}{{printf "%.2f" .Me.Rate}}{{else}}{{index .Settings "fee_rate"}}{{end}}%;<br>
+      · 提现申请提交后由管理员人工审核打款;<br>
+      · 被拒绝的提现金额将自动退回余额。
+    </p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="row between mb">
+    <div class="card-title" style="margin:0">提现记录</div>
+    <a class="btn btn-ghost btn-sm" href="/user/settle/export.csv">⬇ 导出</a>
+  </div>
+  <div class="table-wrap">
+    <table class="tbl">
+      <tr><th>#</th><th class="money">金额</th><th>收款方式</th><th>收款账号</th><th>收款人</th><th>状态</th><th>申请时间</th><th>处理时间</th><th>备注</th></tr>
+      {{if .Logs}}
+      {{range .Logs}}
+      <tr>
+        <td>{{.ID}}</td>
+        <td class="money">¥{{yuan .Amount}}</td>
+        <td>{{settlename .SettleType}}</td>
+        <td class="mono">{{.Account}}</td>
+        <td>{{.Name}}</td>
+        <td>{{if eq .Status 0}}<span class="badge badge-blue">待处理</span>{{else if eq .Status 1}}<span class="badge badge-green">已打款</span>{{else}}<span class="badge badge-red">已拒绝</span>{{end}}</td>
+        <td class="muted">{{fdate .CreatedAt}}</td>
+        <td class="muted">{{fdate .DoneAt}}</td>
+        <td class="muted">{{.Note}}</td>
+      </tr>
+      {{end}}
+      {{else}}
+      <tr><td colspan="9"><div class="empty">暂无提现记录</div></td></tr>
+      {{end}}
+    </table>
+  </div>
+</div>
+{{end}}

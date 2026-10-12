@@ -1,0 +1,77 @@
+{{define "content"}}
+{{template "flash" .}}
+<div class="panel-row">
+  <div class="card">
+    <div class="card-title">接口信息</div>
+    <div class="kv">
+      <span class="k">商户ID (PID)</span>
+      <span class="v mono copyable" onclick="copyText('{{.Merchant.Pid}}','商户ID已复制')">{{.Merchant.Pid}} 📋</span>
+      <span class="k">商户密钥 (KEY)</span>
+      <span class="v mono copyable" onclick="copyText('{{.Merchant.Skey}}','商户密钥已复制')">{{.Merchant.Skey}} 📋</span>
+      <span class="k">提交支付</span><span class="v mono copyable" onclick="copyText('{{.BaseURL}}/submit.php','已复制')">{{.BaseURL}}/submit.php 📋</span>
+      <span class="k">API 支付</span><span class="v mono copyable" onclick="copyText('{{.BaseURL}}/mapi.php','已复制')">{{.BaseURL}}/mapi.php 📋</span>
+      <span class="k">订单查询</span><span class="v mono copyable" onclick="copyText('{{.BaseURL}}/api.php','已复制')">{{.BaseURL}}/api.php 📋</span>
+    </div>
+    <div class="alert info mt">密钥用于接口签名,请妥善保管。若怀疑泄露,请立即重置并更新到您的业务系统。</div>
+    <form method="post" action="/user/merchant/regen" data-confirm="重置后旧密钥立即失效,确定要重置商户密钥吗?">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <button class="btn btn-danger btn-sm" type="submit">重置商户密钥</button>
+    </form>
+  </div>
+  <div class="card">
+    <div class="card-title">API 在线调试</div>
+    <p class="muted" style="font-size:12.5px;margin-bottom:12px">填写参数自动生成签名请求并创建真实订单,一键跳转收银台自测整条链路。</p>
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <select class="input" id="dbgType" style="width:110px">
+        <option value="alipay">支付宝</option>
+        <option value="wxpay">微信</option>
+        <option value="qqpay">QQ钱包</option>
+      </select>
+      <input class="input" id="dbgMoney" type="text" value="1.00" placeholder="金额" style="width:90px">
+      <input class="input" id="dbgNo" type="text" placeholder="商户订单号(留空自动生成)" style="flex:1;min-width:150px">
+      <button class="btn btn-primary btn-sm" id="dbgBtn" type="button">创建测试订单</button>
+    </div>
+    <div id="dbgResult" style="display:none">
+      <div class="kv mb">
+        <span class="k">平台订单号</span><span class="v mono" id="dbgTrade"></span>
+        <span class="k">签名 sign</span><span class="v mono" id="dbgSign"></span>
+      </div>
+      <div class="row">
+        <a class="btn btn-primary btn-sm" id="dbgPay" href="#" target="_blank">打开收银台 →</a>
+        <button class="btn btn-ghost btn-sm" id="dbgCopy" type="button">复制签名请求 URL</button>
+      </div>
+    </div>
+  </div>
+  <script>
+  (function () {
+    var btn = document.getElementById('dbgBtn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      btn.disabled = true; btn.textContent = '请求中...';
+      var fd = new FormData();
+      fd.append('type', document.getElementById('dbgType').value);
+      fd.append('money', document.getElementById('dbgMoney').value.trim() || '1.00');
+      fd.append('out_trade_no', document.getElementById('dbgNo').value.trim());
+      fetch('/user/debug', { method: 'POST', body: fd })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          btn.disabled = false; btn.textContent = '创建测试订单';
+          if (j.code !== 1) { window.toast(j.msg || '失败', 'err'); return; }
+          document.getElementById('dbgResult').style.display = 'block';
+          document.getElementById('dbgTrade').textContent = j.trade_no;
+          document.getElementById('dbgSign').textContent = j.sign;
+          document.getElementById('dbgPay').href = j.pay_url;
+          window.copyText && (document.getElementById('dbgCopy').onclick = function () { copyText(j.url, 'URL 已复制'); });
+        })
+        .catch(function () { btn.disabled = false; btn.textContent = '创建测试订单'; });
+    });
+  })();
+  </script>
+  <div class="card">
+    <div class="card-title">快速接入示例</div>
+    <p class="muted" style="font-size:13px;line-height:1.9">拼接以下地址,替换订单参数即可发起支付(GET 方式示例):</p>
+    <pre class="mono" style="background:#f7f8fa;border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;line-height:1.8;overflow-x:auto;white-space:break-spaces">{{.BaseURL}}/submit.php?pid={{.Merchant.Pid}}&type=alipay&out_trade_no=10001&notify_url=https://你的网站/notify.php&return_url=https://你的网站/return.php&name=测试商品&money=1.00&sign=签名值&sign_type=MD5</pre>
+    <a class="btn btn-outline btn-sm mt" href="/doc">查看完整文档 →</a>
+  </div>
+</div>
+{{end}}

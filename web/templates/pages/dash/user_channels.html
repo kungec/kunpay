@@ -1,0 +1,82 @@
+{{define "content"}}
+{{template "flash" .}}
+<div class="alert info">绑定您自己的收款码后,买家扫码将<strong>直接付到您的账户</strong>。同一类型可添加多个收款码并开启<strong>轮询</strong>(订单轮流使用各个码,分摊收款);未绑定的通道回落展示平台收款码。</div>
+<div class="grid c3">
+  {{$csrf := .CSRF}}
+  {{range .Channels}}
+  <div class="card">
+    <div class="row between mb">
+      <div class="card-title" style="margin:0">{{.Name}}</div>
+      {{if gt (len .Items) 0}}<span class="badge badge-blue">已绑 {{len .Items}} 个码</span>{{else}}<span class="badge badge-gray">未绑定</span>{{end}}
+    </div>
+
+    <!-- 轮询开关 -->
+    <div class="rotate-box {{if and .Rotate .CanRotate}}on{{end}}">
+      <div class="row between">
+        <div>
+          <b style="font-size:13.5px">轮询收款</b>
+          <div class="muted" style="font-size:11.5px;margin-top:2px">
+            {{if .Rotate}}开启中:订单轮流使用 {{.EnabledN}} 个启用码{{else if .CanRotate}}已满足条件({{.EnabledN}} 个启用码),可开启{{else}}需先启用至少 2 个收款码{{end}}
+          </div>
+        </div>
+        <form method="post" action="/user/channels/rotate">
+          <input type="hidden" name="_csrf" value="{{$csrf}}">
+          <input type="hidden" name="type" value="{{.Type}}">
+          <input type="hidden" name="rotate" value="{{if .Rotate}}0{{else}}1{{end}}">
+          <label class="kp-switch{{if and .Rotate .CanRotate}} on{{end}}{{if not .CanRotate}} dis{{end}}">
+            <input type="checkbox" {{if and .Rotate .CanRotate}}checked{{end}} {{if not .CanRotate}}disabled{{end}} onchange="this.closest('form').submit()">
+            <span class="kp-slider"></span>
+          </label>
+        </form>
+      </div>
+    </div>
+
+    <!-- 收款码列表 -->
+    {{if .Items}}
+    <div class="my-items">
+      {{range .Items}}
+      <div class="my-item{{if not .Enabled}} off{{end}}">
+        <img src="{{.Qrcode}}" alt="{{.Name}}" class="my-item-qr">
+        <div class="my-item-info">
+          <b>{{.Name}}</b>
+          <span class="muted" style="font-size:11.5px">{{if .Enabled}}使用中{{else}}已停用{{end}} · 累计 {{.Count}} 笔 / ¥{{yuan .Amount}}</span>
+        </div>
+        <div class="my-item-acts">
+          <form method="post" action="/user/channels/item/toggle">
+            <input type="hidden" name="_csrf" value="{{$csrf}}">
+            <input type="hidden" name="id" value="{{.ID}}">
+            <input type="hidden" name="enabled" value="{{if .Enabled}}0{{else}}1{{end}}">
+            <button class="btn btn-sm btn-ghost" type="submit">{{if .Enabled}}停用{{else}}启用{{end}}</button>
+          </form>
+          <form method="post" action="/user/channels/item/del" data-confirm="确定删除该收款码?">
+            <input type="hidden" name="_csrf" value="{{$csrf}}">
+            <input type="hidden" name="id" value="{{.ID}}">
+            <button class="btn btn-sm btn-danger" type="submit">删除</button>
+          </form>
+        </div>
+      </div>
+      {{end}}
+    </div>
+    {{else}}
+    <div class="muted" style="font-size:12.5px;text-align:center;padding:14px 0 4px">还没有收款码,先添加一个吧</div>
+    {{end}}
+
+    <!-- 添加收款码 -->
+    <form method="post" action="/user/channels/upload" enctype="multipart/form-data" class="mt">
+      <input type="hidden" name="_csrf" value="{{$csrf}}">
+      <input type="hidden" name="type" value="{{.Type}}">
+      <label class="file-upload">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span>添加收款码</span>
+        <span class="fu-name">png/jpg ≤4MB</span>
+        <input type="file" name="qrcode" accept="image/png,image/jpeg,image/gif,image/webp" required onchange="this.closest('form').querySelector('.fu-name').textContent = this.files[0] ? this.files[0].name : 'png/jpg ≤4MB'">
+      </label>
+      <div class="row mt" style="gap:8px">
+        <input class="input" type="text" name="name" placeholder="备注名,如: 支付宝-张三" style="flex:1">
+        <button class="btn btn-primary btn-sm" type="submit">添加</button>
+      </div>
+    </form>
+  </div>
+  {{end}}
+</div>
+{{end}}

@@ -1,0 +1,64 @@
+{{define "content"}}
+{{template "flash" .}}
+{{if .Notice}}<div class="alert info">📢 {{.Notice}}</div>{{end}}
+<div class="stat-cards s3">
+  <div class="scard">
+    <div class="ic b1"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+    <div><div class="l">今日订单</div><div class="v">{{index .Stats "TodayOk"}} <small>/ {{index .Stats "TodayOrders"}} 笔</small></div><div class="d">今日成功 / 全部订单</div></div>
+  </div>
+  <div class="scard">
+    <div class="ic b2"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+    <div><div class="l">今日成交额</div><div class="v">¥{{yuan (index .Stats "TodayMoney")}}</div><div class="d">昨日 ¥{{yuan (index .Stats "YesterdayMoney")}}</div></div>
+  </div>
+  <div class="scard">
+    <div class="ic b3"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+    <div><div class="l">可结算余额</div><div class="v">¥{{yuan .Me.Balance}}</div><div class="d">费率 {{if gt .Me.Rate 0.0}}{{printf "%.2f" .Me.Rate}}{{else}}{{index .Settings "fee_rate"}}{{end}}%(独享)</div></div>
+  </div>
+</div>
+
+<div class="panel-row">
+  <div class="card">
+    <div class="card-title">近 7 日成交趋势</div>
+    <div class="chart-box"><canvas class="kbar-chart" data-labels="{{json (daysLabels .Days)}}" data-values="{{json (daysValues .Days)}}"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-title">快捷操作</div>
+    <div class="kv" style="margin-bottom:16px">
+      <span class="k">商户ID (PID)</span><span class="v mono copyable" onclick="copyText('{{.Me.Pid}}','商户ID已复制')">{{.Me.Pid}} 📋</span>
+      <span class="k">API 提交地址</span><span class="v mono copyable" onclick="copyText('{{.BaseURL}}/submit.php','已复制')">{{.BaseURL}}/submit.php 📋</span>
+    </div>
+    <div class="row" style="flex-wrap:wrap">
+      <a class="btn btn-primary btn-sm" href="/user/merchant">查看密钥</a>
+      <a class="btn btn-outline btn-sm" href="/doc">接入文档</a>
+      <a class="btn btn-ghost btn-sm" href="/user/settle">申请提现</a>
+      <a class="btn btn-ghost btn-sm" href="/demo">支付测试</a>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="row between mb">
+    <div class="card-title" style="margin:0">最近订单</div>
+    <a class="btn btn-ghost btn-sm" href="/user/orders">全部订单 →</a>
+  </div>
+  <div class="table-wrap">
+    <table class="tbl">
+      <tr><th>平台订单号</th><th>商品</th><th>方式</th><th class="money">金额</th><th>状态</th><th>时间</th></tr>
+      {{if .Recent}}
+      {{range .Recent}}
+      <tr>
+        <td class="mono">{{.TradeNo}}</td>
+        <td>{{.Name}}</td>
+        <td>{{typename .Type}}</td>
+        <td class="money">¥{{yuan .Money}}</td>
+        <td>{{template "badge" .Status}}</td>
+        <td class="muted">{{fdate .Addtime}}</td>
+      </tr>
+      {{end}}
+      {{else}}
+      <tr><td colspan="6"><div class="empty">暂无订单,快去接入第一笔支付吧</div></td></tr>
+      {{end}}
+    </table>
+  </div>
+</div>
+{{end}}

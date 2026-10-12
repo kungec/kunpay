@@ -1,0 +1,53 @@
+{{define "content"}}
+{{template "flash" .}}
+<div class="card">
+  <form class="search-bar" method="get" action="/admin/settles">
+    <select class="input" name="status" style="width:150px">
+      <option value="">全部状态</option>
+      <option value="0" {{if eq .QStatus "0"}}selected{{end}}>待处理</option>
+      <option value="1" {{if eq .QStatus "1"}}selected{{end}}>已打款</option>
+      <option value="2" {{if eq .QStatus "2"}}selected{{end}}>已拒绝</option>
+    </select>
+    <button class="btn btn-primary" type="submit">筛选</button>
+  </form>
+  <div class="table-wrap">
+    <table class="tbl">
+      <tr><th>#</th><th>商户</th><th class="money">金额</th><th>收款方式</th><th>收款账号</th><th>收款人</th><th>状态</th><th>申请时间</th><th>操作</th></tr>
+      {{if .Settles}}
+      {{range .Settles}}
+      <tr>
+        <td>{{.ID}}</td>
+        <td><b>{{.Username}}</b> <span class="mono muted">#{{.UserID}}</span></td>
+        <td class="money">¥{{yuan .Amount}}</td>
+        <td>{{settlename .SettleType}}</td>
+        <td class="mono">{{.Account}}</td>
+        <td>{{.Name}}</td>
+        <td>{{if eq .Status 0}}<span class="badge badge-blue">待处理</span>{{else if eq .Status 1}}<span class="badge badge-green">已打款</span>{{else}}<span class="badge badge-red">已拒绝</span>{{end}}{{if .Note}} <span class="muted">({{.Note}})</span>{{end}}</td>
+        <td class="muted">{{fdate .CreatedAt}}</td>
+        <td>
+          {{if eq .Status 0}}
+          <div class="actions-cell">
+            <form method="post" action="/admin/settles/do" data-confirm="确认已完成打款?" style="display:inline">
+              <input type="hidden" name="_csrf" value="{{$.CSRF}}">
+              <input type="hidden" name="id" value="{{.ID}}">
+              <input type="hidden" name="action" value="pay">
+              <button class="btn btn-sm btn-success" type="submit">标记打款</button>
+            </form>
+            <form method="post" action="/admin/settles/do" data-confirm="拒绝后金额将退回商户余额,确定拒绝?" style="display:inline">
+              <input type="hidden" name="_csrf" value="{{$.CSRF}}">
+              <input type="hidden" name="id" value="{{.ID}}">
+              <input type="hidden" name="action" value="reject">
+              <button class="btn btn-sm btn-danger" type="submit">拒绝</button>
+            </form>
+          </div>
+          {{else}}<span class="muted">已处理</span>{{end}}
+        </td>
+      </tr>
+      {{end}}
+      {{else}}
+      <tr><td colspan="9"><div class="empty">暂无结算申请</div></td></tr>
+      {{end}}
+    </table>
+  </div>
+</div>
+{{end}}

@@ -1,0 +1,89 @@
+{{define "content"}}
+{{template "flash" .}}
+<div class="card mb">
+  <div class="row" style="gap:16px;align-items:center;flex-wrap:wrap">
+    {{if .Merchant.Avatar}}
+    <img src="{{.Merchant.Avatar}}" alt="头像" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--primary-light)">
+    {{else}}
+    <div class="avatar" style="width:64px;height:64px;font-size:26px">{{substr .Merchant.Username 1}}</div>
+    {{end}}
+    <div style="flex:1;min-width:200px">
+      <b style="font-size:15px">{{.Merchant.Username}}</b>
+      <div class="muted" style="font-size:12px;margin-top:3px">支持 png/jpg/gif/webp,≤2MB,上传后顶栏与菜单同步展示</div>
+    </div>
+    <form method="post" action="/user/avatar/upload" enctype="multipart/form-data" style="display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <label class="file-upload" style="width:auto">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span>选择头像图片</span>
+        <input type="file" name="avatar" accept="image/png,image/jpeg,image/gif,image/webp" required onchange="this.closest('form').querySelector('button[type=submit]').click()">
+      </label>
+      <button class="btn btn-primary btn-sm" type="submit">上传头像</button>
+    </form>
+    {{if .Merchant.Avatar}}
+    <form method="post" action="/user/avatar/clear" data-confirm="恢复默认头像?">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <button class="btn btn-ghost btn-sm" type="submit">恢复默认</button>
+    </form>
+    {{end}}
+  </div>
+</div>
+
+<div class="panel-row">
+  <div class="card">
+    <div class="card-title">个人信息</div>
+    <form method="post" action="/user/settings/profile">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <div class="form-item">
+        <label>用户名</label>
+        <input class="input" value="{{.Merchant.Username}}" disabled>
+      </div>
+      <div class="form-item">
+        <label>邮箱</label>
+        <input class="input" type="email" name="email" value="{{.Merchant.Email}}" placeholder="用于接收结算通知">
+      </div>
+      <div class="form-item">
+        <label>QQ 号码</label>
+        <input class="input" type="text" name="qq" value="{{.Merchant.QQ}}">
+      </div>
+      <div class="form-item">
+        <label>结算方式</label>
+        <select class="input" name="settle_type">
+          <option value="1" {{if eq .Merchant.SettleType 1}}selected{{end}}>支付宝</option>
+          <option value="2" {{if eq .Merchant.SettleType 2}}selected{{end}}>微信</option>
+          <option value="3" {{if eq .Merchant.SettleType 3}}selected{{end}}>QQ</option>
+          <option value="4" {{if eq .Merchant.SettleType 4}}selected{{end}}>银行卡</option>
+        </select>
+      </div>
+      <div class="form-item">
+        <label>结算账号</label>
+        <input class="input" type="text" name="settle_account" value="{{.Merchant.SettleAccount}}" placeholder="支付宝/微信/QQ 账号或银行卡号">
+      </div>
+      <div class="form-item">
+        <label>结算姓名</label>
+        <input class="input" type="text" name="settle_name" value="{{.Merchant.SettleName}}" placeholder="收款人真实姓名">
+      </div>
+      <button class="btn btn-primary" type="submit">保存修改</button>
+    </form>
+  </div>
+  <div class="card">
+    <div class="card-title">修改密码</div>
+    <form method="post" action="/user/settings/password">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <div class="form-item">
+        <label>原密码</label>
+        <input class="input" type="password" name="old_password" required>
+      </div>
+      <div class="form-item">
+        <label>新密码(至少 6 位)</label>
+        <input class="input" type="password" name="new_password" required>
+      </div>
+      <div class="form-item">
+        <label>确认新密码</label>
+        <input class="input" type="password" name="new_password2" required>
+      </div>
+      <button class="btn btn-primary" type="submit">修改密码</button>
+    </form>
+  </div>
+</div>
+{{end}}

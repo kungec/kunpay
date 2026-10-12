@@ -1,0 +1,124 @@
+{{define "content"}}
+<!-- Hero -->
+<section class="hero">
+  <div class="inner">
+    <div>
+      <span class="tag">✦ 企业级免签约支付平台</span>
+      <h1>专业可靠的<br><span class="hl">码支付解决方案</span></h1>
+      <p class="desc">为企业和个人开发者提供安全、高效、便捷的免签约支付接入服务。无需复杂资质,快速集成,7×24 小时自动到账监控。</p>
+      <div class="feats">
+        <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>银行级安全</span>
+        <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>秒级到账</span>
+        <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>专业服务</span>
+      </div>
+      <div class="cta">
+        <a class="btn btn-primary btn-lg" href="/register">立即接入 →</a>
+        <a class="btn btn-ghost btn-lg" href="/demo">支付测试</a>
+      </div>
+    </div>
+    <div>
+      <div class="mock">
+        <div class="bar"><i></i><i></i><i></i><span class="t">码支付控制台</span></div>
+        <div class="stats">
+          <div class="stat"><div class="l">今日交易额</div><div class="v">¥28,473.92</div><div class="d">+12.5%</div></div>
+          <div class="stat"><div class="l">交易笔数</div><div class="v">15,847</div><div class="d">+8.3%</div></div>
+        </div>
+        <div class="chart">
+          <i style="height:38%"></i><i style="height:55%"></i><i style="height:42%"></i><i style="height:70%"></i><i style="height:58%"></i><i style="height:82%"></i><i style="height:64%"></i><i style="height:92%"></i>
+        </div>
+        <div class="float f1"><div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div><div>订单到账<b style="color:var(--primary)"> ¥{{yuan 24680}}</b></div></div>
+        <div class="float f2"><div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></div><div>监控设备在线</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 核心功能 -->
+<section class="section" id="features">
+  <div class="head">
+    <span class="mini">核心功能</span>
+    <h2>一站式支付解决方案</h2>
+    <p>为不同规模的企业和开发者提供完整的支付服务体系</p>
+  </div>
+  <div class="grid">
+    <div class="feat">
+      <span class="hot">热门</span>
+      <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="3"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg></div>
+      <h3>支付网关</h3>
+      <p>支持支付宝、微信、QQ钱包等主流支付方式,统一易支付协议接口,兼容市面主流程序。</p>
+      <ul>
+        <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>免签约个人码收款</li>
+        <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>submit/mapi/api 全接口</li>
+        <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>金额尾数自动匹配到账</li>
+        <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>7×24 小时监控</li>
+      </ul>
+      <div class="foot"><div class="num">99.9%<small>支付成功率</small></div><a class="btn btn-outline btn-sm" href="/doc">立即接入</a></div>
+    </div>
+    <div class="feat">
+      <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+      <h3>API 文档</h3>
+      <p>完整易支付协议文档与多语言示例代码,5 分钟快速集成支付功能。</p>
+      <ul>
+        <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>RESTful 接口设计</li>
+        <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>MD5 签名安全校验</li>
+        <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>异步通知重试机制</li>
+        <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>在线支付测试</li>
+      </ul>
+      <div class="foot"><div class="num">10+<small>兼容程序</small></div><a class="btn btn-outline btn-sm" href="/doc">查看文档</a></div>
+    </div>
+    <div class="feat">
+      <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
+      <h3>数据看板</h3>
+      <p>实时交易数据统计,多维度报表分析,商户中心数据一目了然。</p>
+      <ul>
+        <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>实时数据监控</li>
+        <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>7 日趋势图表</li>
+        <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>订单全程可溯源</li>
+      </ul>
+      <div class="foot"><div class="num">实时<small>数据更新</small></div><a class="btn btn-outline btn-sm" href="/login">查看演示</a></div>
+    </div>
+    <div class="feat">
+      <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+      <h3>安全防护</h3>
+      <p>签名校验 + 会话隔离 + 风险监控,多重策略保障资金和数据安全。</p>
+      <ul>
+        <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>HTTPS 加密传输</li>
+        <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>MD5 参数验签</li>
+        <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>密钥一键重置</li>
+      </ul>
+      <div class="foot"><div class="num">银行级<small>安全标准</small></div><a class="btn btn-outline btn-sm" href="/doc/md5">了解更多</a></div>
+    </div>
+    <div class="feat">
+      <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+      <h3>商户中心</h3>
+      <p>完善的商户管理系统,账户管理、订单查询、财务对账一站搞定。</p>
+      <ul>
+        <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>余额与资金明细</li>
+        <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>交易记录查询</li>
+        <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>提现结算服务</li>
+      </ul>
+      <div class="foot"><div class="num">24h<small>自助管理</small></div><a class="btn btn-outline btn-sm" href="/login">进入中心</a></div>
+    </div>
+    <div class="feat">
+      <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
+      <h3>消息通知</h3>
+      <p>可靠的异步通知机制,失败自动重试 8 次,确保交易状态及时同步。</p>
+      <ul>
+        <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>异步消息推送</li>
+        <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>失败重试保障</li>
+        <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>签名验证安全</li>
+      </ul>
+      <div class="foot"><div class="num">99.99%<small>送达率</small></div><a class="btn btn-outline btn-sm" href="/doc/notify">配置通知</a></div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<div class="cta-band">
+  <div class="box">
+    <h2>立即开始接入</h2>
+    <p>免费注册商户,无需资质审核,5 分钟快速集成</p>
+    <a href="/register"><button>免费注册商户</button></a>
+  </div>
+</div>
+{{end}}

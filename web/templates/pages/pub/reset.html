@@ -1,0 +1,24 @@
+{{define "content"}}
+<div class="auth-page" style="min-height:calc(100vh - 64px)">
+  <div class="auth-card">
+    <h2>设置新密码</h2>
+    <div class="sub">请输入新的登录密码</div>
+    {{if .Error}}<div class="alert err">{{.Error}}</div>{{end}}
+    <form method="post" action="/reset">
+      <input type="hidden" name="token" value="{{.Token}}">
+      <div class="form-item">
+        <input class="input" type="password" name="password" placeholder="新密码(至少6位)" required>
+      </div>
+      <div class="form-item">
+        <input class="input" type="password" name="password2" placeholder="确认新密码" required>
+      </div>
+      <button class="btn btn-primary" style="width:100%;padding:12px" type="submit">确认重置</button>
+    </form>
+    <div class="auth-foot"><a href="/login">返回登录</a></div>
+  </div>
+</div>
+{{end}}
+
+__zcode_status=$?
+if [ "$__zcode_status" -eq 0 ]; then pwd -P > '/var/folders/01/b19hlzgx447bwy7c97d27k7w0000gn/T/zcode-4056b660-bf45-4565-83d6-6d3ca3539078-cwd'; fi
+exit "$__zcode_status"

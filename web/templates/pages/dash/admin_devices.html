@@ -1,0 +1,75 @@
+{{define "content"}}
+<div class="row between mb" style="flex-wrap:wrap">
+  <span></span>
+  <label class="row" style="gap:7px;font-size:12.5px;color:var(--text-3);cursor:pointer">
+    <input type="checkbox" id="autoRf" data-key="{{`""" + key + """`}}"> 30秒自动刷新
+  </label>
+</div>
+{{template "flash" .}}
+<div class="card">
+  <div class="row between mb" style="flex-wrap:wrap">
+    <div class="card-title" style="margin:0">监控设备列表</div>
+    <form method="post" action="/admin/devices/add" class="row">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <input class="input" type="text" name="name" placeholder="设备名称,如: 收款手机1" style="width:200px">
+      <button class="btn btn-primary btn-sm" type="submit">添加设备</button>
+    </form>
+  </div>
+  <div class="table-wrap">
+    <table class="tbl">
+      <tr><th>ID</th><th>名称</th><th>Token</th><th>在线状态</th><th>最后心跳</th><th>IP</th><th>状态</th><th>操作</th></tr>
+      {{if .Devices}}
+      {{range .Devices}}
+      <tr>
+        <td>{{.ID}}</td>
+        <td><b>{{.Name}}</b></td>
+        <td class="mono copyable" onclick="copyText('{{.Token}}','Token已复制')" title="点击复制">{{.Token}}</td>
+        <td>{{if .Online}}<span class="badge badge-green">● 在线</span>{{else}}<span class="badge badge-gray">离线</span>{{end}}</td>
+        <td class="muted">{{fdate .LastHb}}</td>
+        <td class="mono muted">{{.LastIP}}</td>
+        <td>{{if eq .Status 1}}<span class="badge badge-blue">启用</span>{{else}}<span class="badge badge-red">停用</span>{{end}}</td>
+        <td>
+          <div class="actions-cell">
+            <form method="post" action="/admin/devices/toggle" style="display:inline">
+              <input type="hidden" name="_csrf" value="{{$.CSRF}}">
+              <input type="hidden" name="id" value="{{.ID}}">
+              <button class="btn btn-sm btn-ghost" type="submit">{{if eq .Status 1}}停用{{else}}启用{{end}}</button>
+            </form>
+            <form method="post" action="/admin/devices/del" data-confirm="删除后使用该 Token 的监控APP将无法上报,确定删除?" style="display:inline">
+              <input type="hidden" name="_csrf" value="{{$.CSRF}}">
+              <input type="hidden" name="id" value="{{.ID}}">
+              <button class="btn btn-sm btn-danger" type="submit">删除</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {{end}}
+      {{else}}
+      <tr><td colspan="8"><div class="empty">暂无监控设备,点击右上角「添加设备」创建</div></td></tr>
+      {{end}}
+    </table>
+  </div>
+  <div class="alert info mt">
+    使用方法:添加设备后复制 Token,在监控APP(支持 V免签协议的APP均可)中配置:<br>
+    · 平台地址: <b>您的站点域名</b> · Token: <b>上方设备 Token</b><br>
+    · 心跳地址: <code>/appHeart</code> · 到账推送: <code>/appPushV</code> (本平台已兼容 V免签协议,亦可使用自有协议 <code>/monitor/heart</code> 与 <code>/monitor/push</code>)
+  </div>
+</div>
+{{end}}
+
+<script>
+(function () {
+  var ck = document.getElementById('autoRf');
+  if (!ck) return;
+  var key = ck.getAttribute('data-key');
+  ck.checked = localStorage.getItem(key) === '1';
+  var tick = function () {
+    if (ck.checked) { location.reload(); }
+  };
+  ck.addEventListener('change', function () {
+    localStorage.setItem(key, ck.checked ? '1' : '0');
+    if (ck.checked) { setTimeout(tick, 1000); }
+  });
+  if (ck.checked) { setInterval(tick, 30000); }
+})();
+</script>

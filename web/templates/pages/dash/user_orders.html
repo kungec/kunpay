@@ -1,0 +1,51 @@
+{{define "content"}}
+{{template "flash" .}}
+<div class="card">
+  <form class="search-bar" method="get" action="/user/orders">
+    <input class="input" type="text" name="trade_no" placeholder="平台订单号 / 商户订单号" value="{{.QTradeNo}}">
+    <select class="input" name="status" style="width:130px">
+      <option value="">全部状态</option>
+      <option value="0" {{if eq .QStatus "0"}}selected{{end}}>待支付</option>
+      <option value="1" {{if eq .QStatus "1"}}selected{{end}}>支付成功</option>
+      <option value="2" {{if eq .QStatus "2"}}selected{{end}}>已过期</option>
+      <option value="3" {{if eq .QStatus "3"}}selected{{end}}>手动补单</option>
+    </select>
+    <select class="input" name="type" style="width:130px">
+      <option value="">全部方式</option>
+      <option value="alipay" {{if eq .QType "alipay"}}selected{{end}}>支付宝</option>
+      <option value="wxpay" {{if eq .QType "wxpay"}}selected{{end}}>微信支付</option>
+      <option value="qqpay" {{if eq .QType "qqpay"}}selected{{end}}>QQ钱包</option>
+    </select>
+    <input class="input" type="date" name="date_from" value="{{.DateFrom}}" title="开始日期">
+    <input class="input" type="date" name="date_to" value="{{.DateTo}}" title="结束日期">
+    <button class="btn btn-primary" type="submit">查询</button>
+    <a class="btn btn-ghost" href="/user/orders/export.csv?trade_no={{.QTradeNo}}&status={{.QStatus}}&type={{.QType}}&date_from={{.DateFrom}}&date_to={{.DateTo}}">⬇ 导出 CSV</a>
+  </form>
+  <div class="table-wrap">
+    <table class="tbl">
+      <tr>
+        <th>平台订单号</th><th>商户订单号</th><th>商品</th><th>方式</th>
+        <th class="money">金额</th><th class="money">实付</th><th>状态</th><th>通知</th><th>创建时间</th>
+      </tr>
+      {{if .Orders}}
+      {{range .Orders}}
+      <tr>
+        <td class="mono copyable" onclick="copyText('{{.TradeNo}}','已复制')" title="点击复制">{{.TradeNo}}</td>
+        <td class="mono muted">{{.OutTradeNo}}</td>
+        <td>{{.Name}}</td>
+        <td>{{.TypeName}}</td>
+        <td class="money">¥{{yuan .Money}}</td>
+        <td class="money muted">¥{{yuan .PayMoney}}</td>
+        <td>{{template "badge" .Status}}</td>
+        <td>{{if or (eq .Status 1) (eq .Status 3)}}{{if eq .NotifyOK 1}}<span class="badge badge-green">成功</span>{{else}}<span class="badge badge-orange">重试中</span>{{end}}{{else}}<span class="muted">-</span>{{end}}</td>
+        <td class="muted">{{fdate .Addtime}}</td>
+      </tr>
+      {{end}}
+      {{else}}
+      <tr><td colspan="9"><div class="empty">没有符合条件的订单</div></td></tr>
+      {{end}}
+    </table>
+  </div>
+  {{template "pager" dict "TotalPages" .TotalPages "PageNo" .PageNo "Query" (pagerQuery .QTradeNo .QStatus .QType) "Prev" (addInt .PageNo -1) "Next" (addInt .PageNo 1)}}
+</div>
+{{end}}

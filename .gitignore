@@ -1,0 +1,27 @@
+# 编译产物
+dist/
+monitor-android/build/
+monitor-android/*.apk
+monitor-android/*.idsig
+*.apk
+
+# 运行时数据
+*.db
+*.db-wal
+*.db-shm
+data/
+backups/
+
+# 本地配置
+kunpay-monitor.json
+
+# IDE / 系统
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# 监控端安卓工程本地文件
+monitor-android/.gradle/
+monitor-android/local.properties
+monitor-android/java/com/kunpay/monitor/*.class
