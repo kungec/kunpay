@@ -337,7 +337,9 @@ func (s *Store) ReportPayment(deviceID int64, typ string, money int64, content s
 	return matched
 }
 
-// orderAllowsDevice 渠道绑定监控设备后,仅该设备的上报可匹配其订单(0=不限制)
+// orderAllowsDevice 渠道绑定监控设备后,仅该设备的上报可匹配其订单(0=不限制)。
+// 主备接管: 绑定的主设备离线超过 5 分钟(无心跳)时,任意设备的上报自动接管匹配,
+// 避免云端挂机场景下主设备掉线导致全部掉单。
 func (s *Store) orderAllowsDevice(o *model.Order, deviceID int64) bool {
 	if o.ChannelID == 0 || deviceID == 0 {
 		return true
@@ -346,7 +348,19 @@ func (s *Store) orderAllowsDevice(o *model.Order, deviceID int64) bool {
 	if err := s.DB.QueryRow("SELECT device_id FROM channels WHERE id=?", o.ChannelID).Scan(&devID); err != nil {
 		return true
 	}
-	return devID == 0 || devID == deviceID
+	if devID == 0 || devID == deviceID {
+		return true
+	}
+	// 上报设备不是绑定设备: 若绑定设备已离线超过 5 分钟,则允许接管
+	var lastHb int64
+	var status int
+	if err := s.DB.QueryRow("SELECT COALESCE(last_heartbeat,0),status FROM devices WHERE id=?", devID).Scan(&lastHb, &status); err != nil {
+		return true // 绑定设备已被删除,视为不限制
+	}
+	if status != 1 {
+		return true // 绑定设备已停用,允许其他设备接管
+	}
+	return lastHb == 0 || (model.Now()-lastHb) > 300
 }
 
 // CompleteOrder 标记订单成功并入账(幂等),随后触发异步通知。

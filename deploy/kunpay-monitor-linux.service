@@ -1,0 +1,14 @@
+# KunPay 监控助手 Linux systemd 服务单元
+[Unit]
+Description=KunPay Monitor 监控助手
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/kunpay
+ExecStart=/opt/kunpay/kunpay-monitor_linux64 -port 8210 -no-open
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
