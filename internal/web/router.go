@@ -18,6 +18,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /demo", s.handleDemoPage)
 	mux.HandleFunc("POST /demo/create", s.handleDemoCreate)
 	mux.HandleFunc("GET /demo/done", s.handleDemoDone)
+	mux.HandleFunc("GET /check", s.handleOrderCheckPage)
 
 	// 认证
 	mux.HandleFunc("GET /login", s.handleLoginPage)

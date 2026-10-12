@@ -103,3 +103,50 @@ func (s *Server) handleDemoDone(w http.ResponseWriter, r *http.Request) {
 	d["Title"] = "支付测试完成"
 	s.render(w, "pub_demo_done", http.StatusOK, d)
 }
+
+// handleOrderCheckPage 买家订单状态查询页(公开,无需登录,隐私脱敏)
+func (s *Server) handleOrderCheckPage(w http.ResponseWriter, r *http.Request) {
+	d := s.pageData(r)
+	d["Page"] = "order_check"
+	d["Title"] = "订单查询"
+	tradeNo := strings.TrimSpace(r.FormValue("trade_no"))
+	if tradeNo != "" && !isValidTradeNo(tradeNo) {
+		d["CheckError"] = "订单号格式不正确"
+		tradeNo = ""
+	}
+	if tradeNo != "" {
+		o := s.Store.OrderByTradeNo(tradeNo)
+		if o != nil {
+			// 隐私脱敏: 仅展示必要字段,隐藏商户ID/回调地址等
+			d["Result"] = map[string]any{
+				"Found":   true,
+				"TradeNo": o.TradeNo,
+				"Name":    o.Name,
+				"Type":    typeName(o.Type),
+				"Money":   service.MoneyStr(o.PayMoney),
+				"Status":  o.Status,
+				"Paid":    o.Status == 1 || o.Status == 3,
+				"Addtime": fdate(o.Addtime),
+				"Endtime": fdate(o.Endtime),
+			}
+		} else {
+			d["Result"] = map[string]any{"Found": false}
+			d["CheckError"] = "未找到该订单,请确认订单号是否正确"
+		}
+	}
+	d["TradeNo"] = tradeNo
+	s.render(w, "pub_order_check", http.StatusOK, d)
+}
+
+// isValidTradeNo 校验订单号格式(纯数字,14-23位)
+func isValidTradeNo(s string) bool {
+	if len(s) < 14 || len(s) > 23 {
+		return false
+	}
+	for _, ch := range s {
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+	return true
+}

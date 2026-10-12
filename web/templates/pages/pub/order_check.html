@@ -1,0 +1,38 @@
+{{define "content"}}
+<div class="demo-wrap">
+  <div class="card" style="padding:34px">
+    <div style="text-align:center;margin-bottom:22px">
+      <div class="logo" style="justify-content:center;font-size:20px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="28" height="28"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        订单状态查询
+      </div>
+      <p class="muted" style="margin-top:6px;font-size:12.5px">输入平台订单号查询支付状态(无需登录)</p>
+    </div>
+    {{if .CheckError}}<div class="alert err">{{.CheckError}}</div>{{end}}
+    {{if .Result}}
+    <div class="card" style="margin:14px 0;padding:16px;border:2px solid #2e63f6;background:#f8faff">
+      <div class="kv">
+        <span class="k">平台订单号</span><span class="v mono">{{index .Result "TradeNo"}}</span>
+        <span class="k">商品名称</span><span class="v">{{index .Result "Name"}}</span>
+        <span class="k">支付方式</span><span class="v">{{index .Result "Type"}}</span>
+        <span class="k">支付金额</span><span class="v" style="color:var(--primary);font-weight:700">¥{{index .Result "Money"}}</span>
+        <span class="k">支付状态</span><span class="v">{{if index .Result "Paid"}}<span class="badge badge-green">✓ 已支付</span>{{else}}<span class="badge badge-gray">未支付</span>{{end}}</span>
+        <span class="k">创建时间</span><span class="v muted">{{index .Result "Addtime"}}</span>
+        {{if index .Result "Endtime"}}<span class="k">完成时间</span><span class="v">{{index .Result "Endtime"}}</span>{{end}}
+      </div>
+    </div>
+    {{end}}
+    <form method="get" action="/check" class="mt">
+      <div class="form-item">
+        <label>平台订单号</label>
+        <input class="input" type="text" name="trade_no" value="{{.TradeNo}}" placeholder="输入订单号查询" required>
+      </div>
+      <button class="btn btn-primary" style="width:100%;padding:12px" type="submit">查询</button>
+    </form>
+  </div>
+</div>
+{{end}}
+
+__zcode_status=$?
+if [ "$__zcode_status" -eq 0 ]; then pwd -P > '/var/folders/01/b19hlzgx447bwy7c97d27k7w0000gn/T/zcode-0354573d-d213-473d-a70d-b52b6960090b-cwd'; fi
+exit "$__zcode_status"
