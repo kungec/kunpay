@@ -751,3 +751,71 @@ func (s *Server) handleUserAvatarClear(w http.ResponseWriter, r *http.Request) {
 	_, _ = s.DB.Exec("UPDATE users SET avatar='' WHERE id=?", u.ID)
 	http.Redirect(w, r, "/user/settings?msg="+urlEscape("已恢复默认头像"), http.StatusFound)
 }
+
+// handleUserDebugNotify 商户回调测试: 向商户 notify_url 发送一条带签名的模拟异步通知
+func (s *Server) handleUserDebugNotify(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	_ = r.ParseForm()
+	notifyURL := strings.TrimSpace(r.FormValue("notify_url"))
+	out := map[string]any{}
+	if notifyURL == "" {
+		out["code"] = -1
+		out["msg"] = "请填写 notify_url"
+		writeJSON(w, out)
+		return
+	}
+	lu := strings.ToLower(notifyURL)
+	if !strings.HasPrefix(lu, "http://") && !strings.HasPrefix(lu, "https://") {
+		out["code"] = -1
+		out["msg"] = "仅支持 http/https 协议"
+		writeJSON(w, out)
+		return
+	}
+
+	// 构造与真实异步通知一致的签名参数
+	params := map[string]string{
+		"pid":          strconv.FormatInt(u.Pid, 10),
+		"trade_no":     timeFormat(model.Now(), "20060102150405") + db.RandDigits(5),
+		"out_trade_no": "TEST" + db.RandDigits(6),
+		"type":         "alipay",
+		"name":         "回调测试",
+		"money":        "1.00",
+		"trade_status": "TRADE_SUCCESS",
+	}
+	params["sign"] = service.Sign(params, u.Skey)
+	params["sign_type"] = "MD5"
+
+	q := url.Values{}
+	for k, v := range params {
+		q.Set(k, v)
+	}
+	target := notifyURL
+	if strings.Contains(target, "?") {
+		target += "&" + q.Encode()
+	} else {
+		target += "?" + q.Encode()
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(target)
+	rr := ""
+	if err != nil {
+		rr = "请求失败: " + err.Error()
+		out["ok"] = false
+	} else {
+		defer resp.Body.Close()
+		buf := make([]byte, 512)
+		n, _ := resp.Body.Read(buf)
+		rr = fmt.Sprintf("HTTP %d, 响应: %s", resp.StatusCode, string(buf[:n]))
+		if strings.EqualFold(strings.TrimSpace(rr[strings.Index(rr, "响应: ")+len("响应: "):]), "success") {
+			out["ok"] = true
+		}
+	}
+	if out["ok"] == true {
+		out["msg"] = "✓ 回调送达,商户响应 success — 异步通知配置正确"
+	} else {
+		out["msg"] = "✗ 商户响应非 success(应原样输出 success): " + rr
+	}
+	out["response"] = rr
+	writeJSON(w, out)
+}

@@ -109,6 +109,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /user/report/export.csv", s.requireLogin(s.handleUserReportExport))
 	mux.HandleFunc("POST /user/report/mail", s.requireLogin(s.requireCSRF(s.handleUserReportMail)))
 	mux.HandleFunc("POST /user/debug", s.requireLogin(s.handleUserDebug))
+	mux.HandleFunc("POST /user/debug/notify", s.requireLogin(s.handleUserDebugNotify))
 	mux.HandleFunc("GET /user/orders/export.csv", s.requireLogin(s.handleUserOrdersExport))
 	mux.HandleFunc("GET /admin/orders/export.csv", s.requireAdmin(s.handleAdminOrdersExport))
 	mux.HandleFunc("GET /admin/orders/{id}", s.requireAdmin(s.handleAdminOrderDetail))
