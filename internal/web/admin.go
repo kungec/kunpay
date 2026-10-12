@@ -382,8 +382,8 @@ func (s *Server) handleAdminChannelsSave(w http.ResponseWriter, r *http.Request)
 	}
 	account := strings.TrimSpace(r.FormValue("account"))
 	deviceID := atoint64(r.FormValue("device_id"))
-	_, _ = s.DB.Exec(`UPDATE channels SET enabled=?, min_money=?, max_money=?, account=?, device_id=? WHERE type=?`,
-		enabled, minMoney, maxMoney, account, deviceID, typ)
+	_, _ = s.DB.Exec(`UPDATE channels SET enabled=?, min_money=?, max_money=?, account=?, device_id=?, alipay_uid=? WHERE type=?`,
+		enabled, minMoney, maxMoney, account, deviceID, strings.TrimSpace(r.FormValue("alipay_uid")), typ)
 	http.Redirect(w, r, "/admin/channels?msg="+urlEscape("渠道设置已保存"), http.StatusFound)
 }
 

@@ -620,3 +620,22 @@ body.kp-leaving .demo-wrap, body.kp-leaving .doc-layout { opacity: .55; transiti
 @media (max-width: 1100px) and (min-width: 761px) {
   .grid.c3 > .card { min-width: 0; }
 }
+
+/* ---------- 收银台唤起APP按钮 ---------- */
+.app-launch { display: flex; flex-direction: column; gap: 9px; margin: 4px 0 14px; }
+.app-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px; border-radius: 10px; color: #fff; font-size: 14.5px; font-weight: 600;
+  text-decoration: none; transition: all .15s;
+}
+.app-btn:active { transform: scale(.98); }
+.app-btn svg { width: 20px; height: 20px; }
+.app-btn.alipay { background: #1677ff; }
+.app-btn.wechat { background: #07c160; }
+.app-btn.qq { background: #12b7f5; }
+.amount-chip {
+  display: inline-flex; align-items: center; gap: 8px; background: #f2f6ff;
+  border: 1px solid #d9e4ff; border-radius: 24px; padding: 7px 16px; margin-top: 4px;
+  color: var(--primary); font-size: 14px; font-weight: 600;
+}
+.amount-chip button { border: 0; background: var(--primary); color: #fff; border-radius: 14px; padding: 2px 12px; font-size: 12px; cursor: pointer; }

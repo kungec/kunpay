@@ -238,6 +238,7 @@ func (d *DB) Migrate() error {
 	_, _ = d.Exec("ALTER TABLE orders ADD COLUMN m_item_id INTEGER DEFAULT 0")
 	_, _ = d.Exec("ALTER TABLE orders ADD COLUMN p_item_id INTEGER DEFAULT 0")
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN avatar TEXT DEFAULT ''")
+	_, _ = d.Exec("ALTER TABLE channels ADD COLUMN alipay_uid TEXT DEFAULT ''")
 	// 旧版平台单一收款码迁移为多码 items
 	var itemN, qrN int
 	_ = d.QueryRow("SELECT COUNT(*) FROM platform_channel_items").Scan(&itemN)

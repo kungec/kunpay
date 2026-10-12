@@ -69,8 +69,8 @@ func (s *Store) UserByUsername(name string) (*model.User, error) {
 
 func (s *Store) ChannelByType(t string) (*model.Channel, error) {
 	c := &model.Channel{}
-	err := s.DB.QueryRow("SELECT id,type,name,enabled,min_money,max_money,qrcode,account,device_id FROM channels WHERE type=?", t).
-		Scan(&c.ID, &c.Type, &c.Name, &c.Enabled, &c.MinMoney, &c.MaxMoney, &c.Qrcode, &c.Account, &c.DeviceID)
+	err := s.DB.QueryRow("SELECT id,type,name,enabled,min_money,max_money,qrcode,account,device_id,alipay_uid FROM channels WHERE type=?", t).
+		Scan(&c.ID, &c.Type, &c.Name, &c.Enabled, &c.MinMoney, &c.MaxMoney, &c.Qrcode, &c.Account, &c.DeviceID, &c.AlipayUID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -78,7 +78,7 @@ func (s *Store) ChannelByType(t string) (*model.Channel, error) {
 }
 
 func (s *Store) AllChannels() ([]model.Channel, error) {
-	rows, err := s.DB.Query("SELECT id,type,name,enabled,min_money,max_money,qrcode,account,device_id FROM channels ORDER BY id")
+	rows, err := s.DB.Query("SELECT id,type,name,enabled,min_money,max_money,qrcode,account,device_id,alipay_uid FROM channels ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func (s *Store) AllChannels() ([]model.Channel, error) {
 	var out []model.Channel
 	for rows.Next() {
 		c := model.Channel{}
-		if err := rows.Scan(&c.ID, &c.Type, &c.Name, &c.Enabled, &c.MinMoney, &c.MaxMoney, &c.Qrcode, &c.Account, &c.DeviceID); err != nil {
+		if err := rows.Scan(&c.ID, &c.Type, &c.Name, &c.Enabled, &c.MinMoney, &c.MaxMoney, &c.Qrcode, &c.Account, &c.DeviceID, &c.AlipayUID); err != nil {
 			return nil, err
 		}
 		out = append(out, c)

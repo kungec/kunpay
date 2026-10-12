@@ -62,9 +62,10 @@ type Channel struct {
 	Enabled  int
 	MinMoney int64 // 分
 	MaxMoney int64 // 分
-	Qrcode   string
-	Account  string
-	DeviceID int64
+	Qrcode    string
+	Account   string
+	DeviceID  int64
+	AlipayUID string // 支付宝收款账号UID(用于深链自动带金额)
 }
 
 type Device struct {

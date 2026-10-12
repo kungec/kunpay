@@ -4,7 +4,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -330,17 +332,48 @@ func (s *Server) handlePayCashier(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	qr, qrSource := s.resolvePayQR(o)
+
+	// 移动端唤起: 生成各通道深链(支付宝配置UID后可自动带金额与备注)
+	ch, _ := s.Store.ChannelByType(o.Type)
+	ua := strings.ToLower(r.UserAgent())
+	isMobile := strings.Contains(ua, "mobile") || o.Device == "mobile" ||
+		o.Device == "qq" || o.Device == "wechat" || o.Device == "alipay"
+	amount := service.MoneyStr(o.PayMoney)
+	memo := o.TradeNo
+	if len(memo) > 6 {
+		memo = memo[len(memo)-6:]
+	}
+	var alipayScheme, wechatScheme, qqScheme string
+	if isMobile && o.Status == 0 {
+		if ch != nil && ch.AlipayUID != "" {
+			alipayScheme = "alipays://platformapi/startapp?appId=09999999&actionType=toAccount&userId=" +
+				url.QueryEscape(ch.AlipayUID) + "&amount=" + amount + "&memo=" + url.QueryEscape(memo)
+		} else if o.Type == "alipay" {
+			alipayScheme = "alipays://"
+		}
+		if o.Type == "wxpay" {
+			wechatScheme = "weixin://"
+		}
+		if o.Type == "qqpay" {
+			qqScheme = "mqq://"
+		}
+	}
 	st, _ := s.DB.AllSettings()
 	d := map[string]any{
-		"Settings": st,
-		"Order":    o,
-		"QrPath":   qr,
-		"QrSource": qrSource,
-		"SiteName": st["site_name"],
-		"IsPaid":   o.Status == 1 || o.Status == 3,
-		"Expired":  o.Status == 2 || (o.Status == 0 && o.ExpireAt < model.Now()),
-		"LeftSec":  o.ExpireAt - model.Now(),
-		"PayURL":   s.absoluteURL(r) + "/pay/" + o.TradeNo,
+		"Settings":     st,
+		"Order":        o,
+		"QrPath":       qr,
+		"QrSource":     qrSource,
+		"IsMobileUA":   isMobile,
+		"AmountYuan":   amount,
+		"AlipayScheme": template.URL(alipayScheme),
+		"WechatScheme": template.URL(wechatScheme),
+		"QqScheme":     template.URL(qqScheme),
+		"SiteName":     st["site_name"],
+		"IsPaid":       o.Status == 1 || o.Status == 3,
+		"Expired":      o.Status == 2 || (o.Status == 0 && o.ExpireAt < model.Now()),
+		"LeftSec":      o.ExpireAt - model.Now(),
+		"PayURL":       s.absoluteURL(r) + "/pay/" + o.TradeNo,
 	}
 	d["Page"] = "cashier"
 	s.render(w, "sa_cashier", http.StatusOK, d)

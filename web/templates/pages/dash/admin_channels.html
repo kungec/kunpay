@@ -101,6 +101,13 @@
           <label>收款账号备注(选填)</label>
           <input class="input" type="text" name="account" value="{{.Account}}" placeholder="如: 张三 138****8888">
         </div>
+        {{if eq .Type "alipay"}}
+        <div class="form-item" style="margin:10px 0 0">
+          <label>支付宝账号 UID(手机端唤起支付宝并自动带金额)</label>
+          <input class="input" type="text" name="alipay_uid" value="{{.AlipayUID}}" placeholder="16位数字,支付宝APP「我的-个人信息-账号详情」可查">
+          <div class="tip">配置后,手机端收银台「唤起支付宝」按钮将自动填好金额与备注</div>
+        </div>
+        {{end}}
         <button class="btn btn-primary btn-sm mt" style="width:100%" type="submit">保存渠道设置</button>
       </div>
     </form>
