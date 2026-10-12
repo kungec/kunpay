@@ -146,6 +146,7 @@ func (s *Store) RunBackground() {
 			s.cleanSessions()
 			s.checkDeviceAlerts()
 			s.checkLowBalance()
+			s.checkChannelHealth()
 			if time.Since(lastMaint) >= 6*time.Hour {
 				lastMaint = time.Now()
 				s.cleanOldLogs(90)
@@ -292,4 +293,35 @@ func itoa(v int64) string {
 		buf[i] = '-'
 	}
 	return string(buf[i:])
+}
+
+// checkChannelHealth 渠道成功率自动监控: 近1小时≥10笔且成功率<50%时告警
+func (s *Store) checkChannelHealth() {
+	rows, err := s.DB.Query(`SELECT c.type, c.name,
+		COUNT(o.id) as total,
+		SUM(CASE WHEN o.status IN(1,3) THEN 1 ELSE 0 END) as paid
+		FROM channels c
+		JOIN orders o ON o.type=c.type AND o.addtime>strftime('%s','now')-3600
+		WHERE c.enabled=1
+		GROUP BY c.type, c.name HAVING COUNT(o.id) >= 10`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var typ, name string
+		var total, paid int64
+		if rows.Scan(&typ, &name, &total, &paid) == nil && total >= 10 {
+			rate := float64(paid) / float64(total) * 100
+			key := "chan_" + typ
+			if _, ok := lowBalanceAlerted.Load(key); !ok && rate < 50 {
+				lowBalanceAlerted.Store(key, time.Now())
+				msg := fmt.Sprintf("渠道 %s(%s) 近1小时成功率仅 %.1f%%(%d/%d),请检查收款码和监控设备。", name, typ, rate, paid, total)
+				log.Println("[alert] " + msg)
+				if AlertFn != nil {
+					AlertFn(msg)
+				}
+			}
+		}
+	}
 }
