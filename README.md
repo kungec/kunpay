@@ -11,6 +11,20 @@
 
 > ⚠️ **免责声明**:本项目仅供学习研究。支付业务受严格监管,请勿用于违法违规场景,正式商用请自行评估合规风险并取得相关资质。详见 [LICENSE](LICENSE) 附加条款。
 
+## 💎 赞助商
+
+<table>
+  <tr>
+    <td align="center" width="280">
+      <a href="https://www.kjvps.com" target="_blank"><b>KJ VPS</b></a><br>
+      <sub>跨境 VPS 服务商 · 高速稳定 · 全球节点</sub><br>
+      <a href="https://www.kjvps.com" target="_blank">www.kjvps.com</a>
+    </td>
+  </tr>
+</table>
+
+> 感谢 **[KJ VPS](https://www.kjvps.com)** 为本项目提供跨境 VPS 支持。
+
 ## ⬇ 快速下载
 
 | 下载 | 说明 |
@@ -214,6 +228,15 @@ python3 scripts/e2e_test.py        # 需先以全新数据库启动服务:
 ## ⚠️ 使用须知
 
 本系统仅用于学习研究或合法合规的自有收款场景。支付行业受严格监管,请勿用于违法违规交易;正式商用请自行评估合规风险并取得相关资质。
+
+## 赞助商
+
+<div align="center">
+  <a href="https://www.kjvps.com" target="_blank">
+    <img src="https://img.shields.io/badge/赞助商-KJ_VPS-2e63f6?style=for-the-badge&labelColor=1a1a2e" alt="KJ VPS 跨境VPS">
+  </a>
+  <br><sub>跨境 VPS 服务商 · 高速稳定 · 全球节点 — <a href="https://www.kjvps.com">www.kjvps.com</a></sub>
+</div>
 
 ## 开源与贡献
 
