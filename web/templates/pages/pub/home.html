@@ -34,6 +34,18 @@
   </div>
 </section>
 
+<!-- 渠道状态条 -->
+<section style="max-width:1200px;margin:0 auto;padding:0 24px 20px">
+  <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+    {{range .ChanStatuses}}
+    <span style="display:inline-flex;align-items:center;gap:6px;background:#f8faff;border:1px solid #e0e8ff;border-radius:20px;padding:6px 16px;font-size:13px;color:var(--text-2)">
+      <span style="width:8px;height:8px;border-radius:50%;background:var(--success)"></span>
+      {{.Name}} 今日 {{.Count}} 笔
+    </span>
+    {{end}}
+  </div>
+</section>
+
 <!-- 核心功能 -->
 <section class="section" id="features">
   <div class="head">

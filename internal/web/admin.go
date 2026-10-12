@@ -1263,3 +1263,45 @@ func csvCell(f string) string {
 	}
 	return `"` + strings.ReplaceAll(f, `"`, `""`) + `"`
 }
+
+// handleAdminChannelStats 渠道成功率统计
+func (s *Server) handleAdminChannelStats(w http.ResponseWriter, r *http.Request) {
+	type chanStat struct {
+		Type     string
+		Name     string
+		Enabled  bool
+		Total    int64
+		Paid     int64
+		Expired  int64
+		Pending  int64
+		Rate     float64 // 成功率%
+	}
+	var stats []chanStat
+	rows, err := s.DB.Query(`SELECT c.type, c.name, c.enabled,
+		COUNT(o.id) as total,
+		SUM(CASE WHEN o.status IN(1,3) THEN 1 ELSE 0 END) as paid,
+		SUM(CASE WHEN o.status=2 THEN 1 ELSE 0 END) as expired,
+		SUM(CASE WHEN o.status=0 THEN 1 ELSE 0 END) as pending
+		FROM channels c LEFT JOIN orders o ON o.type=c.type AND o.addtime>strftime('%s','now')-7*86400
+		GROUP BY c.type, c.name, c.enabled ORDER BY c.id`)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var cs chanStat
+			var typ, name string
+			var enabled int
+			if rows.Scan(&typ, &name, &enabled, &cs.Total, &cs.Paid, &cs.Expired, &cs.Pending) == nil {
+				cs.Type = typ; cs.Name = name; cs.Enabled = enabled == 1
+				if cs.Total > 0 {
+					cs.Rate = float64(cs.Paid) / float64(cs.Total) * 100
+				}
+				stats = append(stats, cs)
+			}
+		}
+	}
+	d := s.pageData(r)
+	d["Page"] = "admin_chanstats"
+	d["Title"] = "渠道成功率"
+	d["Stats"] = stats
+	s.render(w, "dash_admin_chanstats", http.StatusOK, d)
+}

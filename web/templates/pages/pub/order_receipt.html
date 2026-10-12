@@ -1,0 +1,30 @@
+{{define "content"}}
+<div class="demo-wrap" style="max-width:440px">
+  <div class="card" style="padding:0;overflow:hidden">
+    <!-- 小票头部 -->
+    <div style="background:linear-gradient(120deg,#2e63f6,#5b8bff);padding:28px 24px;text-align:center;color:#fff">
+      <div style="font-size:13px;opacity:.8">{{.SiteName}} · 交易凭证</div>
+      <div style="font-size:36px;font-weight:800;margin-top:10px">¥{{yuan .Order.PayMoney}}</div>
+      <div style="font-size:12px;opacity:.8;margin-top:6px">{{if .Paid}}✓ 支付成功{{else}}待支付{{end}}</div>
+    </div>
+    <!-- 小票内容 -->
+    <div style="padding:20px 24px">
+      <div class="kv">
+        <span class="k">订单号</span><span class="v mono" style="font-size:11px">{{.Order.TradeNo}}</span>
+        <span class="k">商品名称</span><span class="v">{{.Order.Name}}</span>
+        <span class="k">支付方式</span><span class="v">{{typename .Order.Type}}</span>
+        <span class="k">创建时间</span><span class="v">{{fdate .Order.Addtime}}</span>
+        {{if .Order.Endtime}}<span class="k">完成时间</span><span class="v">{{fdate .Order.Endtime}}</span>{{end}}
+      </div>
+    </div>
+    <!-- 虚线分割 -->
+    <div style="border-top:1px dashed var(--border);margin:0 16px"></div>
+    <div style="padding:16px 24px;text-align:center">
+      <button class="btn btn-outline btn-sm" onclick="window.print()">🖨 打印小票</button>
+    </div>
+  </div>
+  <div style="text-align:center;margin-top:14px;color:var(--text-3);font-size:11px">
+    Powered by <a href="/" style="color:var(--primary)">{{.SiteName}}</a>
+  </div>
+</div>
+{{end}}

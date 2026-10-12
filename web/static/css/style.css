@@ -642,3 +642,11 @@ body.kp-leaving .demo-wrap, body.kp-leaving .doc-layout { opacity: .55; transiti
 
 /* ---------- 图形验证码 ---------- */
 .captcha-img { height: 44px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; flex: none; }
+
+/* ---------- 打印样式 ---------- */
+@media print {
+  body * { visibility: hidden; }
+  .print-area, .print-area * { visibility: visible; }
+  .print-area { position: absolute; left: 0; top: 0; width: 100%; }
+  .no-print { display: none !important; }
+}

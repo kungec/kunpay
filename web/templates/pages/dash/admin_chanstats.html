@@ -1,0 +1,39 @@
+{{define "content"}}
+<div class="card">
+  <div class="row between mb" style="flex-wrap:wrap">
+    <div class="card-title" style="margin:0">渠道成功率统计(近 7 日)</div>
+    <span class="muted" style="font-size:12.5px">成功率 = 已支付 / 总订单</span>
+  </div>
+  <div class="table-wrap">
+    <table class="tbl">
+      <tr><th>渠道</th><th>状态</th><th class="money">总订单</th><th class="money">已支付</th><th class="money">已过期</th><th class="money">待支付</th><th style="width:200px">成功率</th></tr>
+      {{if .Stats}}
+      {{range .Stats}}
+      <tr>
+        <td><b>{{.Name}}</b> <span class="mono muted" style="font-size:11px">{{.Type}}</span></td>
+        <td>{{if .Enabled}}<span class="badge badge-green">启用</span>{{else}}<span class="badge badge-red">停用</span>{{end}}</td>
+        <td class="money">{{.Total}}</td>
+        <td class="money" style="color:var(--success)">{{.Paid}}</td>
+        <td class="money muted">{{.Expired}}</td>
+        <td class="money">{{.Pending}}</td>
+        <td>
+          {{if gt .Total 0}}
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="flex:1;height:8px;background:#f0f1f4;border-radius:4px;overflow:hidden">
+              <div style="width:{{printf "%.0f" .Rate}}%;height:100%;background:{{if ge .Rate 80.0}}var(--success){{else if ge .Rate 50.0}}var(--warning){{else}}var(--danger){{end}};border-radius:4px"></div>
+            </div>
+            <span style="font-size:12px;min-width:45px">{{printf "%.1f" .Rate}}%</span>
+          </div>
+          {{else}}
+          <span class="muted" style="font-size:12px">暂无数据</span>
+          {{end}}
+        </td>
+      </tr>
+      {{end}}
+      {{else}}
+      <tr><td colspan="7"><div class="empty">暂无渠道数据</div></td></tr>
+      {{end}}
+    </table>
+  </div>
+</div>
+{{end}}

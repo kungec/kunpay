@@ -19,6 +19,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /demo/create", s.handleDemoCreate)
 	mux.HandleFunc("GET /demo/done", s.handleDemoDone)
 	mux.HandleFunc("GET /check", s.handleOrderCheckPage)
+	mux.HandleFunc("GET /receipt", s.handleOrderReceipt)
 
 	// 认证
 	mux.HandleFunc("GET /login", s.handleLoginPage)
@@ -103,6 +104,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /admin/audit", s.requireAdmin(s.handleAdminAudit))
 	mux.HandleFunc("GET /api/poll", s.requireLogin(s.handleOrderPoll))
 	mux.HandleFunc("GET /admin/cleanup", s.requireAdmin(s.handleAdminCleanup))
+	mux.HandleFunc("GET /admin/channelstats", s.requireAdmin(s.handleAdminChannelStats))
 	mux.HandleFunc("POST /admin/cleanup/run", s.requireAdmin(s.requireCSRF(s.handleAdminCleanupRun)))
 	mux.HandleFunc("POST /admin/paylogs/match", s.requireAdmin(s.requireCSRF(s.handleAdminPayLogMatch)))
 	mux.HandleFunc("POST /admin/orders/notify", s.requireAdmin(s.requireCSRF(s.handleAdminOrderNotify)))

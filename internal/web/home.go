@@ -15,6 +15,22 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	d := s.pageData(r)
 	d["Page"] = "home"
 	d["Title"] = s.DB.MustSetting("site_title")
+	chs, _ := s.Store.AllChannels()
+	type chStatus struct {
+		Name    string
+		Type    string
+		Enabled bool
+		Count   int64
+	}
+	var chanStatuses []chStatus
+	for _, ch := range chs {
+		if ch.Enabled == 1 {
+			var cnt int64
+			s.DB.QueryRow("SELECT COUNT(*) FROM orders WHERE type=? AND addtime>strftime('%s','now')-86400", ch.Type).Scan(&cnt)
+			chanStatuses = append(chanStatuses, chStatus{Name: ch.Name, Type: ch.Type, Enabled: true, Count: cnt})
+		}
+	}
+	d["ChanStatuses"] = chanStatuses
 	s.render(w, "pub_home", http.StatusOK, d)
 }
 
@@ -149,4 +165,34 @@ func isValidTradeNo(s string) bool {
 		}
 	}
 	return true
+}
+
+// handleOrderReceipt 交易电子小票(公开,通过订单号+金额后两位验证)
+func (s *Server) handleOrderReceipt(w http.ResponseWriter, r *http.Request) {
+	tradeNo := strings.TrimSpace(r.FormValue("trade_no"))
+	payParam := strings.TrimSpace(r.FormValue("pay"))
+	if tradeNo == "" || !isValidTradeNo(tradeNo) {
+		renderMsg(s, w, r, "参数错误", "订单号格式不正确", http.StatusBadRequest)
+		return
+	}
+	o := s.Store.OrderByTradeNo(tradeNo)
+	if o == nil {
+		renderMsg(s, w, r, "订单不存在", "未找到该订单,请确认订单号是否正确", http.StatusNotFound)
+		return
+	}
+	// 验证支付金额后两位(防遍历)
+	payStr := service.MoneyStr(o.PayMoney)
+	if payParam != "" && payParam != payStr[len(payStr)-2:] {
+		renderMsg(s, w, r, "验证失败", "支付金额后两位不匹配", http.StatusForbidden)
+		return
+	}
+	paid := o.Status == 1 || o.Status == 3
+	st, _ := s.DB.AllSettings()
+	d := s.pageData(r)
+	d["Page"] = "order_receipt"
+	d["Title"] = "交易小票"
+	d["Order"] = o
+	d["Paid"] = paid
+	d["SiteName"] = st["site_name"]
+	s.render(w, "pub_order_receipt", http.StatusOK, d)
 }
