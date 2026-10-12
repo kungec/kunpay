@@ -22,6 +22,7 @@ func (s *Server) Routes() http.Handler {
 	// 认证
 	mux.HandleFunc("GET /login", s.handleLoginPage)
 	mux.HandleFunc("POST /login", s.handleLoginPost)
+	mux.HandleFunc("GET /captcha/image", handleCaptchaImage)
 	mux.HandleFunc("GET /forgot", s.handleForgotPage)
 	mux.HandleFunc("POST /forgot", s.handleForgotPost)
 	mux.HandleFunc("GET /reset", s.handleResetPage)

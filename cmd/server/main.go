@@ -15,6 +15,7 @@ func main() {
 	store := service.NewStore(mustDB(cfg))
 
 	srv := web.NewServer(store, cfg.DataDir, cfg.Port)
+	srv.CaptchaEnabled = cfg.Captcha
 	if err := srv.Init(); err != nil {
 		log.Fatalf("初始化失败: %v", err)
 	}

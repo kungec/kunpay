@@ -136,6 +136,7 @@ func (s *Server) handleRegisterPage(w http.ResponseWriter, r *http.Request) {
 	}
 	d := s.pageData(r)
 	d["Page"] = "register"
+	s.newCaptchaData(d)
 	s.render(w, "pub_register", http.StatusOK, d)
 }
 
@@ -174,11 +175,17 @@ func (s *Server) handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 	qq := strings.TrimSpace(r.FormValue("qq"))
 	invite := strings.TrimSpace(r.FormValue("invite_code"))
 
+	if s.CaptchaEnabled && !verifyCaptcha(r.FormValue("captcha_id"), r.FormValue("captcha_code")) {
+		failCaptcha(s, w, r)
+		return
+	}
+
 	fail := func(msg string) {
 		d := s.pageData(r)
 		d["Page"] = "register"
 		d["Error"] = msg
 		d["Form"] = map[string]string{"username": username, "email": email, "qq": qq}
+		s.newCaptchaData(d)
 		s.render(w, "pub_register", http.StatusOK, d)
 	}
 
@@ -252,6 +259,7 @@ func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	}
 	d := s.pageData(r)
 	d["Page"] = "login"
+	s.newCaptchaData(d)
 	s.render(w, "pub_login", http.StatusOK, d)
 }
 
@@ -303,18 +311,26 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 
 	d := s.pageData(r)
 	d["Page"] = "login"
+	s.newCaptchaData(d)
+	if s.CaptchaEnabled && !verifyCaptcha(r.FormValue("captcha_id"), r.FormValue("captcha_code")) {
+		d["Error"] = "验证码错误或已过期"
+		s.render(w, "pub_login", http.StatusOK, d)
+		return
+	}
 	failMsg := "用户名或密码错误"
 
 	u, err := s.Store.UserByUsername(username)
 	if err != nil || u == nil {
 		recordLoginFail(clientIP(r), username)
 		d["Error"] = failMsg
+		s.newCaptchaData(d)
 		s.render(w, "pub_login", http.StatusOK, d)
 		return
 	}
 	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil {
 		recordLoginFail(clientIP(r), username)
 		d["Error"] = failMsg
+		s.newCaptchaData(d)
 		s.render(w, "pub_login", http.StatusOK, d)
 		return
 	}
@@ -365,17 +381,23 @@ func (s *Server) handleForgotPage(w http.ResponseWriter, r *http.Request) {
 	d := s.pageData(r)
 	d["Page"] = "forgot"
 	d["Done"] = false
+	s.newCaptchaData(d)
 	s.render(w, "pub_forgot", http.StatusOK, d)
 }
 
 func (s *Server) handleForgotPost(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
+	if s.CaptchaEnabled && !verifyCaptcha(r.FormValue("captcha_id"), r.FormValue("captcha_code")) {
+		failCaptcha(s, w, r)
+		return
+	}
 	account := strings.TrimSpace(r.FormValue("account"))
 	d := s.pageData(r)
 	d["Page"] = "forgot"
 	if !resetAllowed(clientIP(r)) {
 		d["Msg"] = "请求过于频繁,请稍后再试"
 		d["Done"] = true
+		s.newCaptchaData(d)
 		s.render(w, "pub_forgot", http.StatusOK, d)
 		return
 	}
@@ -388,6 +410,7 @@ func (s *Server) handleForgotPost(w http.ResponseWriter, r *http.Request) {
 	if err != nil || email == "" || s.smtpConf().Host == "" {
 		d["Msg"] = generic
 		d["Done"] = true
+		s.newCaptchaData(d)
 		s.render(w, "pub_forgot", http.StatusOK, d)
 		return
 	}
@@ -405,6 +428,7 @@ func (s *Server) handleForgotPost(w http.ResponseWriter, r *http.Request) {
 	if err := s.SendMail(email, subject, body); err != nil {
 		d["Msg"] = "邮件发送失败,请联系管理员。"
 		d["Done"] = true
+		s.newCaptchaData(d)
 		s.render(w, "pub_forgot", http.StatusOK, d)
 		return
 	}
@@ -451,6 +475,31 @@ func (s *Server) handleResetPost(w http.ResponseWriter, r *http.Request) {
 	// 安全: 重置密码后踢掉该用户所有会话
 	_, _ = s.DB.Exec("DELETE FROM sessions WHERE user_id=?", userID)
 	http.Redirect(w, r, "/login", http.StatusFound)
+}
+
+// newCaptchaData 生成验证码并注入页面数据(未启用时跳过)
+func (s *Server) newCaptchaData(d map[string]any) {
+	if !s.CaptchaEnabled {
+		return
+	}
+	id, _ := newCaptcha()
+	d["CaptchaID"] = id
+}
+
+// failCaptcha 渲染验证码错误页(login/register/forgot 共用)
+func failCaptcha(s *Server, w http.ResponseWriter, r *http.Request) {
+	page := "/register"
+	if strings.Contains(r.URL.Path, "forgot") {
+		page = "/forgot"
+	} else if strings.Contains(r.URL.Path, "login") {
+		page = "/login"
+	}
+	d := s.pageData(r)
+	d["Page"] = strings.TrimPrefix(page, "/")
+	d["Error"] = "验证码错误或已过期"
+	d["Form"] = map[string]string{"username": r.FormValue("username"), "email": r.FormValue("email")}
+	s.newCaptchaData(d)
+	s.render(w, "pub_"+page[strings.LastIndex(page, "/")+1:], http.StatusOK, d)
 }
 
 func htmlEscape(s string) string {

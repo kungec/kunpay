@@ -12,6 +12,7 @@ type Config struct {
 	DBPath   string
 	DataDir  string
 	SiteName string
+	Captcha  bool
 }
 
 func Load() *Config {
@@ -32,6 +33,7 @@ func Load() *Config {
 	flag.StringVar(&cfg.Port, "port", envOr("KUNPAY_PORT", "8080"), "HTTP 监听端口")
 	flag.StringVar(&cfg.DBPath, "db", envOr("KUNPAY_DB", defDB), "SQLite 数据库文件路径")
 	flag.StringVar(&cfg.DataDir, "data", envOr("KUNPAY_DATA", defData), "上传文件(收款码等)存储目录")
+	flag.BoolVar(&cfg.Captcha, "captcha", true, "注册/登录/找回密码启用图形验证码(回归测试可关闭)")
 	flag.Parse()
 
 	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {

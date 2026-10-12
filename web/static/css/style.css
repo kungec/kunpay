@@ -639,3 +639,6 @@ body.kp-leaving .demo-wrap, body.kp-leaving .doc-layout { opacity: .55; transiti
   color: var(--primary); font-size: 14px; font-weight: 600;
 }
 .amount-chip button { border: 0; background: var(--primary); color: #fff; border-radius: 14px; padding: 2px 12px; font-size: 12px; cursor: pointer; }
+
+/* ---------- 图形验证码 ---------- */
+.captcha-img { height: 44px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; flex: none; }

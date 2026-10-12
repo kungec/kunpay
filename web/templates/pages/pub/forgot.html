@@ -12,6 +12,13 @@
       <div class="form-item">
         <input class="input" type="text" name="account" placeholder="用户名或邮箱" required>
       </div>
+            <div class="form-item">
+        <label>验证码</label>
+        <div class="row" style="gap:8px;flex-wrap:nowrap">
+          <input class="input" type="text" name="captcha_code" placeholder="输入图中字符" required style="flex:1;min-width:120px">
+          <img src="/captcha/image?id={{.CaptchaID}}" class="captcha-img" alt="验证码" title="点击刷新" onclick="this.src='/captcha/image?id={{.CaptchaID}}&t='+Date.now()">
+        </div>
+      </div>
       <button class="btn btn-primary" style="width:100%;padding:12px" type="submit">发送重置链接</button>
     </form>
     <div class="auth-foot"><a href="/login">返回登录</a></div>

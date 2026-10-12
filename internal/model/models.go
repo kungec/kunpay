@@ -56,12 +56,12 @@ type Order struct {
 }
 
 type Channel struct {
-	ID       int64
-	Type     string // alipay / wxpay / qqpay
-	Name     string
-	Enabled  int
-	MinMoney int64 // 分
-	MaxMoney int64 // 分
+	ID        int64
+	Type      string // alipay / wxpay / qqpay
+	Name      string
+	Enabled   int
+	MinMoney  int64 // 分
+	MaxMoney  int64 // 分
 	Qrcode    string
 	Account   string
 	DeviceID  int64

@@ -20,12 +20,13 @@ import (
 )
 
 type Server struct {
-	Store     *service.Store
-	DB        *db.DB
-	DataDir   string
-	Port      string
-	StartedAt time.Time
-	Tpl       map[string]*template.Template
+	Store          *service.Store
+	DB             *db.DB
+	DataDir        string
+	Port           string
+	StartedAt      time.Time
+	CaptchaEnabled bool // 图形验证码开关(注册/登录/找回)
+	Tpl            map[string]*template.Template
 }
 
 func NewServer(store *service.Store, dataDir, port string) *Server {

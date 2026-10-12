@@ -13,6 +13,13 @@
       <div class="form-item">
         <input class="input" type="password" name="password" placeholder="请输入密码" required>
       </div>
+            <div class="form-item">
+        <label>验证码</label>
+        <div class="row" style="gap:8px;flex-wrap:nowrap">
+          <input class="input" type="text" name="captcha_code" placeholder="输入图中字符" required style="flex:1;min-width:120px">
+          <img src="/captcha/image?id={{.CaptchaID}}" class="captcha-img" alt="验证码" title="点击刷新" onclick="this.src='/captcha/image?id={{.CaptchaID}}&t='+Date.now()">
+        </div>
+      </div>
       <button class="btn btn-primary" style="width:100%;padding:12px" type="submit">登 录</button>
     </form>
     <div class="auth-foot">
