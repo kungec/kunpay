@@ -11,6 +11,28 @@
 
 > ⚠️ **免责声明**:本项目仅供学习研究。支付业务受严格监管,请勿用于违法违规场景,正式商用请自行评估合规风险并取得相关资质。详见 [LICENSE](LICENSE) 附加条款。
 
+## 界面预览
+
+| 平台首页 | 收银台 |
+|---|---|
+| ![首页](docs/screenshots/home.png) | ![收银台](docs/screenshots/cashier.png) |
+
+| 商户中心 | 监控通道(多码轮询) |
+|---|---|
+| ![商户中心](docs/screenshots/dashboard.png) | ![我的通道](docs/screenshots/channels.png) |
+
+| 每日对账单 | 管理后台 |
+|---|---|
+| ![对账单](docs/screenshots/report.png) | ![管理后台](docs/screenshots/admin.png) |
+
+| 渠道管理(轮询+统计) | 订单详情(通知投递排障) |
+|---|---|
+| ![渠道管理](docs/screenshots/admin_channels.png) | ![订单详情](docs/screenshots/order_detail.png) |
+
+| 监控助手(桌面) | 监控APP(安卓) |
+|---|---|
+| ![桌面监控助手](docs/screenshots/monitor_desktop.png) | ![安卓监控APP](docs/screenshots/monitor_android.png) |
+
 ## 收款监控客户端
 
 | 端 | 产物 | 功能 |
