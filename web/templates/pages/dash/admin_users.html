@@ -89,6 +89,12 @@
     <hr style="border:none;border-top:1px dashed var(--border);margin:18px 0">
     <div class="row" style="flex-wrap:wrap;gap:10px">
       <a class="btn btn-outline btn-sm" id="udChanLink" href="#">查看自有通道</a>
+      <form method="post" action="/admin/users/save" data-confirm="代登将把您当前的会话切换为该商户,返回管理员面板需重新登录管理员账号。确定继续?">
+        <input type="hidden" name="_csrf" value="{{.CSRF}}">
+        <input type="hidden" name="id" id="udIdImp">
+        <input type="hidden" name="action" value="impersonate">
+        <button class="btn btn-primary btn-sm" type="submit">代登商户面板</button>
+      </form>
       <form method="post" action="/admin/users/save" data-confirm="重置后旧密钥立即失效,确定继续吗?">
         <input type="hidden" name="_csrf" value="{{.CSRF}}">
         <input type="hidden" name="id" id="udIdKey">
@@ -112,6 +118,7 @@ function openUserDlg(id, name, rate, skey, limitSingle, limitDaily) {
   document.getElementById('udKey').textContent = skey;
   document.getElementById('udRate').value = rate;
   document.getElementById('udIdLimit').value = id;
+  document.getElementById('udIdImp').value = id;
   document.getElementById('udLimitSingle').value = limitSingle || '0.00';
   document.getElementById('udLimitDaily').value = limitDaily || '0.00';
   ['udIdRate','udIdBal','udIdKey','udIdPw'].forEach(function(x){ document.getElementById(x).value = id; });

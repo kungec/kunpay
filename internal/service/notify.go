@@ -7,6 +7,10 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -166,6 +170,7 @@ func (s *Store) RunBackground() {
 				lastMaint = time.Now()
 				s.cleanOldLogs(90)
 			}
+			s.autoBackup()
 		}
 	}()
 }
@@ -374,6 +379,48 @@ func itoa(v int64) string {
 
 // breakerAlerted 避免冷却恢复重复告警
 var breakerAlerted sync.Map
+
+var lastBackupDay int64
+
+// autoBackup 定时自动备份: 每日第一轮 tick 执行 VACUUM INTO,按保留份数清理旧自动备份
+func (s *Store) autoBackup() {
+	if s.DB.MustSetting("backup_auto") != "1" {
+		return
+	}
+	lt := time.Unix(model.Now(), 0)
+	today := lt.Format("20060102")
+	if lastBackupDay == today_i64(today) {
+		return
+	}
+	lastBackupDay = today_i64(today)
+	dir := filepath.Join(s.DataDir, "backups")
+	_ = os.MkdirAll(dir, 0o755)
+	name := fmt.Sprintf("auto-%s-%s.db", today, lt.Format("150405"))
+	target := filepath.Join(dir, name)
+	if _, err := s.DB.Exec("VACUUM INTO ?", target); err != nil {
+		log.Printf("[backup] 自动备份失败: %v", err)
+		return
+	}
+	keep := int(atoiDefault(s.DB.MustSetting("backup_keep"), 10))
+	if keep < 1 {
+		keep = 1
+	}
+	if ents, err := os.ReadDir(dir); err == nil {
+		var autos []string
+		for _, e := range ents {
+			if !e.IsDir() && strings.HasPrefix(e.Name(), "auto-") && strings.HasSuffix(e.Name(), ".db") {
+				autos = append(autos, e.Name())
+			}
+		}
+		sort.Strings(autos)
+		for i := 0; i < len(autos)-keep; i++ {
+			_ = os.Remove(filepath.Join(dir, autos[i]))
+		}
+	}
+	log.Printf("[backup] 自动备份完成: %s", name)
+}
+
+func today_i64(s string) int64 { n, _ := strconv.ParseInt(s, 10, 64); return n }
 
 // checkCircuitBreaker 渠道自动熔断
 func (s *Store) checkCircuitBreaker() {

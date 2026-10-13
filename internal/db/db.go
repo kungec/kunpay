@@ -231,6 +231,8 @@ var defaultSettings = map[string]string{
 	"invite_rate":        "10",
 	"alert_webhook":      "",
 	"circuit_breaker":    "0",
+	"backup_auto":        "0",
+	"backup_keep":        "10",
 	"footer_text":        "© 2026 KunPay. 保留所有权利.",
 }
 

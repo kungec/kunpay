@@ -13,6 +13,7 @@ import (
 func main() {
 	cfg := config.Load()
 	store := service.NewStore(mustDB(cfg))
+	store.DataDir = cfg.DataDir
 
 	srv := web.NewServer(store, cfg.DataDir, cfg.Port)
 	srv.CaptchaEnabled = cfg.Captcha

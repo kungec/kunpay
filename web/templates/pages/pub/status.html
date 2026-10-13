@@ -1,0 +1,30 @@
+{{define "content"}}
+<div class="doc-layout" style="grid-template-columns:1fr;max-width:860px">
+  <div class="stat-cards s3" style="grid-template-columns:repeat(3,1fr);margin-bottom:18px">
+    <div class="scard"><div><div class="l">平台连续运行</div><div class="v">{{.UptimeH}} <small>小时</small></div></div></div>
+    <div class="scard"><div><div class="l">今日订单支付率</div><div class="v">{{printf "%.1f" .Rate}}<small>%</small></div></div></div>
+    <div class="scard"><div><div class="l">监控设备在线</div><div class="v">{{.DevOnline}} <small>/ {{.DevTotal}}</small></div></div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">支付渠道状态</div>
+    <div class="row" style="gap:12px;flex-wrap:wrap">
+      {{range .Chans}}
+      {{if eq .State "ok"}}<span class="badge badge-green" style="padding:6px 16px;font-size:13px">● {{.Name}} 正常</span>
+      {{else if eq .State "breaker"}}<span class="badge badge-orange" style="padding:6px 16px;font-size:13px">● {{.Name}} 熔断恢复中</span>
+      {{else}}<span class="badge badge-gray" style="padding:6px 16px;font-size:13px">● {{.Name}} 维护中</span>{{end}}
+      {{end}}
+    </div>
+    <div class="muted" style="font-size:12.5px;margin-top:14px">
+      今日订单 {{.TodayTotal}} 笔 · 支付成功 {{.TodayPaid}} 笔{{if .LastPay}} · 最近一笔支付:{{fdate .LastPay}}{{end}}
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">说明</div>
+    <p class="muted" style="font-size:13px;line-height:2">
+      · 本页面为公开运行状态页,实时反映各支付渠道可用性,不含任何敏感数据;<br>
+      · 渠道熔断为系统风控自动执行(连续失败过多时临时停用),恢复后自动上线;<br>
+      · 如渠道长时间显示"维护中",请联系平台管理员。
+    </p>
+  </div>
+</div>
+{{end}}

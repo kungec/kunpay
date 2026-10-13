@@ -30,6 +30,7 @@ var (
 
 type Store struct {
 	DB            *db.DB
+	DataDir       string    // 数据目录(自动备份用)
 	deviceAlertOn *sync.Map // 已告警的离线设备 id -> 告警时间
 }
 

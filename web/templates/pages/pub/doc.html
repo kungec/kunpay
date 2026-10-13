@@ -6,6 +6,7 @@
     <a href="/doc/mapi" class="{{if eq .DocPage "mapi"}}on{{end}}">API接口支付</a>
     <a href="/doc/notify" class="{{if eq .DocPage "notify"}}on{{end}}">支付结果通知</a>
     <a href="/doc/md5" class="{{if eq .DocPage "md5"}}on{{end}}">签名方式</a>
+    <a href="/doc/rsa" class="{{if eq .DocPage "rsa"}}on{{end}}">RSA 签名对接</a>
     <a href="/doc/paytype" class="{{if eq .DocPage "paytype"}}on{{end}}">支付方式</a>
     <a href="/doc/device" class="{{if eq .DocPage "device"}}on{{end}}">设备列表</a>
     <a href="/doc/api" class="{{if eq .DocPage "api"}}on{{end}}">[API] 查询商户信息</a>
@@ -136,6 +137,31 @@ $params['sign_type'] = 'MD5';
 header('Location: https://pay.example.com/submit.php?' . http_build_query($params));</code></pre>
     <h2>注意事项</h2>
     <p>· 参数值不要进行 URL 编码;· MD5 结果为小写;· 密钥请妥善保管,泄露后请立即在商户中心重置。</p>
+
+    {{else if eq .DocPage "rsa"}}
+    <h1>RSA 签名对接</h1>
+    <p>相比 MD5,RSA 签名下您的私钥无需随请求参与运算摘要,即使请求被截获也无法伪造新签名,安全性更高。已在商户中心上传 RSA 公钥的商户即可使用。</p>
+
+    <h2>前置准备</h2>
+    <p>1. 生成您自己的 RSA 2048 密钥对(openssl 示例):</p>
+    <pre>openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out merchant_private.pem
+openssl pkey -in merchant_private.pem -pubout -out merchant_public.pem</pre>
+    <p>2. 登录商户中心 → 商户信息 → 粘贴 <code>merchant_public.pem</code> 内容保存;<br>
+    3. 在同一页面复制<strong>平台公钥</strong>,用于验证平台发给您的异步通知签名。</p>
+
+    <h2>请求签名</h2>
+    <p>1. 与 MD5 相同:过滤空值与 <code>sign</code>/<code>sign_type</code>,参数名 ASCII 升序,拼为 <code>a=b&amp;c=d</code>(值不做 URL 编码);<br>
+    2. 用您的私钥对该排序串做 <strong>RSA-SHA256(PKCS1v15)</strong> 签名,Base64 编码后作为 <code>sign</code>;<br>
+    3. 请求携带 <code>sign_type=RSA</code>。</p>
+    <pre>openssl dgst -sha256 -sign merchant_private.pem -out sig.bin sorted_string.txt
+sign=$(base64 -w 0 sig.bin)</pre>
+
+    <h2>验证平台通知</h2>
+    <p>平台异步通知会带 <code>sign_type=RSA</code> 与 <code>sign</code>(平台私钥签名)。验证方式:按相同排序规则构造串,用<strong>平台公钥</strong>做 RSA-SHA256 验签:</p>
+    <pre>openssl dgst -sha256 -verify platform_public.pem -signature sig.bin sorted_string.txt
+# 输出 Verified OK 即签名有效</pre>
+
+    <div class="alert info">两种签名方式可共存:未携带 <code>sign_type=RSA</code> 的请求仍按 MD5 校验;清除商户公钥即整体回落 MD5。平台公钥可在商户中心-商户信息页随时复制。</div>
 
     {{else if eq .DocPage "paytype"}}
     <h1>支付方式列表</h1>

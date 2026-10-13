@@ -14,7 +14,10 @@ func main() {
 	now := time.Now().Unix()
 	hash := ""
 	db.QueryRow("SELECT password_hash FROM users WHERE username='demo'").Scan(&hash)
-	for _, u := range []struct{ name string; pid int }{{"mchA", 1002}, {"mchB", 1003}} {
+	for _, u := range []struct {
+		name string
+		pid  int
+	}{{"mchA", 1002}, {"mchB", 1003}} {
 		_, err := db.Exec(
 			"INSERT OR IGNORE INTO users(username,email,password_hash,role,status,pid,skey,created_at) VALUES(?,?,?,?,1,?,?,?)",
 			u.name, u.name+"@t.com", hash, u.pid, "test"+fmt.Sprint(u.pid), now)

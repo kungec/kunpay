@@ -116,6 +116,18 @@
     <div class="muted" style="font-size:12.5px;margin-top:6px">保存 SMTP 配置后点此验证;发送失败会显示具体原因。</div>
   </div>
   <div class="card">
+    <div class="card-title">自动备份(每日一次)</div>
+    <form method="post" action="/admin/settings/save">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <label class="row" style="gap:8px;margin-bottom:12px"><input type="checkbox" name="backup_auto" {{if eq (index .S "backup_auto") "1"}}checked{{end}}> 开启每日自动备份(存储于数据目录 backups/auto-*,可与手动备份共存)</label>
+      <div class="form-item" style="max-width:240px">
+        <label>保留份数(超出自动清理最旧的)</label>
+        <input class="input" type="number" name="backup_keep" min="1" max="100" value="{{index .S "backup_keep"}}">
+      </div>
+      <button class="btn btn-primary btn-sm" type="submit">保存备份设置</button>
+    </form>
+  </div>
+  <div class="card">
     <div class="card-title">运营提示</div>
     <p class="muted" style="line-height:2.1;font-size:13px">
       · <b>金额尾数偏移</b>:开启后,整数金额订单会自动追加 0.01~0.99 的随机尾数,保证同一时刻待支付订单金额唯一,监控到账可精确匹配;<br>

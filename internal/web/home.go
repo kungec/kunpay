@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"kunzhifu/internal/db"
 	"kunzhifu/internal/model"
@@ -56,6 +57,54 @@ func (s *Server) handleDocs(w http.ResponseWriter, r *http.Request) {
 		d["MyKey"] = u.Skey
 	}
 	s.render(w, "pub_doc", http.StatusOK, d)
+}
+
+// handleStatus 公开系统状态页: 渠道可用性/今日成功率/设备在线(不含敏感数据)
+func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
+	dayStart := todayStart()
+	var todayTotal, todayPaid int64
+	_ = s.DB.QueryRow("SELECT COUNT(*) FROM orders WHERE addtime>=?", dayStart).Scan(&todayTotal)
+	_ = s.DB.QueryRow("SELECT COUNT(*) FROM orders WHERE status IN(1,3) AND addtime>=?", dayStart).Scan(&todayPaid)
+	var lastPay int64
+	_ = s.DB.QueryRow("SELECT COALESCE(MAX(endtime),0) FROM orders WHERE status IN(1,3)").Scan(&lastPay)
+	var devTotal, devOnline int64
+	_ = s.DB.QueryRow("SELECT COUNT(*) FROM devices").Scan(&devTotal)
+	_ = s.DB.QueryRow("SELECT COUNT(*) FROM devices WHERE last_heartbeat>?", model.Now()-120).Scan(&devOnline)
+
+	type chState struct {
+		Name  string
+		Type  string
+		State string // ok / breaker / off
+	}
+	chs, _ := s.Store.AllChannels()
+	var chans []chState
+	for _, c := range chs {
+		st := "ok"
+		if c.Enabled != 1 {
+			if c.BreakerAt > 0 {
+				st = "breaker"
+			} else {
+				st = "off"
+			}
+		}
+		chans = append(chans, chState{Name: c.Name, Type: c.Type, State: st})
+	}
+	d := s.pageData(r)
+	d["Page"] = "status"
+	d["Title"] = "运行状态"
+	d["UptimeH"] = int(time.Since(s.StartedAt).Hours()) + 1
+	d["TodayTotal"] = todayTotal
+	d["TodayPaid"] = todayPaid
+	rate := 100.0
+	if todayTotal > 0 {
+		rate = float64(todayPaid) / float64(todayTotal) * 100
+	}
+	d["Rate"] = rate
+	d["LastPay"] = lastPay
+	d["DevTotal"] = devTotal
+	d["DevOnline"] = devOnline
+	d["Chans"] = chans
+	s.render(w, "pub_status", http.StatusOK, d)
 }
 
 // handleDemoPage 演示收银台(平台内置演示商户)

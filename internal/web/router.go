@@ -38,6 +38,7 @@ func (s *Server) Routes() http.Handler {
 	})
 	mux.HandleFunc("GET /receipt", s.handleOrderReceipt)
 	mux.HandleFunc("GET /download", s.handleDownload)
+	mux.HandleFunc("GET /status", s.handleStatus)
 	mux.HandleFunc("GET /download/file", s.handleDownloadFile)
 
 	// 认证
