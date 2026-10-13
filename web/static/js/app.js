@@ -157,6 +157,23 @@
     });
   }
 
+  // ---------- 深浅色主题切换 ----------
+  var themeBtn = document.getElementById('themeBtn');
+  if (themeBtn) {
+    themeBtn.addEventListener('click', function () {
+      var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+      if (dark) {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem('kp-theme', 'light');
+      } else {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        localStorage.setItem('kp-theme', 'dark');
+      }
+      if (window.kpRedrawCharts) window.kpRedrawCharts();
+      else location.reload();
+    });
+  }
+
   // ---------- 简易柱状图 ----------
   $$('.kbar-chart').forEach(function (canvas) {
     var data = JSON.parse(canvas.getAttribute('data-values') || '[]');
@@ -169,8 +186,10 @@
     var max = Math.max.apply(null, data.concat([1]));
     var pad = 28, gap = 14;
     var bw = (w - pad * 2 - gap * (data.length - 1)) / data.length;
-    // 网格线
-    ctx.strokeStyle = '#f0f1f4';
+    // 网格线(跟随主题)
+    var cs = getComputedStyle(document.documentElement);
+    var gridColor = (cs.getPropertyValue('--chart-grid') || '#f0f1f4').trim();
+    ctx.strokeStyle = gridColor;
     ctx.lineWidth = 1;
     for (var g = 0; g <= 4; g++) {
       var gy = 10 + (h - 50) * g / 4;
@@ -185,12 +204,12 @@
       ctx.fillStyle = grad;
       roundRect(ctx, x, y, bw, bh, 5);
       ctx.fill();
-      ctx.fillStyle = '#86909c';
+      ctx.fillStyle = (getComputedStyle(document.documentElement).getPropertyValue('--text-3') || '#86909c').trim();
       ctx.font = '11px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(labels[i] || i, x + bw / 2, h - 14);
       if (v > 0) {
-        ctx.fillStyle = '#4e5969';
+        ctx.fillStyle = (getComputedStyle(document.documentElement).getPropertyValue('--text-2') || '#4e5969').trim();
         ctx.fillText(String(v), x + bw / 2, y - 6);
       }
     });
