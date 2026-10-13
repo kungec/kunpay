@@ -232,7 +232,8 @@ internal/service/    签名、订单创建、金额匹配引擎、异步通知�
 internal/web/        HTTP 路由与处理器(epay 兼容层/收银台/用户中心/后台/监控API/工单/下载中心)
 web/templates/       全部 HTML 模板(embed)
 web/static/          CSS/JS/图标(embed)
-scripts/e2e_test.py  端到端测试(52 项断言)
+scripts/e2e_test.py  端到端测试(52 项断言,基础功能)
+scripts/e2e_test_v2.py 端到端测试(44 项断言,TOTP/工单/快捷收款/RSA/限流等新功能)
 build.sh/build.bat   交叉编译脚本
 ```
 
