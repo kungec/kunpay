@@ -22,12 +22,15 @@
       <div class="form-item">
         <input class="input" type="text" name="qq" placeholder="请输入QQ号码(选填)" value="{{index .Form "qq"}}">
       </div>
+            {{if .CaptchaID}}
             <div class="form-item">
-        <label>验证码</label>
+              <label>验证码</label>
         <div class="row" style="gap:8px;flex-wrap:nowrap">
+          {{if .CaptchaID}}
           <input type="hidden" name="captcha_id" value="{{.CaptchaID}}">
           <input class="input" type="text" name="captcha_code" placeholder="输入图中字符" required style="flex:1;min-width:120px">
           <img src="/captcha/image?id={{.CaptchaID}}" class="captcha-img" alt="验证码" title="点击刷新" onclick="this.src='/captcha/image?id={{.CaptchaID}}&t='+Date.now()">
+          {{end}}
         </div>
       </div>
       <div class="form-item">
@@ -36,7 +39,8 @@
       <div class="auth-agree">
         <input type="checkbox" name="agree" value="1" required id="agreeCk">
         <label for="agreeCk">我已阅读并同意 <a href="#" onclick="alert('注册即代表同意本平台服务条款:仅用于合法合规的收款场景,严禁用于违法违规交易。');return false">《服务条款》</a>与<a href="#" onclick="alert('本平台仅记录交易流水,不收集任何无关个人信息。');return false">《隐私条款》</a></label>
-      </div>
+            </div>
+            {{end}}
       <button class="btn btn-primary" style="width:100%;padding:12px" type="submit">立即注册</button>
     </form>
     <div class="auth-foot">
