@@ -143,6 +143,9 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .pub-nav .inner { max-width: 1200px; margin: 0 auto; padding: 0 24px; height: 64px; display: flex; align-items: center; gap: 36px; }
 .logo { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 800; color: var(--primary); letter-spacing: .5px; white-space: nowrap; flex: none; }
 .logo svg { width: 30px; height: 30px; }
+.logo img.logo-ic { width: 32px; height: 32px; object-fit: contain; filter: drop-shadow(0 2px 6px rgba(27,42,74,.18)); }
+.side .logo img.logo-ic { width: 30px; height: 30px; }
+.pub > .cols .about img.logo-ic { width: 26px; height: 26px; }
 .pub-nav .menu { display: flex; gap: 6px; flex: 1; }
 .pub-nav .menu a { padding: 8px 16px; border-radius: 8px; color: var(--text-2); font-size: 15px; }
 .pub-nav .menu a:hover, .pub-nav .menu a.on { color: var(--primary); background: var(--primary-light); }
@@ -456,6 +459,7 @@ body.kp-leaving .demo-wrap, body.kp-leaving .doc-layout { opacity: .55; transiti
   .pub-nav .inner { gap: 12px; height: 58px; padding: 0 14px; }
   .pub-nav .logo { flex: none; white-space: nowrap; font-size: 17px; }
   .pub-nav .logo svg { width: 24px; height: 24px; }
+  .pub-nav .logo img.logo-ic { width: 27px; height: 27px; }
   .pub-nav .menu { display: none; }
   .pub-nav .acts .btn-ghost { display: none; }
   /* 公共导航下拉面板 */

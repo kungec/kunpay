@@ -4,13 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{if .Title}}{{.Title}} - {{end}}{{index .Settings "site_name"}}</title>
-<link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/static/img/favicon.ico" sizes="any">
+<link rel="icon" href="/static/img/favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
 <link rel="stylesheet" href="/static/css/style.css?v=20261012">
 </head>
 <body>
 <nav class="pub-nav">
   <div class="inner">    <a class="logo" href="/">
-      {{if index .Settings "site_logo"}}<img src="{{index .Settings "site_logo"}}" alt="logo" style="height:30px;width:auto">{{else}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="3"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg>{{end}}
+      {{if index .Settings "site_logo"}}<img src="{{index .Settings "site_logo"}}" alt="logo" style="height:30px;width:auto">{{else}}<img src="/static/img/logo-icon@256.png" alt="logo" class="logo-ic">{{end}}
       {{index .Settings "site_name"}}
     </a>
     <div class="menu">
@@ -51,7 +53,7 @@
   <div class="cols">
     <div class="about">
       <div class="logo" style="font-size:18px">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="24" height="24"><rect x="2" y="5" width="20" height="14" rx="3"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg>
+        <img src="/static/img/logo-icon@256.png" alt="logo" class="logo-ic">
         {{index .Settings "site_name"}}
       </div>
       <p>专业可靠的免签约码支付解决方案,为企业和个人开发者提供安全、高效、便捷的支付接入服务。</p>
