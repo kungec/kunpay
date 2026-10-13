@@ -182,6 +182,7 @@ func (s *Store) RunBackground() {
 			}
 			s.autoBackup()
 			s.autoStatement()
+			s.autoDigest()
 		}
 	}()
 }
@@ -454,6 +455,60 @@ func (s *Store) autoStatement() {
 	}
 	_ = s.DB.SetSetting("statement_last", key)
 	log.Printf("[statement] 月度对账单已发送 %d 位商户(%s)", sent, key)
+}
+
+// autoDigest 平台每日晨报: 昨日经营数据 + 待办事项,发送到告警邮箱
+func (s *Store) autoDigest() {
+	if s.DB.MustSetting("digest_auto") != "1" {
+		return
+	}
+	if MailHook == nil {
+		return
+	}
+	to := s.DB.MustSetting("alert_email")
+	if to == "" {
+		return
+	}
+	now := time.Unix(model.Now(), 0)
+	today := now.Format("20060102")
+	if s.DB.MustSetting("digest_last") == today {
+		return
+	}
+	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Unix()
+	yStart := dayStart - 86400
+
+	var total, paid, newMerchants int64
+	var money, fee int64
+	_ = s.DB.QueryRow("SELECT COUNT(*),SUM(CASE WHEN status IN(1,3) THEN 1 ELSE 0 END),COALESCE(SUM(CASE WHEN status IN(1,3) THEN money ELSE 0 END),0),COALESCE(SUM(CASE WHEN status IN(1,3) THEN fee ELSE 0 END),0) FROM orders WHERE addtime>=? AND addtime<?",
+		yStart, dayStart).Scan(&total, &paid, &money, &fee)
+	_ = s.DB.QueryRow("SELECT COUNT(*) FROM users WHERE role='user' AND created_at>=? AND created_at<?", yStart, dayStart).Scan(&newMerchants)
+	var pendingSettles, unmatched, devOffline int64
+	nowTs := model.Now()
+	_ = s.DB.QueryRow("SELECT COUNT(*) FROM settle_logs WHERE status=0").Scan(&pendingSettles)
+	_ = s.DB.QueryRow("SELECT COUNT(*) FROM pay_logs WHERE order_id=0 AND created_at>?", nowTs-86400).Scan(&unmatched)
+	_ = s.DB.QueryRow("SELECT COUNT(*) FROM devices WHERE status=1 AND last_heartbeat<=?", nowTs-120).Scan(&devOffline)
+
+	rate := 100.0
+	if total > 0 {
+		rate = float64(paid) / float64(total) * 100
+	}
+	var b strings.Builder
+	b.WriteString("<p>昨日(" + time.Unix(yStart, 0).Format("2006-01-02") + ")经营数据:</p>")
+	b.WriteString("<table style=\"border-collapse:collapse\" border=\"1\" cellpadding=\"6\">")
+	b.WriteString("<tr><th>订单数</th><th>成功数</th><th>成功率</th><th>成交额</th><th>手续费</th><th>新增商户</th></tr>")
+	b.WriteString(fmt.Sprintf("<tr><td style=\"text-align:center\">%d</td><td style=\"text-align:center\">%d</td><td style=\"text-align:center\">%.1f%%</td><td>¥%s</td><td>¥%s</td><td style=\"text-align:center\">%d</td></tr></table>", total, paid, rate, MoneyStr(money), MoneyStr(fee), newMerchants))
+	b.WriteString("<p>当前待办:</p><ul>")
+	b.WriteString(fmt.Sprintf("<li>待审核结算单: %d 个</li>", pendingSettles))
+	b.WriteString(fmt.Sprintf("<li>24h 内未匹配到账流水: %d 条</li>", unmatched))
+	b.WriteString(fmt.Sprintf("<li>离线监控设备: %d 台</li>", devOffline))
+	b.WriteString("</ul>")
+	b.WriteString("<p style=\"color:#888;font-size:12px\">本邮件由系统每日自动发送,可在系统设置中关闭。</p>")
+	if err := MailHook(to, "【"+s.DB.MustSetting("site_name")+"】每日晨报 "+time.Unix(yStart, 0).Format("01-02"), b.String()); err != nil {
+		log.Printf("[digest] 晨报发送失败: %v", err)
+		return
+	}
+	_ = s.DB.SetSetting("digest_last", today)
+	log.Printf("[digest] 晨报已发送至 %s", to)
 }
 
 var lastBackupDay int64

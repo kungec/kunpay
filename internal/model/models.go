@@ -32,6 +32,7 @@ type User struct {
 	PayTypes      string // 商户可用支付方式(CSV,空=全部)
 	NotifyEmailOn int    // 收款成功邮件通知开关(需已填邮箱)
 	NotifyPost    int    // 异步通知使用 POST 方式(0=GET)
+	ApiRate       int64  // 下单接口限流(次/分钟,0=跟随全局)
 	RecoveryCodes string // TOTP 恢复代码(SHA256 十六进制 CSV,空=未生成)
 }
 

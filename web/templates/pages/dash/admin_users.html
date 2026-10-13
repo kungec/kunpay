@@ -30,7 +30,7 @@
               <button class="btn btn-sm {{if eq .Status 1}}btn-danger{{else}}btn-success{{end}}" type="submit">{{if eq .Status 1}}封禁{{else}}解封{{end}}</button>
             </form>
             {{end}}
-            <button class="btn btn-sm btn-ghost" onclick="openUserDlg({{.ID}},'{{.Username}}',{{.Rate}},'{{.Skey}}','{{.LimitSingleYuan}}','{{.LimitDailyYuan}}')">更多</button>
+            <button class="btn btn-sm btn-ghost" onclick="openUserDlg({{.ID}},'{{.Username}}',{{.Rate}},'{{.Skey}}','{{.LimitSingleYuan}}','{{.LimitDailyYuan}}',{{.ApiRate}})">更多</button>
           </div>
         </td>
       </tr>
@@ -75,6 +75,16 @@
       </div>
       <button class="btn btn-primary btn-sm" type="submit">保存限额</button>
     </form>
+    <form method="post" action="/admin/users/save" id="udFormRate2" class="mt">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <input type="hidden" name="id" id="udIdApiRate">
+      <input type="hidden" name="action" value="apirate">
+      <div class="form-item">
+        <label>下单接口限流(次/分钟,0=跟随全局 120)</label>
+        <input class="input" type="number" name="api_rate" id="udApiRate" min="0" max="100000" placeholder="如 60">
+      </div>
+      <button class="btn btn-primary btn-sm" type="submit">保存限流</button>
+    </form>
     <hr style="border:none;border-top:1px dashed var(--border);margin:18px 0">
     <form method="post" action="/admin/users/save" id="udFormBal">
       <input type="hidden" name="_csrf" value="{{.CSRF}}">
@@ -113,7 +123,7 @@
   </div>
 </div>
 <script>
-function openUserDlg(id, name, rate, skey, limitSingle, limitDaily) {
+function openUserDlg(id, name, rate, skey, limitSingle, limitDaily, apiRate) {
   document.getElementById('udName').textContent = name;
   document.getElementById('udKey').textContent = skey;
   document.getElementById('udRate').value = rate;
@@ -121,6 +131,8 @@ function openUserDlg(id, name, rate, skey, limitSingle, limitDaily) {
   document.getElementById('udIdImp').value = id;
   document.getElementById('udLimitSingle').value = limitSingle || '0.00';
   document.getElementById('udLimitDaily').value = limitDaily || '0.00';
+  document.getElementById('udIdApiRate').value = id;
+  document.getElementById('udApiRate').value = apiRate || 0;
   ['udIdRate','udIdBal','udIdKey','udIdPw'].forEach(function(x){ document.getElementById(x).value = id; });
   document.getElementById('udChanLink').href = '/admin/users/' + id + '/channels';
   document.getElementById('userDlg').classList.add('show');

@@ -3,6 +3,7 @@ package web
 import (
 	"crypto/subtle"
 	"fmt"
+	"kunzhifu/internal/model"
 	"net"
 	"net/http"
 	"strings"
@@ -196,4 +197,43 @@ func apiIPAllowed(list, ip string) bool {
 		}
 	}
 	return false
+}
+
+// ---- 商户级下单限流(内存滑动窗口,按分钟) ----
+var apiThrottleMu sync.Mutex
+var apiThrottle = map[int64]*apiWindow{}
+
+type apiWindow struct {
+	winStart int64
+	count    int
+}
+
+// merchantApiThrottle 商户限流: api_rate>0 时按该值限流,0=跟随全局默认(120/分钟)
+func merchantApiThrottle(m *model.User) bool {
+	limit := m.ApiRate
+	if limit <= 0 {
+		return true // 跟随全局 IP 限频,不再叠加
+	}
+	now := model.Now()
+	win := now / 60
+	apiThrottleMu.Lock()
+	defer apiThrottleMu.Unlock()
+	w := apiThrottle[m.ID]
+	if w == nil || w.winStart != win {
+		w = &apiWindow{winStart: win, count: 0}
+		apiThrottle[m.ID] = w
+		// 顺带清理其他过期窗口,防 map 无限增长
+		if len(apiThrottle) > 4096 {
+			for k, v := range apiThrottle {
+				if v.winStart < win-2 {
+					delete(apiThrottle, k)
+				}
+			}
+		}
+	}
+	if w.count >= int(limit) {
+		return false
+	}
+	w.count++
+	return true
 }

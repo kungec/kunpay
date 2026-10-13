@@ -195,22 +195,23 @@ func (s *Server) handleAdminUsers(w http.ResponseWriter, r *http.Request) {
 	var total int64
 	_ = s.DB.QueryRow("SELECT COUNT(*) FROM users WHERE "+where, args...).Scan(&total)
 	rows, err := s.DB.Query(`SELECT id,username,email,qq,role,status,rate,balance,pid,skey,created_at,last_login_at,
-		COALESCE(limit_single,0),COALESCE(limit_daily,0)
+		COALESCE(limit_single,0),COALESCE(limit_daily,0),COALESCE(api_rate,0)
 		FROM users WHERE `+where+` ORDER BY id ASC LIMIT ? OFFSET ?`, append(args, pageSize, (page-1)*pageSize)...)
 	var users []map[string]any
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
-			var id, balance, pid, createdAt, lastLogin, limitSingle, limitDaily int64
+			var id, balance, pid, createdAt, lastLogin, limitSingle, limitDaily, apiRate int64
 			var username, email, qq, role, skey string
 			var status int
 			var rate float64
-			if rows.Scan(&id, &username, &email, &qq, &role, &status, &rate, &balance, &pid, &skey, &createdAt, &lastLogin, &limitSingle, &limitDaily) == nil {
+			if rows.Scan(&id, &username, &email, &qq, &role, &status, &rate, &balance, &pid, &skey, &createdAt, &lastLogin, &limitSingle, &limitDaily, &apiRate) == nil {
 				users = append(users, map[string]any{
 					"ID": id, "Username": username, "Email": email, "QQ": qq, "Role": role,
 					"Status": status, "Rate": rate, "Balance": balance, "Pid": pid, "Skey": skey,
 					"CreatedAt": createdAt, "LastLogin": lastLogin,
 					"LimitSingleYuan": yuan(limitSingle), "LimitDailyYuan": yuan(limitDaily),
+					"ApiRate": apiRate,
 				})
 			}
 		}
@@ -277,6 +278,14 @@ func (s *Server) handleAdminUsersSave(w http.ResponseWriter, r *http.Request) {
 		s.setSession(w, r, u.ID)
 		http.Redirect(w, r, "/user?imp=1", http.StatusFound)
 		return
+	case "apirate":
+		rate := atoint64(r.FormValue("api_rate"))
+		_ = s.Store.SetUserApiRate(id, rate)
+		if rate > 0 {
+			msg = fmt.Sprintf("已将 %s 的下单限流设为 %d 次/分钟", u.Username, rate)
+		} else {
+			msg = fmt.Sprintf("已恢复 %s 跟随全局限流", u.Username)
+		}
 	case "limit":
 		single, _ := service.ParseMoney(r.FormValue("limit_single"))
 		daily, _ := service.ParseMoney(r.FormValue("limit_daily"))
@@ -938,13 +947,13 @@ func (s *Server) handleAdminSettingsSave(w http.ResponseWriter, r *http.Request)
 		"money_offset", "register_open", "min_settle", "pay_notice", "invite_open", "footer_text", "poll_interval",
 		"site_url", "smtp_host", "smtp_port", "smtp_user", "smtp_pass", "smtp_tls", "smtp_from", "admin_ip_whitelist",
 		"alert_email", "device_alert", "merchant_notice", "alert_webhook", "invite_rate", "auto_settle", "circuit_breaker",
-		"backup_auto", "backup_keep", "statement_auto", "ip_blacklist"}
+		"backup_auto", "backup_keep", "statement_auto", "ip_blacklist", "digest_auto"}
 	for _, k := range keys {
 		v := strings.TrimSpace(r.FormValue(k))
 		if r.Form[k] == nil {
 			continue
 		}
-		if k == "money_offset" || k == "register_open" || k == "invite_open" || k == "auto_settle" || k == "circuit_breaker" || k == "backup_auto" || k == "statement_auto" {
+		if k == "money_offset" || k == "register_open" || k == "invite_open" || k == "auto_settle" || k == "circuit_breaker" || k == "backup_auto" || k == "statement_auto" || k == "digest_auto" {
 			if v == "on" || v == "1" {
 				v = "1"
 			} else {

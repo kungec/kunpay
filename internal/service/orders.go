@@ -42,7 +42,7 @@ func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 		&u.Rate, &u.Balance, &u.Pid, &u.Skey, &u.SettleType, &u.SettleAccount, &u.SettleName,
 		&u.InviteCode, &u.InvitedBy, &u.CreatedAt, &u.LastLoginAt, &u.LastLoginIP, &u.Avatar, &u.ApiIPs,
 		&u.TotpSecret, &u.NotifyWebhook, &u.LimitSingle, &u.LimitDaily,
-		&u.RsaPublic, &u.PayTypes, &u.NotifyEmailOn, &u.RecoveryCodes, &u.NotifyPost)
+		&u.RsaPublic, &u.PayTypes, &u.NotifyEmailOn, &u.RecoveryCodes, &u.NotifyPost, &u.ApiRate)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,7 @@ func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 }
 
 const userCols = `id,username,email,password_hash,qq,role,status,rate,balance,pid,skey,
-	settle_type,settle_account,settle_name,invite_code,invited_by,created_at,last_login_at,last_login_ip,avatar,COALESCE(api_ips,''),COALESCE(totp_secret,''),COALESCE(notify_webhook,''),COALESCE(limit_single,0),COALESCE(limit_daily,0),COALESCE(rsa_public,''),COALESCE(pay_types,''),COALESCE(notify_email_on,0),COALESCE(recovery_codes,''),COALESCE(notify_post,0)`
+	settle_type,settle_account,settle_name,invite_code,invited_by,created_at,last_login_at,last_login_ip,avatar,COALESCE(api_ips,''),COALESCE(totp_secret,''),COALESCE(notify_webhook,''),COALESCE(limit_single,0),COALESCE(limit_daily,0),COALESCE(rsa_public,''),COALESCE(pay_types,''),COALESCE(notify_email_on,0),COALESCE(recovery_codes,''),COALESCE(notify_post,0),COALESCE(api_rate,0)`
 
 func (s *Store) UserByID(id int64) (*model.User, error) {
 	u, err := scanUser(s.DB.QueryRow("SELECT "+userCols+" FROM users WHERE id=?", id))
@@ -566,6 +566,18 @@ func (s *Store) SetUserRSAPublic(userID int64, pubPEM string) error {
 
 // PayEmailHook 由 web 层注入: 商户开启收款邮件通知后的发送实现
 var PayEmailHook func(merchant *model.User, o *model.Order)
+
+// SetUserApiRate 设置商户下单接口限流(次/分钟,0=跟随全局)
+func (s *Store) SetUserApiRate(userID int64, rate int64) error {
+	if rate < 0 {
+		rate = 0
+	}
+	if rate > 100000 {
+		rate = 100000
+	}
+	_, err := s.DB.Exec("UPDATE users SET api_rate=? WHERE id=?", rate, userID)
+	return err
+}
 
 // SetUserNotifyPost 设置异步通知请求方式
 func (s *Store) SetUserNotifyPost(userID int64, post bool) error {

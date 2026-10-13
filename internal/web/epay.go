@@ -103,6 +103,12 @@ func (s *Server) validateEpayRequestIP(p map[string]string, ip string) (*model.U
 		if bl := s.DB.MustSetting("ip_blacklist"); strings.TrimSpace(bl) != "" && apiIPAllowed(bl, ip) {
 			return nil, nil, "来源 IP 已被平台拉黑,如有疑问请联系管理员"
 		}
+	}
+	// 商户级限流(独立于 IP 全局限频)
+	if !merchantApiThrottle(merchant) {
+		return nil, nil, "下单请求过于频繁,请稍后再试"
+	}
+	if ip != "" {
 		if !apiIPAllowed(merchant.ApiIPs, ip) {
 			return nil, nil, "来源 IP 不在商户 API 白名单内,请在商户中心-商户信息中配置"
 		}
