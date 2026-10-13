@@ -487,6 +487,7 @@ func (s *Server) handleUserSettings(w http.ResponseWriter, r *http.Request) {
 	d["Flash"] = r.URL.Query().Get("msg")
 	d["FlashErr"] = r.URL.Query().Get("err")
 	d["RecoveryN"] = s.Store.RecoveryCodesRemaining(u.ID)
+	d["Devices"] = s.sessionDevices(r)
 	s.render(w, "dash_user_settings", http.StatusOK, d)
 }
 
@@ -1470,6 +1471,18 @@ func (s *Server) handleUserOrderClose(w http.ResponseWriter, r *http.Request) {
 	}
 	_, _ = s.DB.Exec("UPDATE orders SET status=2, endtime=? WHERE id=? AND status=0", model.Now(), o.ID)
 	http.Redirect(w, r, "/user/orders?msg="+urlEscape("订单已关闭,占用金额已释放"), http.StatusFound)
+}
+
+// handleUserSessionsRevoke 下线其他设备
+func (s *Server) handleUserSessionsRevoke(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	cur, err := r.Cookie(sessionCookie)
+	if err != nil || cur.Value == "" {
+		http.Redirect(w, r, "/user/settings", http.StatusFound)
+		return
+	}
+	n := s.RevokeOtherSessions(u.ID, cur.Value)
+	http.Redirect(w, r, "/user/settings?msg="+urlEscape(fmt.Sprintf("已下线其他 %d 台设备", n)), http.StatusFound)
 }
 
 func (s *Server) handleUserTicketClose(w http.ResponseWriter, r *http.Request) {

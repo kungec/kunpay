@@ -98,6 +98,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /user/settings/totp", s.requireLogin(s.requireCSRF(s.handleUserTOTPEnable)))
 	mux.HandleFunc("POST /user/settings/totp/off", s.requireLogin(s.requireCSRF(s.handleUserTOTPDisable)))
 	mux.HandleFunc("POST /user/settings/totp/recovery", s.requireLogin(s.requireCSRF(s.handleUserTOTPRecoveryRegen)))
+	mux.HandleFunc("POST /user/settings/sessions/revoke", s.requireLogin(s.requireCSRF(s.handleUserSessionsRevoke)))
 	mux.HandleFunc("GET /user/totp/qr", s.requireLogin(s.handleUserTOTPQR))
 	mux.HandleFunc("POST /user/notify/webhook", s.requireLogin(s.requireCSRF(s.handleUserNotifyWebhook)))
 	mux.HandleFunc("POST /user/avatar/upload", s.requireLogin(s.requireCSRF(s.handleUserAvatarUpload)))

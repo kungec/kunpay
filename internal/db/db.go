@@ -282,6 +282,10 @@ func (d *DB) Migrate() error {
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN pay_types TEXT DEFAULT ''")
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN notify_email_on INTEGER DEFAULT 0")
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN recovery_codes TEXT DEFAULT ''")
+	// 会话设备信息(登录设备管理)
+	_, _ = d.Exec("ALTER TABLE sessions ADD COLUMN ip TEXT DEFAULT ''")
+	_, _ = d.Exec("ALTER TABLE sessions ADD COLUMN ua TEXT DEFAULT ''")
+	_, _ = d.Exec("ALTER TABLE sessions ADD COLUMN last_seen INTEGER DEFAULT 0")
 	_, _ = d.Exec("ALTER TABLE channels ADD COLUMN alipay_uid TEXT DEFAULT ''")
 	// 旧版平台单一收款码迁移为多码 items
 	var itemN, qrN int

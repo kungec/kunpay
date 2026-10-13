@@ -26,8 +26,12 @@ var (
 func (s *Server) setSession(w http.ResponseWriter, r *http.Request, userID int64) {
 	token := db.RandKey(32)
 	now := model.Now()
-	_, err := s.DB.Exec("INSERT INTO sessions(token,user_id,expires_at,created_at) VALUES(?,?,?,?)",
-		token, userID, now+7*86400, now)
+	ua := r.UserAgent()
+	if len(ua) > 120 {
+		ua = ua[:120]
+	}
+	_, err := s.DB.Exec("INSERT INTO sessions(token,user_id,expires_at,created_at,ip,ua,last_seen) VALUES(?,?,?,?,?,?,?)",
+		token, userID, now+7*86400, now, clientIP(r), ua, now)
 	if err != nil {
 		http.Error(w, "创建会话失败", 500)
 		return
@@ -53,22 +57,81 @@ func (s *Server) clearSession(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+var lastSeenMu sync.Mutex
+var lastSeenAt = map[string]int64{}
+
 func (s *Server) currentUser(r *http.Request) *model.User {
 	c, err := r.Cookie(sessionCookie)
 	if err != nil || c.Value == "" {
 		return nil
 	}
-	var userID int64
-	var expires int64
-	err = s.DB.QueryRow("SELECT user_id,expires_at FROM sessions WHERE token=?", c.Value).Scan(&userID, &expires)
+	var userID, expires, lastSeen int64
+	var sip string
+	err = s.DB.QueryRow("SELECT user_id,expires_at,COALESCE(last_seen,0),COALESCE(ip,'') FROM sessions WHERE token=?", c.Value).
+		Scan(&userID, &expires, &lastSeen, &sip)
 	if err != nil || expires < model.Now() {
 		return nil
+	}
+	// 活跃心跳限频写库: 距上次 >60s 才更新,并记录最新 IP
+	now := model.Now()
+	lastSeenMu.Lock()
+	last := lastSeenAt[c.Value]
+	lastSeenMu.Unlock()
+	if now-last > 60 {
+		ip := clientIP(r)
+		if ip != sip || now-lastSeen > 60 {
+			_, _ = s.DB.Exec("UPDATE sessions SET last_seen=?, ip=? WHERE token=?", now, ip, c.Value)
+		}
+		lastSeenMu.Lock()
+		lastSeenAt[c.Value] = now
+		lastSeenMu.Unlock()
 	}
 	u, _ := s.Store.UserByID(userID)
 	if u == nil || u.Status != 1 {
 		return nil
 	}
 	return u
+}
+
+// SessionDevice 当前用户会话设备列表(标记当前会话)
+type SessionDevice struct {
+	Token    string
+	IP       string
+	UA       string
+	Created  int64
+	LastSeen int64
+	Current  bool
+}
+
+func (s *Server) sessionDevices(r *http.Request) []SessionDevice {
+	c, err := r.Cookie(sessionCookie)
+	cur := ""
+	if err == nil {
+		cur = c.Value
+	}
+	rows, err := s.DB.Query(`SELECT token,COALESCE(ip,''),COALESCE(ua,''),created_at,COALESCE(last_seen,created_at)
+		FROM sessions WHERE user_id=? AND expires_at>? ORDER BY COALESCE(last_seen,created_at) DESC`,
+		s.currentUser(r).ID, model.Now())
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var out []SessionDevice
+	for rows.Next() {
+		var d SessionDevice
+		if rows.Scan(&d.Token, &d.IP, &d.UA, &d.Created, &d.LastSeen) == nil {
+			d.Current = d.Token == cur
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// RevokeOtherSessions 下线当前账号除当前会话外的所有会话
+func (s *Server) RevokeOtherSessions(userID int64, curToken string) int64 {
+	res, _ := s.DB.Exec("DELETE FROM sessions WHERE user_id=? AND token<>?", userID, curToken)
+	n, _ := res.RowsAffected()
+	return n
 }
 
 // requireLogin 包装: 未登录跳转 /login

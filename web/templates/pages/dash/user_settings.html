@@ -127,4 +127,31 @@
     {{end}}
   </div>
 </div>
+
+<div class="card">
+  <div class="row between mb">
+    <div class="card-title" style="margin:0">登录设备</div>
+    {{if gt (len .Devices) 1}}
+    <form method="post" action="/user/settings/sessions/revoke" data-confirm="将下线除当前设备外的所有登录会话,其他设备需重新登录。确定?">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <button class="btn btn-danger btn-sm" type="submit">下线其他设备</button>
+    </form>
+    {{end}}
+  </div>
+  <div class="table-wrap">
+    <table class="tbl">
+      <tr><th>设备 / 浏览器</th><th>IP</th><th>登录时间</th><th>最后活跃</th><th></th></tr>
+      {{range .Devices}}
+      <tr>
+        <td style="max-width:320px;white-space:normal;word-break:break-all">{{if .UA}}{{.UA}}{{else}}未知设备{{end}}</td>
+        <td class="mono">{{.IP}}</td>
+        <td class="muted">{{fdate .Created}}</td>
+        <td class="muted">{{fdate .LastSeen}}</td>
+        <td>{{if .Current}}<span class="badge badge-green">当前设备</span>{{end}}</td>
+      </tr>
+      {{end}}
+    </table>
+  </div>
+  <div class="muted" style="font-size:12.5px;margin-top:6px">如发现陌生设备,请立即修改密码并在此下线所有其他会话。</div>
+</div>
 {{end}}
