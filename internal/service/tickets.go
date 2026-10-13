@@ -108,6 +108,13 @@ func (s *Store) TicketOf(id, uid int64) (subject string, status int, owner int64
 	return
 }
 
+// TicketSubject 取工单标题
+func (s *Store) TicketSubject(id int64) (string, error) {
+	var subject string
+	err := s.DB.QueryRow("SELECT subject FROM tickets WHERE id=?", id).Scan(&subject)
+	return subject, err
+}
+
 // TicketMsgs 工单会话内容
 func (s *Store) TicketMsgs(ticketID int64) ([]map[string]any, error) {
 	rows, err := s.DB.Query("SELECT is_admin,content,created_at FROM ticket_msgs WHERE ticket_id=? ORDER BY id ASC", ticketID)

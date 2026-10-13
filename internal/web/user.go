@@ -157,6 +157,9 @@ type chanView struct {
 	EnabledN   int
 	Rotate     bool
 	CanRotate  bool
+	Count7     int64   // 近7日订单数
+	Ok7        int64   // 近7日成功数
+	Rate7      float64 // 近7日成功率 %
 }
 
 func (s *Server) handleUserChannels(w http.ResponseWriter, r *http.Request) {
@@ -181,6 +184,14 @@ func (s *Server) handleUserChannels(w http.ResponseWriter, r *http.Request) {
 		}
 		v.Rotate = s.Store.MerchantRotate(u.ID, c.Type)
 		v.CanRotate = v.EnabledN >= 2
+		_ = s.DB.QueryRow(`SELECT COUNT(*), SUM(CASE WHEN status IN(1,3) THEN 1 ELSE 0 END)
+			FROM orders WHERE pid=? AND type=? AND addtime>? - 7*86400`,
+			u.Pid, c.Type, model.Now()).Scan(&v.Count7, &v.Ok7)
+		if v.Count7 > 0 {
+			v.Rate7 = float64(v.Ok7) / float64(v.Count7) * 100
+		} else {
+			v.Rate7 = -1
+		}
 		views = append(views, v)
 	}
 	d := s.pageData(r)

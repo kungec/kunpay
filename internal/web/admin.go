@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -852,13 +853,13 @@ func (s *Server) handleAdminSettingsSave(w http.ResponseWriter, r *http.Request)
 		"money_offset", "register_open", "min_settle", "pay_notice", "invite_open", "footer_text", "poll_interval",
 		"site_url", "smtp_host", "smtp_port", "smtp_user", "smtp_pass", "smtp_tls", "smtp_from", "admin_ip_whitelist",
 		"alert_email", "device_alert", "merchant_notice", "alert_webhook", "invite_rate", "auto_settle", "circuit_breaker",
-		"backup_auto", "backup_keep"}
+		"backup_auto", "backup_keep", "statement_auto"}
 	for _, k := range keys {
 		v := strings.TrimSpace(r.FormValue(k))
 		if r.Form[k] == nil {
 			continue
 		}
-		if k == "money_offset" || k == "register_open" || k == "invite_open" || k == "auto_settle" || k == "circuit_breaker" || k == "backup_auto" {
+		if k == "money_offset" || k == "register_open" || k == "invite_open" || k == "auto_settle" || k == "circuit_breaker" || k == "backup_auto" || k == "statement_auto" {
 			if v == "on" || v == "1" {
 				v = "1"
 			} else {
@@ -1590,12 +1591,29 @@ func (s *Server) handleAdminTicketView(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAdminTicketReply(w http.ResponseWriter, r *http.Request) {
 	id := atoint64(r.FormValue("id"))
-	if err := s.Store.AddTicketMsg(id, true, r.FormValue("content")); err != nil {
+	content := strings.TrimSpace(r.FormValue("content"))
+	if err := s.Store.AddTicketMsg(id, true, content); err != nil {
 		http.Redirect(w, r, "/admin/tickets/"+strconv.FormatInt(id, 10)+"?err="+urlEscape(err.Error()), http.StatusFound)
 		return
 	}
 	s.audit(r, "ticket.reply", "工单 #"+strconv.FormatInt(id, 10))
-	http.Redirect(w, r, "/admin/tickets/"+strconv.FormatInt(id, 10)+"?msg="+urlEscape("回复已发送"), http.StatusFound)
+	// 邮件通知商户(异步)
+	if _, _, owner, e := s.Store.TicketOf(id, 0); e == nil && owner > 0 {
+		if m, _ := s.Store.UserByID(owner); m != nil && m.Email != "" {
+			subject, _ := s.Store.TicketSubject(id)
+			go func(mail, uname, subj, body string) {
+				mailBody := mailHTML("工单新回复", []string{
+					"您的工单「" + subj + "」有新的平台回复:",
+					body,
+					"请登录商户中心 → 工单支持 查看详情。",
+				})
+				if err := s.SendMail(mail, "【"+s.DB.MustSetting("site_name")+"】工单新回复: "+subj, mailBody); err != nil {
+					log.Printf("[ticketmail] 工单回复邮件发送失败(%s): %v", mail, err)
+				}
+			}(m.Email, m.Username, subject, content)
+		}
+	}
+	http.Redirect(w, r, "/admin/tickets/"+strconv.FormatInt(id, 10)+"?msg="+urlEscape("回复已发送,已邮件通知商户"), http.StatusFound)
 }
 
 func (s *Server) handleAdminTicketClose(w http.ResponseWriter, r *http.Request) {

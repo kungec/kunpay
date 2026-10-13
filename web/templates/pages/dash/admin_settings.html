@@ -162,6 +162,15 @@
     </form>
   </div>
   <div class="card">
+    <div class="card-title">月度对账单自动邮件</div>
+    <form method="post" action="/admin/settings/save">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <label class="row" style="gap:8px;margin-bottom:12px"><input type="checkbox" name="statement_auto" {{if eq (index .S "statement_auto") "1"}}checked{{end}}> 每月自动把上月对账汇总(成功笔数/成交额/手续费/净入账)发送给已填邮箱的商户</label>
+      <button class="btn btn-primary btn-sm" type="submit">保存</button>
+      {{if index .S "statement_last"}}<span class="muted" style="font-size:12px;margin-left:10px">上次已发送: {{index .S "statement_last"}}</span>{{end}}
+    </form>
+  </div>
+  <div class="card">
     <div class="card-title">运营提示</div>
     <p class="muted" style="line-height:2.1;font-size:13px">
       · <b>金额尾数偏移</b>:开启后,整数金额订单会自动追加 0.01~0.99 的随机尾数,保证同一时刻待支付订单金额唯一,监控到账可精确匹配;<br>

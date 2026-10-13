@@ -171,12 +171,16 @@ func (s *Store) RunBackground() {
 				s.cleanOldLogs(90)
 			}
 			s.autoBackup()
+			s.autoStatement()
 		}
 	}()
 }
 
 // AlertFn 由上层注入(发送告警邮件),为空时仅记录日志
 var AlertFn func(msg string)
+
+// MailHook 通用邮件发送注入(收件人/主题/HTML 正文),为空时不可发信
+var MailHook func(to, subject, htmlBody string) error
 
 // checkLowBalance 商户余额低于阈值时邮件提醒(每商户每次离线周期只发一次)
 var lowBalanceAlerted sync.Map
@@ -385,6 +389,62 @@ func itoa(v int64) string {
 
 // breakerAlerted 避免冷却恢复重复告警
 var breakerAlerted sync.Map
+
+// autoStatement 月度对账单自动邮件: 每月首次 tick,把上月汇总发给填了邮箱的商户
+func (s *Store) autoStatement() {
+	if s.DB.MustSetting("statement_auto") != "1" {
+		return
+	}
+	if MailHook == nil {
+		return
+	}
+	now := time.Unix(model.Now(), 0)
+	prevMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).AddDate(0, -1, 0)
+	key := prevMonth.Format("2006-01")
+	if s.DB.MustSetting("statement_last") == key {
+		return
+	}
+	start := prevMonth.Unix()
+	end := prevMonth.AddDate(0, 1, 0).Unix()
+
+	type merchant struct {
+		id       int64
+		email    string
+		username string
+	}
+	var ms []merchant
+	rows, err := s.DB.Query("SELECT id,COALESCE(email,''),username FROM users WHERE role='user' AND status=1 AND email<>''")
+	if err != nil {
+		return
+	}
+	for rows.Next() {
+		var m merchant
+		if rows.Scan(&m.id, &m.email, &m.username) == nil {
+			ms = append(ms, m)
+		}
+	}
+	rows.Close()
+
+	sent := 0
+	for _, m := range ms {
+		var okN int64
+		var money, fee int64
+		_ = s.DB.QueryRow(`SELECT COUNT(*),COALESCE(SUM(money),0),COALESCE(SUM(fee),0)
+			FROM orders WHERE pid=(SELECT pid FROM users WHERE id=?) AND status IN(1,3) AND addtime>=? AND addtime<?`,
+			m.id, start, end).Scan(&okN, &money, &fee)
+		income := money - fee
+		var b strings.Builder
+		b.WriteString("<p>" + prevMonth.Format("2006年01月") + " 对账汇总:</p>")
+		b.WriteString("<table style=\"border-collapse:collapse\" border=\"1\" cellpadding=\"6\"><tr><th>成功笔数</th><th>成交额</th><th>手续费</th><th>净入账</th></tr>")
+		b.WriteString(fmt.Sprintf("<tr><td style=\"text-align:center\">%d</td><td>¥%s</td><td>¥%s</td><td>¥%s</td></tr></table>", okN, MoneyStr(money), MoneyStr(fee), MoneyStr(income)))
+		b.WriteString("<p style=\"color:#888;font-size:12px\">详细按日数据可在商户中心 → 每日对账 导出。</p>")
+		if err := MailHook(m.email, "【"+s.DB.MustSetting("site_name")+"】"+key+" 月度对账单", b.String()); err == nil {
+			sent++
+		}
+	}
+	_ = s.DB.SetSetting("statement_last", key)
+	log.Printf("[statement] 月度对账单已发送 %d 位商户(%s)", sent, key)
+}
 
 var lastBackupDay int64
 

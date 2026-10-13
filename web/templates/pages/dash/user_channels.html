@@ -31,6 +31,12 @@
       </div>
     </div>
 
+    {{if ge .Rate7 0.0}}
+    <div class="muted" style="font-size:12px;margin:0 0 10px;display:flex;align-items:center;gap:8px">
+      近 7 日 {{.Count7}} 笔 · 成功率
+      <b style="color:{{if ge .Rate7 80.0}}var(--success,#16a374){{else if ge .Rate7 50.0}}#d9860b{{else}}var(--danger,#e5484d){{end}}">{{printf "%.1f" .Rate7}}%</b>
+    </div>
+    {{end}}
     <!-- 收款码列表 -->
     {{if .Items}}
     <div class="my-items">

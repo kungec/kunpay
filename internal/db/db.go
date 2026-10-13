@@ -250,6 +250,8 @@ var defaultSettings = map[string]string{
 	"circuit_breaker":    "0",
 	"backup_auto":        "0",
 	"backup_keep":        "10",
+	"statement_auto":     "0",
+	"statement_last":     "",
 	"footer_text":        "© 2026 KunPay. 保留所有权利.",
 }
 
