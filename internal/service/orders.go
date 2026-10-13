@@ -300,7 +300,7 @@ func (s *Store) uniquePayMoney(typ string, money, now, ttl int64) int64 {
 		c := int64(1 + fastrandN(99)) // 1~99 分
 		cand := money + c
 		var n int
-		_ = s.DB.QueryRow("SELECT COUNT(*) FROM orders WHERE status=0 AND type=? AND pay_money=? AND expire_at>?",
+		_ = s.DB.QueryRow("SELECT COUNT(*) FROM orders WHERE status=0 AND COALESCE(custom,0)=0 AND type=? AND pay_money=? AND expire_at>?",
 			typ, cand, now+ttl-3600).Scan(&n)
 		if n == 0 {
 			return cand
@@ -393,7 +393,7 @@ func (s *Store) ReportPayment(deviceID int64, typ string, money int64, content s
 		var candidates []*model.Order
 		rows, err := s.DB.Query(`SELECT id,trade_no,out_trade_no,pid,type,name,money,pay_money,param,notify_url,
 			return_url,sitename,device,channel_id,status,fee,buyer,addtime,endtime,expire_at,notify_count,notify_ok,next_notify_at,client_ip,m_item_id,p_item_id,COALESCE(remark,''),COALESCE(custom,0)
-			FROM orders WHERE status=0 AND type=? AND pay_money=? AND expire_at>? ORDER BY id ASC LIMIT 5`,
+			FROM orders WHERE status=0 AND COALESCE(custom,0)=0 AND type=? AND pay_money=? AND expire_at>? ORDER BY id ASC LIMIT 5`,
 			typ, money, now-300)
 		if err == nil {
 			for rows.Next() {

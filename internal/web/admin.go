@@ -5,6 +5,7 @@ import (
 	crand "crypto/rand"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"math/big"
@@ -1710,9 +1711,10 @@ func (s *Server) handleAdminTicketReply(w http.ResponseWriter, r *http.Request) 
 		if m, _ := s.Store.UserByID(owner); m != nil && m.Email != "" {
 			subject, _ := s.Store.TicketSubject(id)
 			go func(mail, uname, subj, body string) {
+				esc := html.EscapeString
 				mailBody := mailHTML("工单新回复", []string{
-					"您的工单「" + subj + "」有新的平台回复:",
-					body,
+					"您的工单「" + esc(subj) + "」有新的平台回复:",
+					esc(body),
 					"请登录商户中心 → 工单支持 查看详情。",
 				})
 				if err := s.SendMail(mail, "【"+s.DB.MustSetting("site_name")+"】工单新回复: "+subj, mailBody); err != nil {

@@ -95,7 +95,8 @@ func HashRecoveryCodes(codes []string) string {
 	return strings.Join(hashes, ",")
 }
 
-// ConsumeRecoveryCode 校验并消费一个恢复代码(命中即从库中移除,一次性)
+// ConsumeRecoveryCode 校验并消费一个恢复代码(命中即从库中移除,一次性)。
+// 用 CAS(比较后交换)防止并发双用: 两个请求同时用同一码时只有一个能成功。
 func (s *Store) ConsumeRecoveryCode(userID int64, code string) bool {
 	code = strings.ToUpper(strings.TrimSpace(code))
 	if code == "" {
@@ -103,16 +104,30 @@ func (s *Store) ConsumeRecoveryCode(userID int64, code string) bool {
 	}
 	sum := sha256.Sum256([]byte(code))
 	want := hex.EncodeToString(sum[:])
-	var raw string
-	if err := s.DB.QueryRow("SELECT COALESCE(recovery_codes,'') FROM users WHERE id=?", userID).Scan(&raw); err != nil || raw == "" {
-		return false
-	}
-	parts := strings.Split(raw, ",")
-	for i, h := range parts {
-		if subtle.ConstantTimeCompare([]byte(h), []byte(want)) == 1 {
-			parts = append(parts[:i], parts[i+1:]...)
-			_, _ = s.DB.Exec("UPDATE users SET recovery_codes=? WHERE id=?", strings.Join(parts, ","), userID)
-			return true
+	for attempt := 0; attempt < 3; attempt++ {
+		var raw string
+		if err := s.DB.QueryRow("SELECT COALESCE(recovery_codes,'') FROM users WHERE id=?", userID).Scan(&raw); err != nil || raw == "" {
+			return false
+		}
+		parts := strings.Split(raw, ",")
+		consumed := false
+		for i, h := range parts {
+			if subtle.ConstantTimeCompare([]byte(h), []byte(want)) == 1 {
+				parts = append(parts[:i], parts[i+1:]...)
+				res, err := s.DB.Exec("UPDATE users SET recovery_codes=? WHERE id=? AND recovery_codes=?",
+					strings.Join(parts, ","), userID, raw)
+				if err != nil {
+					return false
+				}
+				if n, _ := res.RowsAffected(); n == 1 {
+					return true
+				}
+				consumed = false
+				break // 期间被并发修改,重读重试
+			}
+		}
+		if !consumed && attempt < 2 {
+			continue
 		}
 	}
 	return false

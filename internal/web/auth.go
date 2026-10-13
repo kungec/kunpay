@@ -41,9 +41,9 @@ func (s *Server) setSession(w http.ResponseWriter, r *http.Request, userID int64
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   isHTTPSRequest(r),
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   7 * 86400,
-		Secure:   isHTTPSRequest(r),
 	})
 }
 
@@ -53,7 +53,7 @@ func (s *Server) clearSession(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name: sessionCookie, Value: "", Path: "/", HttpOnly: true,
-		SameSite: http.SameSiteLaxMode, MaxAge: -1,
+		Secure: isHTTPSRequest(r), SameSite: http.SameSiteLaxMode, MaxAge: -1,
 	})
 }
 
