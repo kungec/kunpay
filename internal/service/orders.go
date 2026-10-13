@@ -21,6 +21,8 @@ var (
 	ErrMerchantBanned   = errors.New("商户已被封禁,无法发起支付")
 	ErrChannelDisabled  = errors.New("支付方式未开通或已关闭")
 	ErrMoneyRange       = errors.New("支付金额超出渠道限额")
+	ErrLimitSingle      = errors.New("支付金额超出商户单笔限额")
+	ErrLimitDaily       = errors.New("超出商户当日收款限额")
 	ErrOrderPaid        = errors.New("订单号已存在且已支付,请勿重复提交")
 	ErrBadMoney         = errors.New("金额格式错误,最多两位小数")
 )
@@ -37,7 +39,7 @@ func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 	err := row.Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.QQ, &u.Role, &u.Status,
 		&u.Rate, &u.Balance, &u.Pid, &u.Skey, &u.SettleType, &u.SettleAccount, &u.SettleName,
 		&u.InviteCode, &u.InvitedBy, &u.CreatedAt, &u.LastLoginAt, &u.LastLoginIP, &u.Avatar, &u.ApiIPs,
-		&u.TotpSecret, &u.NotifyWebhook)
+		&u.TotpSecret, &u.NotifyWebhook, &u.LimitSingle, &u.LimitDaily)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +47,7 @@ func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 }
 
 const userCols = `id,username,email,password_hash,qq,role,status,rate,balance,pid,skey,
-	settle_type,settle_account,settle_name,invite_code,invited_by,created_at,last_login_at,last_login_ip,avatar,COALESCE(api_ips,''),COALESCE(totp_secret,''),COALESCE(notify_webhook,'')`
+	settle_type,settle_account,settle_name,invite_code,invited_by,created_at,last_login_at,last_login_ip,avatar,COALESCE(api_ips,''),COALESCE(totp_secret,''),COALESCE(notify_webhook,''),COALESCE(limit_single,0),COALESCE(limit_daily,0)`
 
 func (s *Store) UserByID(id int64) (*model.User, error) {
 	u, err := scanUser(s.DB.QueryRow("SELECT "+userCols+" FROM users WHERE id=?", id))
@@ -73,8 +75,8 @@ func (s *Store) UserByUsername(name string) (*model.User, error) {
 
 func (s *Store) ChannelByType(t string) (*model.Channel, error) {
 	c := &model.Channel{}
-	err := s.DB.QueryRow("SELECT id,type,name,enabled,min_money,max_money,qrcode,account,device_id,alipay_uid FROM channels WHERE type=?", t).
-		Scan(&c.ID, &c.Type, &c.Name, &c.Enabled, &c.MinMoney, &c.MaxMoney, &c.Qrcode, &c.Account, &c.DeviceID, &c.AlipayUID)
+	err := s.DB.QueryRow("SELECT id,type,name,enabled,min_money,max_money,qrcode,account,device_id,alipay_uid,COALESCE(breaker_at,0) FROM channels WHERE type=?", t).
+		Scan(&c.ID, &c.Type, &c.Name, &c.Enabled, &c.MinMoney, &c.MaxMoney, &c.Qrcode, &c.Account, &c.DeviceID, &c.AlipayUID, &c.BreakerAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -82,7 +84,7 @@ func (s *Store) ChannelByType(t string) (*model.Channel, error) {
 }
 
 func (s *Store) AllChannels() ([]model.Channel, error) {
-	rows, err := s.DB.Query("SELECT id,type,name,enabled,min_money,max_money,qrcode,account,device_id,alipay_uid FROM channels ORDER BY id")
+	rows, err := s.DB.Query("SELECT id,type,name,enabled,min_money,max_money,qrcode,account,device_id,alipay_uid,COALESCE(breaker_at,0) FROM channels ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +92,7 @@ func (s *Store) AllChannels() ([]model.Channel, error) {
 	var out []model.Channel
 	for rows.Next() {
 		c := model.Channel{}
-		if err := rows.Scan(&c.ID, &c.Type, &c.Name, &c.Enabled, &c.MinMoney, &c.MaxMoney, &c.Qrcode, &c.Account, &c.DeviceID, &c.AlipayUID); err != nil {
+		if err := rows.Scan(&c.ID, &c.Type, &c.Name, &c.Enabled, &c.MinMoney, &c.MaxMoney, &c.Qrcode, &c.Account, &c.DeviceID, &c.AlipayUID, &c.BreakerAt); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -129,6 +131,20 @@ func (s *Store) CreateOrder(u *model.User, req *OrderReq, clientIP string) (*mod
 	}
 	if money < ch.MinMoney || money > ch.MaxMoney {
 		return nil, ErrMoneyRange
+	}
+	// 商户风控限额(0=不限)
+	if u.LimitSingle > 0 && money > u.LimitSingle {
+		return nil, ErrLimitSingle
+	}
+	if u.LimitDaily > 0 {
+		lt := time.Unix(model.Now(), 0)
+		dayStart := time.Date(lt.Year(), lt.Month(), lt.Day(), 0, 0, 0, 0, lt.Location()).Unix()
+		var todayPaid int64
+		_ = s.DB.QueryRow("SELECT COALESCE(SUM(money),0) FROM orders WHERE pid=? AND status IN(1,3) AND addtime>=?",
+			u.Pid, dayStart).Scan(&todayPaid)
+		if todayPaid+money > u.LimitDaily {
+			return nil, ErrLimitDaily
+		}
 	}
 	name := truncate(req.Name, 127)
 	outTradeNo := truncate(req.OutTradeNo, 64)
@@ -506,6 +522,18 @@ func (s *Store) SetUserNotifyWebhook(userID int64, hook string) error {
 // SetUserTOTP 开启/关闭两步验证
 func (s *Store) SetUserTOTP(userID int64, secret string) error {
 	_, err := s.DB.Exec("UPDATE users SET totp_secret=? WHERE id=?", secret, userID)
+	return err
+}
+
+// SetUserLimits 设置商户收款限额(分,0=不限)
+func (s *Store) SetUserLimits(userID int64, single, daily int64) error {
+	if single < 0 {
+		single = 0
+	}
+	if daily < 0 {
+		daily = 0
+	}
+	_, err := s.DB.Exec("UPDATE users SET limit_single=?, limit_daily=? WHERE id=?", single, daily, userID)
 	return err
 }
 

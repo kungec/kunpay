@@ -108,21 +108,23 @@ func (s *Server) handleAdminUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	var total int64
 	_ = s.DB.QueryRow("SELECT COUNT(*) FROM users WHERE "+where, args...).Scan(&total)
-	rows, err := s.DB.Query(`SELECT id,username,email,qq,role,status,rate,balance,pid,skey,created_at,last_login_at
+	rows, err := s.DB.Query(`SELECT id,username,email,qq,role,status,rate,balance,pid,skey,created_at,last_login_at,
+		COALESCE(limit_single,0),COALESCE(limit_daily,0)
 		FROM users WHERE `+where+` ORDER BY id ASC LIMIT ? OFFSET ?`, append(args, pageSize, (page-1)*pageSize)...)
 	var users []map[string]any
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
-			var id, balance, pid, createdAt, lastLogin int64
+			var id, balance, pid, createdAt, lastLogin, limitSingle, limitDaily int64
 			var username, email, qq, role, skey string
 			var status int
 			var rate float64
-			if rows.Scan(&id, &username, &email, &qq, &role, &status, &rate, &balance, &pid, &skey, &createdAt, &lastLogin) == nil {
+			if rows.Scan(&id, &username, &email, &qq, &role, &status, &rate, &balance, &pid, &skey, &createdAt, &lastLogin, &limitSingle, &limitDaily) == nil {
 				users = append(users, map[string]any{
 					"ID": id, "Username": username, "Email": email, "QQ": qq, "Role": role,
 					"Status": status, "Rate": rate, "Balance": balance, "Pid": pid, "Skey": skey,
 					"CreatedAt": createdAt, "LastLogin": lastLogin,
+					"LimitSingleYuan": yuan(limitSingle), "LimitDailyYuan": yuan(limitDaily),
 				})
 			}
 		}
@@ -176,6 +178,11 @@ func (s *Server) handleAdminUsersSave(w http.ResponseWriter, r *http.Request) {
 		}
 		_, _ = s.DB.Exec("UPDATE users SET rate=? WHERE id=?", rate, id)
 		msg = fmt.Sprintf("已将 %s 费率设为 %.2f%%", u.Username, rate)
+	case "limit":
+		single, _ := service.ParseMoney(r.FormValue("limit_single"))
+		daily, _ := service.ParseMoney(r.FormValue("limit_daily"))
+		_ = s.Store.SetUserLimits(id, single, daily)
+		msg = fmt.Sprintf("已更新 %s 的收款限额(0=不限)", u.Username)
 	case "balance":
 		amount, err := service.ParseMoney(r.FormValue("amount"))
 		if err != nil || amount == 0 {
@@ -383,7 +390,7 @@ func (s *Server) handleAdminChannelsSave(w http.ResponseWriter, r *http.Request)
 	}
 	account := strings.TrimSpace(r.FormValue("account"))
 	deviceID := atoint64(r.FormValue("device_id"))
-	_, _ = s.DB.Exec(`UPDATE channels SET enabled=?, min_money=?, max_money=?, account=?, device_id=?, alipay_uid=? WHERE type=?`,
+	_, _ = s.DB.Exec(`UPDATE channels SET enabled=?, min_money=?, max_money=?, account=?, device_id=?, alipay_uid=?, breaker_at=0 WHERE type=?`,
 		enabled, minMoney, maxMoney, account, deviceID, strings.TrimSpace(r.FormValue("alipay_uid")), typ)
 	http.Redirect(w, r, "/admin/channels?msg="+urlEscape("渠道设置已保存"), http.StatusFound)
 }
@@ -797,13 +804,13 @@ func (s *Server) handleAdminSettingsSave(w http.ResponseWriter, r *http.Request)
 	keys := []string{"site_name", "site_title", "announcement", "kefu", "fee_rate", "order_timeout",
 		"money_offset", "register_open", "min_settle", "pay_notice", "invite_open", "footer_text", "poll_interval",
 		"site_url", "smtp_host", "smtp_port", "smtp_user", "smtp_pass", "smtp_tls", "smtp_from", "admin_ip_whitelist",
-		"alert_email", "device_alert", "merchant_notice", "alert_webhook", "invite_rate", "auto_settle"}
+		"alert_email", "device_alert", "merchant_notice", "alert_webhook", "invite_rate", "auto_settle", "circuit_breaker"}
 	for _, k := range keys {
 		v := strings.TrimSpace(r.FormValue(k))
 		if r.Form[k] == nil {
 			continue
 		}
-		if k == "money_offset" || k == "register_open" || k == "invite_open" || k == "auto_settle" {
+		if k == "money_offset" || k == "register_open" || k == "invite_open" || k == "auto_settle" || k == "circuit_breaker" {
 			if v == "on" || v == "1" {
 				v = "1"
 			} else {

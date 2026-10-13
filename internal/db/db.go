@@ -230,6 +230,7 @@ var defaultSettings = map[string]string{
 	"invite_open":        "1",
 	"invite_rate":        "10",
 	"alert_webhook":      "",
+	"circuit_breaker":    "0",
 	"footer_text":        "© 2026 KunPay. 保留所有权利.",
 }
 
@@ -253,6 +254,10 @@ func (d *DB) Migrate() error {
 	// TOTP 两步验证密钥(空=未开启) / 商户收款成功 IM 推送 webhook
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN totp_secret TEXT DEFAULT ''")
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN notify_webhook TEXT DEFAULT ''")
+	// 商户收款限额(分,0=不限) / 渠道熔断时间戳(0=正常)
+	_, _ = d.Exec("ALTER TABLE users ADD COLUMN limit_single INTEGER DEFAULT 0")
+	_, _ = d.Exec("ALTER TABLE users ADD COLUMN limit_daily INTEGER DEFAULT 0")
+	_, _ = d.Exec("ALTER TABLE channels ADD COLUMN breaker_at INTEGER DEFAULT 0")
 	_, _ = d.Exec("ALTER TABLE channels ADD COLUMN alipay_uid TEXT DEFAULT ''")
 	// 旧版平台单一收款码迁移为多码 items
 	var itemN, qrN int

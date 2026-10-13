@@ -26,6 +26,8 @@ type User struct {
 	ApiIPs        string // API IP 白名单(逗号分隔/CIDR,空=不限制)
 	TotpSecret    string // TOTP 两步验证密钥(base32,空=未开启)
 	NotifyWebhook string // 收款成功 IM 推送(飞书/钉钉/企微机器人地址)
+	LimitSingle   int64  // 单笔收款限额(分,0=不限)
+	LimitDaily    int64  // 单日收款限额(分,0=不限)
 }
 
 type Order struct {
@@ -70,6 +72,7 @@ type Channel struct {
 	Account   string
 	DeviceID  int64
 	AlipayUID string // 支付宝收款账号UID(用于深链自动带金额)
+	BreakerAt int64  // 熔断停用时间(0=正常,仅自动熔断写入)
 }
 
 type Device struct {

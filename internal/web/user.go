@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/skip2/go-qrcode"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -1198,4 +1200,64 @@ func (s *Server) handleUserStatementExport(w http.ResponseWriter, r *http.Reques
 	fmt.Fprintf(bw, "合计,%d,%d,%s,%s,%s\n", sumTotal, sumOk,
 		service.MoneyStr(sumMoney), service.MoneyStr(sumFee), service.MoneyStr(sumIncome))
 	_ = bw.Flush()
+}
+
+// handleDownload 公开下载中心: 列出数据目录 downloads/ 下的文件
+func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
+	dir := filepath.Join(s.DataDir, "downloads")
+	_ = os.MkdirAll(dir, 0o755)
+	type finfo struct {
+		Name     string
+		SizeText string
+		ModTime  int64
+	}
+	var files []finfo
+	if ents, err := os.ReadDir(dir); err == nil {
+		for _, e := range ents {
+			if e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+				continue
+			}
+			info, err := e.Info()
+			if err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
+				continue
+			}
+			size := info.Size()
+			sizeText := fmt.Sprintf("%.1f KB", float64(size)/1024)
+			if size >= 1024*1024 {
+				sizeText = fmt.Sprintf("%.1f MB", float64(size)/1024/1024)
+			}
+			files = append(files, finfo{Name: e.Name(), SizeText: sizeText, ModTime: info.ModTime().Unix()})
+		}
+	}
+	d := s.pageData(r)
+	d["Page"] = "download"
+	d["Title"] = "下载中心"
+	d["Files"] = files
+	s.render(w, "pub_download", http.StatusOK, d)
+}
+
+// handleDownloadFile 提供下载(严格防目录穿越)
+func (s *Server) handleDownloadFile(w http.ResponseWriter, r *http.Request) {
+	name := filepath.Base(r.URL.Query().Get("name"))
+	if name == "" || name == "." || name == "/" || strings.ContainsAny(name, "\\/") ||
+		!regexp.MustCompile(`^[A-Za-z0-9._\-]+$`).MatchString(name) || strings.HasPrefix(name, ".") {
+		http.Error(w, "invalid file name", 400)
+		return
+	}
+	path := filepath.Join(s.DataDir, "downloads", name)
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", name))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	f, err := os.Open(path)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer f.Close()
+	_, _ = io.Copy(w, f)
 }

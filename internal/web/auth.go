@@ -369,8 +369,22 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	loginFails.Delete(loginKey(clientIP(r), username))
+	prevIP := u.LastLoginIP
+	curIP := clientIP(r)
 	_, _ = s.DB.Exec("UPDATE users SET last_login_at=?, last_login_ip=? WHERE id=?",
-		model.Now(), clientIP(r), u.ID)
+		model.Now(), curIP, u.ID)
+	// 登录 IP 变化邮件提醒(异步,不影响登录)
+	if prevIP != "" && prevIP != curIP && u.Email != "" {
+		go func(mail, name, from, to string, site string) {
+			body := mailHTML("登录安全提醒", []string{
+				"您的账号 " + name + " 刚刚在新 IP 地址登录:",
+				"本次登录 IP:" + to,
+				"上次登录 IP:" + from,
+				"如非本人操作,请立即修改密码并检查账户安全。",
+			})
+			_ = s.SendMail(mail, "【"+site+"】登录安全提醒", body)
+		}(u.Email, u.Username, prevIP, curIP, s.DB.MustSetting("site_name"))
+	}
 	s.setSession(w, r, u.ID)
 	next := r.FormValue("next")
 	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {

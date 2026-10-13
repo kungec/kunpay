@@ -73,6 +73,7 @@
         <label class="row" style="gap:8px"><input type="checkbox" name="register_open" {{if eq (index .S "register_open") "1"}}checked{{end}}> 开放商户注册</label>
         <label class="row" style="gap:8px"><input type="checkbox" name="invite_open" {{if eq (index .S "invite_open") "1"}}checked{{end}}> 启用邀请码(填写时校验)</label>
         <label class="row" style="gap:8px"><input type="checkbox" name="auto_settle" {{if eq (index .S "auto_settle") "1"}}checked{{end}}> 自动结算(余额达到最低结算金额且已填收款方式的商户自动提交结算单)</label>
+        <label class="row" style="gap:8px"><input type="checkbox" name="circuit_breaker" {{if eq (index .S "circuit_breaker") "1"}}checked{{end}}> 渠道自动熔断(近1小时≥10笔且成功率低于30%自动停用渠道,10分钟后自动恢复)</label>
       </div>
       <div class="form-item">
         <label>邀请返佣比例(%)</label>

@@ -1,0 +1,29 @@
+{{define "content"}}
+<div class="doc-layout" style="grid-template-columns:1fr;max-width:900px">
+  <div class="card">
+    <div class="card-title">监控软件下载中心</div>
+    <div class="alert info">收款监控 APP(安卓)与 Windows/macOS 挂机助手用于接收银行/支付 APP 的到账通知并实时回传平台。下载后请参照「开发文档 → 监控APP对接」配置服务器地址与设备令牌。</div>
+    {{if .Files}}
+    <div class="table-wrap">
+      <table class="tbl">
+        <tr><th>文件</th><th class="money">大小</th><th>更新时间</th><th class="right">下载</th></tr>
+        {{range .Files}}
+        <tr>
+          <td class="mono">{{.Name}}</td>
+          <td class="money mono">{{.SizeText}}</td>
+          <td class="muted">{{fdate .ModTime}}</td>
+          <td class="right"><a class="btn btn-primary btn-sm" href="/download/file?name={{.Name}}" download>⬇ 下载</a></td>
+        </tr>
+        {{end}}
+      </table>
+    </div>
+    {{else}}
+    <div class="empty">
+      <div style="font-size:34px;margin-bottom:10px">📦</div>
+      暂无可下载文件<br>
+      <span style="font-size:12.5px">管理员可将监控 APP(APK)、挂机助手(EXE/DMG)等文件放入程序数据目录的 <code class="mono">downloads/</code> 文件夹,本页面将自动列出。</span>
+    </div>
+    {{end}}
+  </div>
+</div>
+{{end}}

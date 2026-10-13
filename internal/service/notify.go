@@ -358,8 +358,98 @@ func itoa(v int64) string {
 	return string(buf[i:])
 }
 
-// checkChannelHealth 渠道成功率自动监控: 近1小时≥10笔且成功率<50%时告警
+// breakerAlerted 避免冷却恢复重复告警
+var breakerAlerted sync.Map
+
+// checkCircuitBreaker 渠道自动熔断
+func (s *Store) checkCircuitBreaker() {
+	if s.DB.MustSetting("circuit_breaker") != "1" {
+		return
+	}
+	now := model.Now()
+	// 1) 冷却到期(10 分钟)自动恢复观察
+	type rec struct {
+		id    int64
+		name  string
+		typ   string
+		until int64
+	}
+	var recs []rec
+	rows, err := s.DB.Query(`SELECT id,name,type,breaker_at FROM channels WHERE enabled=0 AND breaker_at>0 AND breaker_at<=?`, now-600)
+	if err != nil {
+		return
+	}
+	for rows.Next() {
+		var rc rec
+		if rows.Scan(&rc.id, &rc.name, &rc.typ, &rc.until) == nil {
+			recs = append(recs, rc)
+		}
+	}
+	rows.Close()
+	for _, rc := range recs {
+		if _, err := s.DB.Exec("UPDATE channels SET enabled=1, breaker_at=0 WHERE id=? AND enabled=0 AND breaker_at=?", rc.id, rc.until); err == nil {
+			log.Printf("[breaker] 渠道 %s(%s) 冷却结束,自动恢复观察", rc.name, rc.typ)
+			key := "breaker_" + rc.typ
+			if AlertFn != nil {
+				if _, dup := breakerAlerted.LoadOrStore(key+"_"+fmt.Sprint(rc.until), 1); !dup {
+					AlertFn(fmt.Sprintf("渠道 %s(%s) 熔断冷却结束,已自动恢复,请关注成功率。", rc.name, rc.typ))
+				}
+			}
+		}
+	}
+	// 2) 近1小时 ≥10 笔且成功率 <30% → 熔断停用
+	type bad struct {
+		typ, name string
+		total     int64
+		paid      int64
+	}
+	var bads []bad
+	brows, err := s.DB.Query(`SELECT c.type, c.name, COUNT(o.id),
+			SUM(CASE WHEN o.status IN(1,3) THEN 1 ELSE 0 END)
+		FROM channels c JOIN orders o ON o.type=c.type AND o.addtime>=?
+		WHERE c.enabled=1 AND COALESCE(c.breaker_at,0)=0
+		GROUP BY c.type, c.name HAVING COUNT(o.id)>=10`, now-3600)
+	if err != nil {
+		return
+	}
+	for brows.Next() {
+		var cb bad
+		if brows.Scan(&cb.typ, &cb.name, &cb.total, &cb.paid) == nil {
+			bads = append(bads, cb)
+		}
+	}
+	brows.Close()
+	for _, cb := range bads {
+		if cb.total < 10 || cb.paid*100 >= cb.total*30 {
+			continue
+		}
+		res, err := s.DB.Exec("UPDATE channels SET enabled=0, breaker_at=? WHERE type=? AND enabled=1 AND COALESCE(breaker_at,0)=0", now, cb.typ)
+		if err != nil {
+			continue
+		}
+		if n, _ := res.RowsAffected(); n > 0 {
+			rate := float64(cb.paid) / float64(cb.total) * 100
+			msg := fmt.Sprintf("渠道 %s(%s) 近1小时成功率仅 %.1f%%(%d/%d),已自动熔断停用,10 分钟后自动恢复。",
+				cb.name, cb.typ, rate, cb.paid, cb.total)
+			log.Println("[breaker] " + msg)
+			s.auditBySystem("channel.breaker", msg)
+			if AlertFn != nil {
+				AlertFn(msg)
+			}
+		}
+	}
+}
+
+// auditBySystem 后台任务产生的审计记录(操作人记为 system)
+func (s *Store) auditBySystem(action, detail string) {
+	_, _ = s.DB.Exec(`INSERT INTO audit_logs(admin_id,admin,action,detail,ip,created_at) VALUES(0,'system',?,?, '', ?)`,
+		action, detail, model.Now())
+}
+
+// checkChannelHealth 渠道成功率自动监控: 近1小时≥10笔且成功率<50%时告警;
+// 开启熔断开关后,成功率<30% 自动停用渠道,10 分钟冷却后自动恢复观察。
 func (s *Store) checkChannelHealth() {
+	s.checkCircuitBreaker()
 	rows, err := s.DB.Query(`SELECT c.type, c.name,
 		COUNT(o.id) as total,
 		SUM(CASE WHEN o.status IN(1,3) THEN 1 ELSE 0 END) as paid
