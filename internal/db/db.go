@@ -199,6 +199,23 @@ CREATE TABLE IF NOT EXISTS merchant_channel_items (
   last_used_at INTEGER DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_mci ON merchant_channel_items(user_id, type, enabled);
+CREATE TABLE IF NOT EXISTS tickets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  subject TEXT NOT NULL,
+  status INTEGER DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tickets ON tickets(user_id, status);
+CREATE TABLE IF NOT EXISTS ticket_msgs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id INTEGER NOT NULL,
+  is_admin INTEGER DEFAULT 0,
+  content TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tmsgs ON ticket_msgs(ticket_id);
 `
 
 // 默认配置项

@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: 安装 Android SDK 构建工具
+        run: |
+          mkdir -p $HOME/.android-sdk/cmdline-tools
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/ct.zip
+          unzip -q /tmp/ct.zip -d $HOME/.android-sdk/cmdline-tools
+          mv $HOME/.android-sdk/cmdline-tools/cmdline-tools $HOME/.android-sdk/cmdline-tools/latest
+          yes | $HOME/.android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/.android-sdk --licenses > /dev/null
+          $HOME/.android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/.android-sdk "build-tools;34.0.0" "platforms;android-34" > /dev/null
+      - name: 构建平台主程序(6 平台)
+        run: bash build.sh
+      - name: 构建监控助手(6 平台)
+        run: bash build-monitor.sh
+      - name: 构建 Android 监控 APK
+        working-directory: monitor-android
+        run: bash build-android.sh
+      - name: 打包
+        run: |
+          mkdir -p release
+          cp -r dist/* release/
+          cp monitor-android/KunPayMonitor.apk release/ 2>/dev/null || true
+          cd release && zip -qr ../kunpay-${{ github.ref_name }}.zip . && cd ..
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            kunpay-${{ github.ref_name }}.zip

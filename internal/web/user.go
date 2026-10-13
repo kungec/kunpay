@@ -1304,3 +1304,76 @@ func (s *Server) handleDownloadFile(w http.ResponseWriter, r *http.Request) {
 	defer f.Close()
 	_, _ = io.Copy(w, f)
 }
+
+// ---------- 工单支持 ----------
+
+// handleUserTickets 商户工单列表 + 新建
+func (s *Server) handleUserTickets(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	tickets, _ := s.Store.MerchantTickets(u.ID, 50)
+	d := s.pageData(r)
+	d["Page"] = "user_tickets"
+	d["Title"] = "工单支持"
+	d["Tickets"] = tickets
+	d["Flash"] = r.URL.Query().Get("msg")
+	d["FlashErr"] = r.URL.Query().Get("err")
+	s.render(w, "dash_user_tickets", http.StatusOK, d)
+}
+
+func (s *Server) handleUserTicketCreate(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	id, err := s.Store.CreateTicket(u.ID, r.FormValue("subject"), r.FormValue("content"))
+	if err != nil {
+		http.Redirect(w, r, "/user/tickets?err="+urlEscape(err.Error()), http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, "/user/tickets/"+strconv.FormatInt(id, 10)+"?msg="+urlEscape("工单已提交,平台会尽快处理"), http.StatusFound)
+}
+
+func (s *Server) handleUserTicketView(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	id := atoint64(r.PathValue("id"))
+	subject, status, _, err := s.Store.TicketOf(id, u.ID)
+	if err != nil {
+		renderMsg(s, w, r, "工单不存在", "工单不存在或无权查看", http.StatusNotFound)
+		return
+	}
+	msgs, _ := s.Store.TicketMsgs(id)
+	d := s.pageData(r)
+	d["Page"] = "user_tickets"
+	d["Title"] = "工单详情"
+	d["TID"] = id
+	d["Subject"] = subject
+	d["Status"] = status
+	d["Msgs"] = msgs
+	d["Flash"] = r.URL.Query().Get("msg")
+	d["FlashErr"] = r.URL.Query().Get("err")
+	s.render(w, "dash_user_ticketdetail", http.StatusOK, d)
+}
+
+func (s *Server) handleUserTicketReply(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	id := atoint64(r.FormValue("id"))
+	if _, _, owner, err := s.Store.TicketOf(id, u.ID); err != nil {
+		http.Redirect(w, r, "/user/tickets?err="+urlEscape("工单不存在"), http.StatusFound)
+		return
+	} else if owner != u.ID {
+		http.Redirect(w, r, "/user/tickets?err="+urlEscape("无权操作"), http.StatusFound)
+		return
+	}
+	if err := s.Store.AddTicketMsg(id, false, r.FormValue("content")); err != nil {
+		http.Redirect(w, r, "/user/tickets/"+strconv.FormatInt(id, 10)+"?err="+urlEscape(err.Error()), http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, "/user/tickets/"+strconv.FormatInt(id, 10)+"?msg="+urlEscape("回复已发送"), http.StatusFound)
+}
+
+func (s *Server) handleUserTicketClose(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	id := atoint64(r.FormValue("id"))
+	if err := s.Store.CloseTicket(id, u.ID); err != nil {
+		http.Redirect(w, r, "/user/tickets?err="+urlEscape(err.Error()), http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, "/user/tickets?msg="+urlEscape("工单已关闭"), http.StatusFound)
+}

@@ -1,0 +1,41 @@
+{{define "content"}}
+{{template "flash" .}}
+<div class="panel-row">
+  <div class="card">
+    <div class="card-title">我的工单</div>
+    {{if .Tickets}}
+    <div class="table-wrap">
+      <table class="tbl">
+        <tr><th>标题</th><th>状态</th><th>更新时间</th><th class="right">操作</th></tr>
+        {{range .Tickets}}
+        <tr>
+          <td><a href="/user/tickets/{{.ID}}">{{.Subject}}</a></td>
+          <td>{{if eq .Status 0}}<span class="badge badge-orange">待平台回复</span>{{else if eq .Status 1}}<span class="badge badge-blue">平台已回复</span>{{else}}<span class="badge badge-gray">已关闭</span>{{end}}</td>
+          <td class="muted">{{fdate .UpdatedAt}}</td>
+          <td class="right"><a class="btn btn-ghost btn-sm" href="/user/tickets/{{.ID}}">查看</a></td>
+        </tr>
+        {{end}}
+      </table>
+    </div>
+    {{else}}
+    <div class="empty">还没有工单,遇到问题可在右侧新建</div>
+    {{end}}
+  </div>
+  <div class="card">
+    <div class="card-title">新建工单</div>
+    <form method="post" action="/user/tickets/create">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <div class="form-item">
+        <label>标题(100 字内)</label>
+        <input class="input" type="text" name="subject" maxlength="100" required placeholder="如: 提现未到账咨询">
+      </div>
+      <div class="form-item">
+        <label>问题描述(2000 字内)</label>
+        <textarea class="input" name="content" rows="6" maxlength="2000" required placeholder="请描述遇到的问题,涉及订单请附上平台订单号"></textarea>
+      </div>
+      <button class="btn btn-primary" type="submit">提交工单</button>
+      <span class="muted" style="font-size:12px;margin-left:8px">每商户每日最多 5 个</span>
+    </form>
+  </div>
+</div>
+{{end}}

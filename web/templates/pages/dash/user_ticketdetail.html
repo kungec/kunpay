@@ -1,0 +1,37 @@
+{{define "content"}}
+{{template "flash" .}}
+<div class="card" style="max-width:820px;margin:0 auto">
+  <div class="row between mb">
+    <div class="card-title" style="margin:0">{{.Subject}}</div>
+    <div class="row" style="gap:8px">
+      {{if eq .Status 0}}<span class="badge badge-orange">待平台回复</span>{{else if eq .Status 1}}<span class="badge badge-blue">平台已回复</span>{{else}}<span class="badge badge-gray">已关闭</span>{{end}}
+      {{if ne .Status 2}}
+      <form method="post" action="/user/tickets/close" data-confirm="确定关闭该工单?关闭后如仍有问题请新建工单。">
+        <input type="hidden" name="_csrf" value="{{.CSRF}}">
+        <input type="hidden" name="id" value="{{.TID}}">
+        <button class="btn btn-ghost btn-sm" type="submit">关闭工单</button>
+      </form>
+      {{end}}
+    </div>
+  </div>
+  <a class="btn btn-ghost btn-sm mb" href="/user/tickets">← 返回列表</a>
+  <div style="display:flex;flex-direction:column;gap:12px">
+    {{range .Msgs}}
+    <div style="align-self:{{if .IsAdmin}}flex-end{{else}}flex-start{{end}};max-width:78%">
+      <div style="background:{{if .IsAdmin}}var(--primary-light){{else}}#f5f7fb{{end}};border-radius:12px;padding:12px 15px;font-size:13.5px;line-height:1.8;white-space:pre-wrap;word-break:break-word">{{.Content}}</div>
+      <div class="muted" style="font-size:11.5px;margin-top:4px;text-align:{{if .IsAdmin}}right{{else}}left{{end}}">{{if .IsAdmin}}平台客服{{else}}我{{end}} · {{fdate .CreatedAt}}</div>
+    </div>
+    {{end}}
+  </div>
+  {{if ne .Status 2}}
+  <form method="post" action="/user/tickets/reply" class="mt">
+    <input type="hidden" name="_csrf" value="{{.CSRF}}">
+    <input type="hidden" name="id" value="{{.TID}}">
+    <textarea class="input" name="content" rows="4" maxlength="2000" required placeholder="回复内容(2000 字内)"></textarea>
+    <button class="btn btn-primary btn-sm mt" type="submit">发送回复</button>
+  </form>
+  {{else}}
+  <div class="alert info mt">工单已关闭。如仍有问题,请返回列表新建工单。</div>
+  {{end}}
+</div>
+{{end}}

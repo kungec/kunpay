@@ -1,0 +1,32 @@
+{{define "content"}}
+<div class="card">
+  <div class="row between mb">
+    <div class="card-title" style="margin:0">工单处理{{if gt .OpenN 0}} <span class="badge badge-orange">{{.OpenN}} 个待回复</span>{{end}}</div>
+    <div class="row" style="gap:8px">
+      <a class="btn btn-ghost btn-sm {{if eq .StFilter -1}}btn-outline{{end}}" href="/admin/tickets?status=-1">全部</a>
+      <a class="btn btn-ghost btn-sm {{if eq .StFilter 0}}btn-outline{{end}}" href="/admin/tickets?status=0">待回复</a>
+      <a class="btn btn-ghost btn-sm {{if eq .StFilter 1}}btn-outline{{end}}" href="/admin/tickets?status=1">已回复</a>
+      <a class="btn btn-ghost btn-sm {{if eq .StFilter 2}}btn-outline{{end}}" href="/admin/tickets?status=2">已关闭</a>
+    </div>
+  </div>
+  {{if .Tickets}}
+  <div class="table-wrap">
+    <table class="tbl">
+      <tr><th>#</th><th>商户</th><th>标题</th><th>状态</th><th>更新时间</th><th class="right">操作</th></tr>
+      {{range .Tickets}}
+      <tr>
+        <td class="mono">{{.ID}}</td>
+        <td>{{.Username}}</td>
+        <td><a href="/admin/tickets/{{.ID}}">{{.Subject}}</a></td>
+        <td>{{if eq .Status 0}}<span class="badge badge-orange">待回复</span>{{else if eq .Status 1}}<span class="badge badge-blue">已回复</span>{{else}}<span class="badge badge-gray">已关闭</span>{{end}}</td>
+        <td class="muted">{{fdate .UpdatedAt}}</td>
+        <td class="right"><a class="btn btn-ghost btn-sm" href="/admin/tickets/{{.ID}}">处理</a></td>
+      </tr>
+      {{end}}
+    </table>
+  </div>
+  {{else}}
+  <div class="empty">暂无工单</div>
+  {{end}}
+</div>
+{{end}}

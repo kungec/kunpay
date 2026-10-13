@@ -1523,3 +1523,61 @@ func (s *Server) handleAdminScreen(w http.ResponseWriter, r *http.Request) {
 	d["ChanStatus"] = chSt
 	s.render(w, "dash_admin_screen", http.StatusOK, d)
 }
+
+// ---------- 工单处理 ----------
+
+func (s *Server) handleAdminTickets(w http.ResponseWriter, r *http.Request) {
+	stFilter := -1
+	if v, err := strconv.Atoi(strings.TrimSpace(r.FormValue("status"))); err == nil && v >= -1 && v <= 2 {
+		stFilter = v
+	}
+	tickets, _ := s.Store.AdminTickets(stFilter, 100)
+	d := s.pageData(r)
+	d["Page"] = "admin_tickets"
+	d["Title"] = "工单处理"
+	d["Tickets"] = tickets
+	d["StFilter"] = stFilter
+	d["OpenN"] = s.Store.OpenTicketCount()
+	s.render(w, "dash_admin_tickets", http.StatusOK, d)
+}
+
+func (s *Server) handleAdminTicketView(w http.ResponseWriter, r *http.Request) {
+	id := atoint64(r.PathValue("id"))
+	subject, status, owner, err := s.Store.TicketOf(id, 0)
+	if err != nil {
+		renderMsg(s, w, r, "工单不存在", "工单不存在", http.StatusNotFound)
+		return
+	}
+	var username string
+	_ = s.DB.QueryRow("SELECT username FROM users WHERE id=?", owner).Scan(&username)
+	msgs, _ := s.Store.TicketMsgs(id)
+	d := s.pageData(r)
+	d["Page"] = "admin_tickets"
+	d["Title"] = "工单详情"
+	d["TID"] = id
+	d["Subject"] = subject
+	d["Status"] = status
+	d["Username"] = username
+	d["Msgs"] = msgs
+	s.render(w, "dash_admin_ticketdetail", http.StatusOK, d)
+}
+
+func (s *Server) handleAdminTicketReply(w http.ResponseWriter, r *http.Request) {
+	id := atoint64(r.FormValue("id"))
+	if err := s.Store.AddTicketMsg(id, true, r.FormValue("content")); err != nil {
+		http.Redirect(w, r, "/admin/tickets/"+strconv.FormatInt(id, 10)+"?err="+urlEscape(err.Error()), http.StatusFound)
+		return
+	}
+	s.audit(r, "ticket.reply", "工单 #"+strconv.FormatInt(id, 10))
+	http.Redirect(w, r, "/admin/tickets/"+strconv.FormatInt(id, 10)+"?msg="+urlEscape("回复已发送"), http.StatusFound)
+}
+
+func (s *Server) handleAdminTicketClose(w http.ResponseWriter, r *http.Request) {
+	id := atoint64(r.FormValue("id"))
+	if err := s.Store.CloseTicket(id, 0); err != nil {
+		http.Redirect(w, r, "/admin/tickets?err="+urlEscape(err.Error()), http.StatusFound)
+		return
+	}
+	s.audit(r, "ticket.close", "工单 #"+strconv.FormatInt(id, 10))
+	http.Redirect(w, r, "/admin/tickets?msg="+urlEscape("工单已关闭"), http.StatusFound)
+}
