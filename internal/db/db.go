@@ -250,6 +250,9 @@ func (d *DB) Migrate() error {
 	_, _ = d.Exec("ALTER TABLE orders ADD COLUMN remark TEXT DEFAULT ''")
 	// 商户 API IP 白名单(空=不限制)
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN api_ips TEXT DEFAULT ''")
+	// TOTP 两步验证密钥(空=未开启) / 商户收款成功 IM 推送 webhook
+	_, _ = d.Exec("ALTER TABLE users ADD COLUMN totp_secret TEXT DEFAULT ''")
+	_, _ = d.Exec("ALTER TABLE users ADD COLUMN notify_webhook TEXT DEFAULT ''")
 	_, _ = d.Exec("ALTER TABLE channels ADD COLUMN alipay_uid TEXT DEFAULT ''")
 	// 旧版平台单一收款码迁移为多码 items
 	var itemN, qrN int

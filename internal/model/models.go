@@ -24,6 +24,8 @@ type User struct {
 	LastLoginIP   string
 	Avatar        string
 	ApiIPs        string // API IP 白名单(逗号分隔/CIDR,空=不限制)
+	TotpSecret    string // TOTP 两步验证密钥(base32,空=未开启)
+	NotifyWebhook string // 收款成功 IM 推送(飞书/钉钉/企微机器人地址)
 }
 
 type Order struct {

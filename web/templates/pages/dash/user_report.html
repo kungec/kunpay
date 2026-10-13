@@ -4,6 +4,7 @@
   <input class="input" type="date" name="date" value="{{.Date}}" max="{{.Today}}">
   <button class="btn btn-primary" type="submit">查看对账单</button>
   <a class="btn btn-ghost" href="/user/report/export.csv?date={{.Date}}">⬇ 导出当日成功订单</a>
+  <a class="btn btn-ghost" href="/user/report/statement.csv?month={{printf "%.4d-%.2d" .Year .Month}}">⬇ 导出本月对账单(按日汇总)</a>
 </form>
 <div style="margin-top:-46px;text-align:right">
   <form method="post" action="/user/report/mail" style="display:inline">

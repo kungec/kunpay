@@ -63,6 +63,14 @@
         <label>结算姓名</label>
         <input class="input" type="text" name="settle_name" value="{{.Merchant.SettleName}}" placeholder="收款人真实姓名">
       </div>
+      <div class="form-item">
+        <label>收款成功 IM 推送(选填)</label>
+        <div class="row" style="gap:8px">
+          <input class="input mono" type="url" name="notify_webhook" value="{{.Merchant.NotifyWebhook}}" placeholder="飞书/钉钉/企业微信机器人 Webhook 地址" style="flex:1;min-width:200px">
+          <button class="btn btn-primary btn-sm" type="submit">保存并测试</button>
+        </div>
+        <div class="tip">保存时会向该机器人发送一条测试消息;收款到账后将实时推送到您的群/应用。</div>
+      </div>
       <button class="btn btn-primary" type="submit">保存修改</button>
     </form>
   </div>
@@ -84,6 +92,28 @@
       </div>
       <button class="btn btn-primary" type="submit">修改密码</button>
     </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">账户安全</div>
+  <div class="row between" style="flex-wrap:wrap;gap:12px">
+    <div>
+      <b style="font-size:14px">两步验证(TOTP)</b>
+      <div class="muted" style="font-size:12.5px;margin-top:4px">
+        {{if .Merchant.TotpSecret}}<span class="badge badge-green">已开启</span> 登录时需输入验证器 APP 的 6 位动态码,密码泄露也无法登录。{{else}}<span class="badge badge-gray">未开启</span> 使用 Google Authenticator 等验证器 APP,为账号加一层动态码保护。{{end}}
+      </div>
+    </div>
+    {{if .Merchant.TotpSecret}}
+    <form method="post" action="/user/settings/totp/off" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <input class="input" type="password" name="password" placeholder="登录密码" required style="width:150px">
+      <input class="input" type="text" name="code" placeholder="6 位动态码" inputmode="numeric" maxlength="6" required style="width:120px">
+      <button class="btn btn-danger btn-sm" type="submit" data-confirm="关闭后登录将不再需要动态码,确定关闭两步验证?">关闭两步验证</button>
+    </form>
+    {{else}}
+    <a class="btn btn-primary btn-sm" href="/user/settings/totp/setup">开启两步验证</a>
+    {{end}}
   </div>
 </div>
 {{end}}

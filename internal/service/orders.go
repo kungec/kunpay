@@ -36,7 +36,8 @@ func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 	u := &model.User{}
 	err := row.Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.QQ, &u.Role, &u.Status,
 		&u.Rate, &u.Balance, &u.Pid, &u.Skey, &u.SettleType, &u.SettleAccount, &u.SettleName,
-		&u.InviteCode, &u.InvitedBy, &u.CreatedAt, &u.LastLoginAt, &u.LastLoginIP, &u.Avatar, &u.ApiIPs)
+		&u.InviteCode, &u.InvitedBy, &u.CreatedAt, &u.LastLoginAt, &u.LastLoginIP, &u.Avatar, &u.ApiIPs,
+		&u.TotpSecret, &u.NotifyWebhook)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +45,7 @@ func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 }
 
 const userCols = `id,username,email,password_hash,qq,role,status,rate,balance,pid,skey,
-	settle_type,settle_account,settle_name,invite_code,invited_by,created_at,last_login_at,last_login_ip,avatar,COALESCE(api_ips,'')`
+	settle_type,settle_account,settle_name,invite_code,invited_by,created_at,last_login_at,last_login_ip,avatar,COALESCE(api_ips,''),COALESCE(totp_secret,''),COALESCE(notify_webhook,'')`
 
 func (s *Store) UserByID(id int64) (*model.User, error) {
 	u, err := scanUser(s.DB.QueryRow("SELECT "+userCols+" FROM users WHERE id=?", id))
@@ -441,6 +442,11 @@ func (s *Store) CompleteOrder(o *model.Order, buyer string) error {
 			}
 		}
 	}
+	// 商户自配 IM 机器人推送(异步,不阻塞)
+	if hook := merchant.NotifyWebhook; strings.TrimSpace(hook) != "" {
+		msg := fmt.Sprintf("✅ 收款到账 %s\n订单: %s\n商品: %s", MoneyStr(o.Money), o.TradeNo, o.Name)
+		go SendWebhookAlert(hook, s.DB.MustSetting("site_name"), msg)
+	}
 	// 立即异步通知 + 安排重试
 	_, _ = s.DB.Exec("UPDATE orders SET next_notify_at=? WHERE id=?", now, o.ID)
 	s.TriggerNotify(o.ID)
@@ -485,6 +491,22 @@ func atoiDefault(s string, def int) int {
 		return def
 	}
 	return v
+}
+
+// SetUserNotifyWebhook 设置商户收款成功 IM 推送地址(空=关闭)
+func (s *Store) SetUserNotifyWebhook(userID int64, hook string) error {
+	hook = strings.TrimSpace(hook)
+	if len(hook) > 300 {
+		return errors.New("webhook 地址过长")
+	}
+	_, err := s.DB.Exec("UPDATE users SET notify_webhook=? WHERE id=?", hook, userID)
+	return err
+}
+
+// SetUserTOTP 开启/关闭两步验证
+func (s *Store) SetUserTOTP(userID int64, secret string) error {
+	_, err := s.DB.Exec("UPDATE users SET totp_secret=? WHERE id=?", secret, userID)
+	return err
 }
 
 // trimRate 费率展示: 去掉多余的小数尾零(10 → "10", 7.5 → "7.5")

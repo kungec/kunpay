@@ -351,7 +351,7 @@ func (s *Server) InjectAlert() {
 			}
 		}
 		if hook := s.DB.MustSetting("alert_webhook"); hook != "" {
-			if err := SendWebhookAlert(hook, siteName, "【"+siteName+"】"+msg); err != nil && err != errInvalidWebhook {
+			if err := service.SendWebhookAlert(hook, siteName, "【"+siteName+"】"+msg); err != nil && err != service.ErrInvalidWebhook {
 				log.Printf("[alert] 机器人告警发送失败: %v", err)
 			}
 		}

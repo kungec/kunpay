@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"database/sql"
 	"fmt"
+	"github.com/skip2/go-qrcode"
 	"net"
 	"net/http"
 	"net/url"
@@ -580,6 +581,8 @@ func (s *Server) handleUserReport(w http.ResponseWriter, r *http.Request) {
 	d["Page"] = "user_report"
 	d["Title"] = "对账单"
 	d["Date"] = timeFormat(dayStart, "2006-01-02")
+	lt := time.Unix(dayStart, 0)
+	d["Year"], d["Month"] = lt.Year(), int(lt.Month())
 	d["Stats"] = map[string]any{
 		"TotalOrders": totalOrders, "OkOrders": okOrders,
 		"OkMoney": okMoney, "FeeSum": feeSum, "Income": okMoney - feeSum,
@@ -1023,4 +1026,176 @@ func (s *Server) handleUserInvite(w http.ResponseWriter, r *http.Request) {
 	d["Rate"] = s.DB.MustSetting("invite_rate")
 	d["Open"] = s.DB.MustSetting("invite_open") == "1"
 	s.render(w, "dash_user_invite", http.StatusOK, d)
+}
+
+// handleUserTOTPQR 输出 otpauth:// 绑定二维码(login 后方可取)
+func (s *Server) handleUserTOTPQR(w http.ResponseWriter, r *http.Request) {
+	secret := r.URL.Query().Get("s")
+	if secret == "" || len(secret) > 64 || !reTOTPSecret.MatchString(secret) {
+		http.Error(w, "bad secret", 400)
+		return
+	}
+	u := s.currentUser(r)
+	uri := service.OTPAuthURL(secret, u.Username, s.DB.MustSetting("site_name"))
+	data, err := qrcode.Encode(uri, qrcode.Medium, 260)
+	if err != nil {
+		http.Error(w, "qrcode", 500)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write(data)
+}
+
+// handleUserTOTPSetup 两步验证绑定页
+func (s *Server) handleUserTOTPSetup(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	if u.TotpSecret != "" {
+		http.Redirect(w, r, "/user/settings?err="+urlEscape("两步验证已开启,如需更换请先关闭"), http.StatusFound)
+		return
+	}
+	secret := service.GenerateTOTPSecret()
+	d := s.pageData(r)
+	d["Page"] = "user_settings"
+	d["Title"] = "开启两步验证"
+	d["Secret"] = secret
+	d["QRSrc"] = "/user/totp/qr?s=" + secret
+	d["OTPURL"] = service.OTPAuthURL(secret, u.Username, s.DB.MustSetting("site_name"))
+	s.render(w, "dash_totp_setup", http.StatusOK, d)
+}
+
+// handleUserTOTPEnable 确认开启(校验动态码后写库)
+func (s *Server) handleUserTOTPEnable(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	secret := strings.ToUpper(strings.TrimSpace(r.FormValue("secret")))
+	code := strings.TrimSpace(r.FormValue("code"))
+	if !reTOTPSecret.MatchString(secret) {
+		http.Redirect(w, r, "/user/settings?err="+urlEscape("密钥格式不正确"), http.StatusFound)
+		return
+	}
+	if !service.VerifyTOTP(secret, code) {
+		http.Redirect(w, r, "/user/settings/totp/setup?err="+urlEscape("动态码不正确,请重试(注意手机时间需准确)"), http.StatusFound)
+		return
+	}
+	_ = s.Store.SetUserTOTP(u.ID, secret)
+	http.Redirect(w, r, "/user/settings?msg="+urlEscape("两步验证已开启,下次登录需输入动态码"), http.StatusFound)
+}
+
+// handleUserTOTPDisable 关闭两步验证(需密码 + 动态码)
+func (s *Server) handleUserTOTPDisable(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	pwd := r.FormValue("password")
+	code := strings.TrimSpace(r.FormValue("code"))
+	if u.TotpSecret == "" {
+		http.Redirect(w, r, "/user/settings", http.StatusFound)
+		return
+	}
+	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(pwd)) != nil {
+		http.Redirect(w, r, "/user/settings?err="+urlEscape("密码错误,两步验证未关闭"), http.StatusFound)
+		return
+	}
+	if !service.VerifyTOTP(u.TotpSecret, code) {
+		http.Redirect(w, r, "/user/settings?err="+urlEscape("动态码不正确,两步验证未关闭"), http.StatusFound)
+		return
+	}
+	_ = s.Store.SetUserTOTP(u.ID, "")
+	http.Redirect(w, r, "/user/settings?msg="+urlEscape("两步验证已关闭"), http.StatusFound)
+}
+
+// handleUserNotifyWebhook 保存收款成功 IM 推送地址
+func (s *Server) handleUserNotifyWebhook(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	hook := strings.TrimSpace(r.FormValue("notify_webhook"))
+	if hook != "" {
+		if err := service.SendWebhookAlert(hook, s.DB.MustSetting("site_name"), "✅ 坤支付推送测试:配置成功,收款到账后将推送到这里。"); err != nil {
+			http.Redirect(w, r, "/user/settings?err="+urlEscape("测试推送失败,请检查地址(支持飞书/钉钉/企业微信机器人)"), http.StatusFound)
+			return
+		}
+	}
+	if err := s.Store.SetUserNotifyWebhook(u.ID, hook); err != nil {
+		http.Redirect(w, r, "/user/settings?err="+urlEscape(err.Error()), http.StatusFound)
+		return
+	}
+	if hook == "" {
+		http.Redirect(w, r, "/user/settings?msg="+urlEscape("IM 推送已关闭"), http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, "/user/settings?msg="+urlEscape("保存成功,测试消息已发送到您的机器人"), http.StatusFound)
+}
+
+// handleUserOrderNotify 商户手动重发异步通知(仅本人已支付订单)
+func (s *Server) handleUserOrderNotify(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	o := s.Store.OrderByID(atoint64(r.FormValue("id")))
+	if o == nil || o.Pid != u.Pid {
+		http.Redirect(w, r, "/user/orders?err="+urlEscape("订单不存在"), http.StatusFound)
+		return
+	}
+	if o.Status != 1 && o.Status != 3 {
+		http.Redirect(w, r, "/user/orders/"+strconv.FormatInt(o.ID, 10)+"?err="+urlEscape("仅已支付订单可重发通知"), http.StatusFound)
+		return
+	}
+	s.Store.TriggerNotify(o.ID)
+	http.Redirect(w, r, "/user/orders/"+strconv.FormatInt(o.ID, 10)+"?msg="+urlEscape("已发起重新通知,可在下方投递记录查看结果"), http.StatusFound)
+}
+
+// handleUserStatementExport 月度对账单导出(按日汇总 CSV)
+func (s *Server) handleUserStatementExport(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	month := strings.TrimSpace(r.FormValue("month"))
+	t, err := time.Parse("2006-01", month)
+	if err != nil {
+		now := time.Unix(model.Now(), 0)
+		t = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	}
+	start := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location()).Unix()
+	next := t.AddDate(0, 1, 0)
+	end := time.Date(next.Year(), next.Month(), 1, 0, 0, 0, 0, next.Location()).Unix()
+
+	type dayRow struct {
+		day                           string
+		total, ok, money, fee, income int64
+	}
+	var rows []dayRow
+	qRows, qerr := s.DB.Query(`SELECT (addtime/86400)*86400 AS d, COUNT(*),
+			SUM(CASE WHEN status IN(1,3) THEN 1 ELSE 0 END),
+			COALESCE(SUM(CASE WHEN status IN(1,3) THEN money ELSE 0 END),0),
+			COALESCE(SUM(CASE WHEN status IN(1,3) THEN fee ELSE 0 END),0),
+			COALESCE(SUM(CASE WHEN status IN(1,3) THEN money-fee ELSE 0 END),0)
+		FROM orders WHERE pid=? AND addtime>=? AND addtime<? GROUP BY d ORDER BY d ASC`,
+		u.Pid, start, end)
+	if qerr == nil {
+		for qRows.Next() {
+			var ts int64
+			var dr dayRow
+			if qRows.Scan(&ts, &dr.total, &dr.ok, &dr.money, &dr.fee, &dr.income) == nil {
+				dr.day = time.Unix(ts, 0).Format("2006-01-02")
+				rows = append(rows, dr)
+			}
+		}
+		qRows.Close()
+	}
+
+	var sumMoney, sumFee, sumIncome, sumOk, sumTotal int64
+	for _, dr := range rows {
+		sumMoney += dr.money
+		sumFee += dr.fee
+		sumIncome += dr.income
+		sumOk += dr.ok
+		sumTotal += dr.total
+	}
+
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", "attachment; filename=statement_"+month+".csv")
+	// BOM 便于 Excel 识别中文
+	_, _ = w.Write([]byte{0xEF, 0xBB, 0xBF})
+	bw := bufio.NewWriter(w)
+	fmt.Fprintln(bw, "日期,订单数,成功笔数,成交额(元),手续费(元),净入账(元)")
+	for _, dr := range rows {
+		fmt.Fprintf(bw, "%s,%d,%d,%s,%s,%s\n", dr.day, dr.total, dr.ok,
+			service.MoneyStr(dr.money), service.MoneyStr(dr.fee), service.MoneyStr(dr.income))
+	}
+	fmt.Fprintf(bw, "合计,%d,%d,%s,%s,%s\n", sumTotal, sumOk,
+		service.MoneyStr(sumMoney), service.MoneyStr(sumFee), service.MoneyStr(sumIncome))
+	_ = bw.Flush()
 }

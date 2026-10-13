@@ -1,6 +1,7 @@
 package web
 
 import (
+	"kunzhifu/internal/service"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -17,8 +18,9 @@ import (
 const sessionCookie = "kunpay_sid"
 
 var (
-	reUsername = regexp.MustCompile(`^[a-zA-Z0-9_]{3,20}$`)
-	reEmail    = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
+	reUsername   = regexp.MustCompile(`^[a-zA-Z0-9_]{3,20}$`)
+	reEmail      = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
+	reTOTPSecret = regexp.MustCompile(`^[A-Z2-7]{16,64}$`)
 )
 
 func (s *Server) setSession(w http.ResponseWriter, r *http.Request, userID int64) {
@@ -353,6 +355,16 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 	}
 	if u.Status != 1 {
 		d["Error"] = "账号已被封禁,请联系管理员"
+		s.render(w, "pub_login", http.StatusOK, d)
+		return
+	}
+	// 两步验证: 开启后必须携带有效动态码
+	if u.TotpSecret != "" && !service.VerifyTOTP(u.TotpSecret, r.FormValue("totp_code")) {
+		recordLoginFail(clientIP(r), username)
+		recordLoginFail("u", username)
+		d["Error"] = "两步验证码不正确"
+		d["NeedTOTP"] = true
+		s.newCaptchaData(d)
 		s.render(w, "pub_login", http.StatusOK, d)
 		return
 	}

@@ -1,4 +1,4 @@
-package web
+package service
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-var errInvalidWebhook = errors.New("无效的 webhook 地址,仅支持 http(s)")
+var ErrInvalidWebhook = errors.New("无效的 webhook 地址,仅支持 http(s)")
 
 // SendWebhookAlert 发送 IM 机器人告警,按 URL 自动识别机器人类型:
 // 飞书 / 钉钉 / 企业微信 / 通用格式({"text": msg})。
@@ -19,7 +19,7 @@ func SendWebhookAlert(rawURL, siteName, msg string) error {
 	rawURL = strings.TrimSpace(rawURL)
 	u, err := url.Parse(rawURL)
 	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
-		return errInvalidWebhook
+		return ErrInvalidWebhook
 	}
 	host := strings.ToLower(u.Host)
 	payload := func() any {

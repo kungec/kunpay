@@ -1,0 +1,31 @@
+{{define "content"}}
+{{template "flash" .}}
+<div class="auth-card" style="width:520px;margin:0 auto">
+  <h2 style="text-align:center;font-size:20px;margin-bottom:6px">开启两步验证</h2>
+  <div class="sub" style="text-align:center;color:var(--text-3);font-size:13px;margin-bottom:20px">使用 Google Authenticator、阿里面板、1Password 等验证器 APP 扫码</div>
+  <div style="display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap;justify-content:center">
+    <div style="text-align:center">
+      <img src="{{.QRSrc}}" alt="绑定二维码" width="170" height="170" style="border:1px solid var(--border);border-radius:12px;padding:8px;background:#fff">
+      <div class="muted" style="font-size:12px;margin-top:8px">扫码添加到验证器</div>
+    </div>
+    <div style="flex:1;min-width:220px">
+      <div class="form-item">
+        <label>无法扫码?手动输入密钥</label>
+        <input class="input mono" readonly value="{{.Secret}}" onclick="copyText(this.value,'密钥已复制')">
+      </div>
+      <div class="muted" style="font-size:12.5px;line-height:1.9;margin-bottom:14px">
+        添加后输入 APP 显示的 6 位动态码完成绑定。请务必备份上方密钥,更换手机时需要它重新绑定。
+      </div>
+      <form method="post" action="/user/settings/totp">
+        <input type="hidden" name="_csrf" value="{{.CSRF}}">
+        <input type="hidden" name="secret" value="{{.Secret}}">
+        <div class="form-item">
+          <input class="input" type="text" name="code" placeholder="输入 6 位动态码" inputmode="numeric" maxlength="6" required style="text-align:center;letter-spacing:6px;font-size:18px">
+        </div>
+        <button class="btn btn-primary" type="submit" style="width:100%">确认开启</button>
+      </form>
+      <div class="auth-foot"><a href="/user/settings">返回设置</a></div>
+    </div>
+  </div>
+</div>
+{{end}}

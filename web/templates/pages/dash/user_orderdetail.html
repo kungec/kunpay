@@ -65,6 +65,14 @@
   {{else}}
   <div class="empty">{{if or (eq .Order.Status 1) (eq .Order.Status 3)}}未发起过通知(未填写 notify_url){{else}}订单未支付,暂无通知{{end}}</div>
   {{end}}
+  {{if or (eq .Order.Status 1) (eq .Order.Status 3)}}
+  <form method="post" action="/user/orders/notify" class="mt" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <input type="hidden" name="_csrf" value="{{.CSRF}}">
+    <input type="hidden" name="id" value="{{.Order.ID}}">
+    <button class="btn btn-primary btn-sm" type="submit">↻ 立即重发通知</button>
+    <span class="muted" style="font-size:12.5px">商户侧未收到回调时可手动补发,无需联系客服</span>
+  </form>
+  {{end}}
   <div class="alert info mt">商户响应须为原样 <code>success</code>;未送达时平台将按 15s→30s→1m→3m→10m→30m→1h→2h 自动重试 8 次。</div>
 </div>
 {{end}}
