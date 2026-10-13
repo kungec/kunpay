@@ -797,13 +797,13 @@ func (s *Server) handleAdminSettingsSave(w http.ResponseWriter, r *http.Request)
 	keys := []string{"site_name", "site_title", "announcement", "kefu", "fee_rate", "order_timeout",
 		"money_offset", "register_open", "min_settle", "pay_notice", "invite_open", "footer_text", "poll_interval",
 		"site_url", "smtp_host", "smtp_port", "smtp_user", "smtp_pass", "smtp_tls", "smtp_from", "admin_ip_whitelist",
-		"alert_email", "device_alert", "merchant_notice"}
+		"alert_email", "device_alert", "merchant_notice", "alert_webhook", "invite_rate", "auto_settle"}
 	for _, k := range keys {
 		v := strings.TrimSpace(r.FormValue(k))
 		if r.Form[k] == nil {
 			continue
 		}
-		if k == "money_offset" || k == "register_open" || k == "invite_open" {
+		if k == "money_offset" || k == "register_open" || k == "invite_open" || k == "auto_settle" {
 			if v == "on" || v == "1" {
 				v = "1"
 			} else {

@@ -1,0 +1,51 @@
+{{define "content"}}
+{{template "flash" .}}
+<div class="grid c3">
+  <div class="card">
+    <div class="card-title">我的邀请链接</div>
+    <div class="form-item">
+      <label>分享以下链接,新商户注册时自动绑定为您的发展商户</label>
+      <div class="row" style="gap:8px">
+        <input class="input mono" id="invite-url" type="text" readonly value="{{.InviteURL}}" style="flex:1">
+        <button class="btn btn-primary btn-sm" type="button" onclick="copyText(document.getElementById('invite-url').value,this)">复制</button>
+      </div>
+    </div>
+    <div class="form-item">
+      <label>邀请码</label>
+      <input class="input mono" type="text" readonly value="{{.User.InviteCode}}">
+    </div>
+    <p class="muted" style="font-size:12.5px;line-height:1.9">
+      当前返佣比例:<b>{{.Rate}}%</b> —— 被邀请商户每笔订单的平台手续费,按此比例实时返到您的余额。
+      {{if not .Open}}<br><span style="color:#e07b00">平台暂未开启邀请返佣,返佣暂停累计。</span>{{end}}
+    </p>
+  </div>
+  <div class="card">
+    <div class="card-title">返佣统计</div>
+    <div class="stat-cards s3" style="grid-template-columns:repeat(3,1fr)">
+      <div class="scard"><div><div class="l">已邀请商户</div><div class="v">{{.InvitedN}} <small>人</small></div></div></div>
+      <div class="scard"><div><div class="l">累计返佣</div><div class="v">¥{{yuan .TotalRebate}}</div></div></div>
+      <div class="scard"><div><div class="l">余额</div><div class="v">¥{{yuan .User.Balance}}</div></div></div>
+    </div>
+    <div class="muted" style="font-size:12.5px;margin-top:6px">返佣直接进入余额,达到最低结算金额后可在「结算提现」申请提现。</div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-title">返佣明细</div>
+  {{if .Logs}}
+  <div class="table-wrap">
+    <table class="tbl">
+      <tr><th>时间</th><th>说明</th><th class="money">金额</th></tr>
+      {{range .Logs}}
+      <tr>
+        <td class="mono">{{fdate .CreatedAt}}</td>
+        <td>{{.Memo}}</td>
+        <td class="money" style="color:var(--ok,#0a8f4c)">+¥{{yuan .Amount}}</td>
+      </tr>
+      {{end}}
+    </table>
+  </div>
+  {{else}}
+  <div class="empty">还没有返佣记录,快去分享您的邀请链接吧</div>
+  {{end}}
+</div>
+{{end}}

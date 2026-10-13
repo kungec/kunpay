@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"database/sql"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -83,6 +84,7 @@ func (s *Server) handleUserMerchant(w http.ResponseWriter, r *http.Request) {
 	d["BaseURL"] = s.absoluteURL(r)
 	d["Merchant"] = u
 	d["Flash"] = r.URL.Query().Get("msg")
+	d["FlashErr"] = r.URL.Query().Get("err")
 	s.render(w, "dash_user_merchant", http.StatusOK, d)
 }
 
@@ -90,6 +92,44 @@ func (s *Server) handleUserMerchantRegen(w http.ResponseWriter, r *http.Request)
 	u := s.currentUser(r)
 	_, _ = s.DB.Exec("UPDATE users SET skey=? WHERE id=?", db.RandKey(32), u.ID)
 	http.Redirect(w, r, "/user/merchant?msg=密钥已重置,请及时更新到您的业务系统", http.StatusFound)
+}
+
+// handleUserApiIPs 保存商户 API IP 白名单
+func (s *Server) handleUserApiIPs(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	raw := strings.TrimSpace(r.FormValue("api_ips"))
+	if len(raw) > 500 {
+		http.Redirect(w, r, "/user/merchant?err="+urlEscape("白名单过长(最多500字符)"), http.StatusFound)
+		return
+	}
+	// 逐项校验格式,防手误把自己锁死
+	if raw != "" {
+		for _, entry := range strings.Split(raw, ",") {
+			entry = strings.TrimSpace(entry)
+			if entry == "" {
+				continue
+			}
+			if strings.Contains(entry, "/") {
+				if _, _, err := net.ParseCIDR(entry); err != nil {
+					http.Redirect(w, r, "/user/merchant?err="+urlEscape("CIDR 格式不正确: "+entry), http.StatusFound)
+					return
+				}
+				continue
+			}
+			if strings.HasSuffix(entry, "*") {
+				continue
+			}
+			if net.ParseIP(entry) == nil {
+				http.Redirect(w, r, "/user/merchant?err="+urlEscape("IP 格式不正确: "+entry), http.StatusFound)
+				return
+			}
+		}
+	}
+	if _, err := s.DB.Exec("UPDATE users SET api_ips=? WHERE id=?", raw, u.ID); err != nil {
+		http.Redirect(w, r, "/user/merchant?err="+urlEscape("保存失败"), http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, "/user/merchant?msg="+urlEscape("API IP 白名单已保存"), http.StatusFound)
 }
 
 // ---------- 我的通道(商户自有收款码,同类型可多个,支持轮询) ----------
@@ -952,4 +992,35 @@ func (s *Server) handleUserOrderRefund(w http.ResponseWriter, r *http.Request) {
 			"订单退款 "+o.TradeNo, model.Now())
 	}
 	http.Redirect(w, r, "/user/orders?msg="+urlEscape("订单已退款,余额已扣减"), http.StatusFound)
+}
+
+// handleUserInvite 邀请返佣页: 邀请链接 + 统计 + 返佣明细
+func (s *Server) handleUserInvite(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	var invitedN, totalRebate int64
+	_ = s.DB.QueryRow("SELECT COUNT(*) FROM users WHERE invited_by=?", u.ID).Scan(&invitedN)
+	_ = s.DB.QueryRow("SELECT COALESCE(SUM(amount),0) FROM balance_logs WHERE user_id=? AND type='invite'", u.ID).Scan(&totalRebate)
+	var logs []map[string]any
+	rows, err := s.DB.Query(`SELECT amount,memo,created_at FROM balance_logs
+		WHERE user_id=? AND type='invite' ORDER BY id DESC LIMIT 50`, u.ID)
+	if err == nil {
+		for rows.Next() {
+			var amount, at int64
+			var memo string
+			if rows.Scan(&amount, &memo, &at) == nil {
+				logs = append(logs, map[string]any{"Amount": amount, "Memo": memo, "CreatedAt": at})
+			}
+		}
+		rows.Close()
+	}
+	d := s.pageData(r)
+	d["Page"] = "user_invite"
+	d["Title"] = "邀请返佣"
+	d["InviteURL"] = s.baseURL(r) + "/register?invite=" + u.InviteCode
+	d["InvitedN"] = invitedN
+	d["TotalRebate"] = totalRebate
+	d["Logs"] = logs
+	d["Rate"] = s.DB.MustSetting("invite_rate")
+	d["Open"] = s.DB.MustSetting("invite_open") == "1"
+	s.render(w, "dash_user_invite", http.StatusOK, d)
 }

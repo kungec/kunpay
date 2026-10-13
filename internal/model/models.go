@@ -23,6 +23,7 @@ type User struct {
 	LastLoginAt   int64
 	LastLoginIP   string
 	Avatar        string
+	ApiIPs        string // API IP 白名单(逗号分隔/CIDR,空=不限制)
 }
 
 type Order struct {

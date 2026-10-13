@@ -337,19 +337,23 @@ func (s *Server) baseURL(r *http.Request) string {
 	return s.absoluteURL(r)
 }
 
-// InjectAlert 将设备离线告警接入邮件通道(按设置开关与告警邮箱)
+// InjectAlert 将告警接入邮件 + IM 机器人双通道(按设置开关)
 func (s *Server) InjectAlert() {
 	service.AlertFn = func(msg string) {
 		if s.DB.MustSetting("device_alert") != "1" {
 			return
 		}
-		to := s.DB.MustSetting("alert_email")
-		if to == "" {
-			return
+		siteName := s.DB.MustSetting("site_name")
+		if to := s.DB.MustSetting("alert_email"); to != "" {
+			body := mailHTML("系统告警通知", []string{msg})
+			if err := s.SendMail(to, "【"+siteName+"】系统告警", body); err != nil {
+				log.Printf("[alert] 告警邮件发送失败: %v", err)
+			}
 		}
-		body := mailHTML("监控设备离线告警", []string{msg, "请尽快检查收款手机网络与监控APP运行状态。"})
-		if err := s.SendMail(to, "【"+s.DB.MustSetting("site_name")+"】设备离线告警", body); err != nil {
-			log.Printf("[alert] 告警邮件发送失败: %v", err)
+		if hook := s.DB.MustSetting("alert_webhook"); hook != "" {
+			if err := SendWebhookAlert(hook, siteName, "【"+siteName+"】"+msg); err != nil && err != errInvalidWebhook {
+				log.Printf("[alert] 机器人告警发送失败: %v", err)
+			}
 		}
 	}
 }

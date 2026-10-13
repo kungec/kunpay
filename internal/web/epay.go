@@ -82,6 +82,11 @@ func paramsOfForm(r *http.Request) map[string]string {
 
 // validateEpayRequest 校验公共参数与签名,返回 (merchant, req, errInfo)
 func (s *Server) validateEpayRequest(p map[string]string) (*model.User, *service.OrderReq, string) {
+	return s.validateEpayRequestIP(p, "")
+}
+
+// validateEpayRequestIP 同上,并校验商户 API IP 白名单(配置了白名单时,来源 IP 必须命中)
+func (s *Server) validateEpayRequestIP(p map[string]string, ip string) (*model.User, *service.OrderReq, string) {
 	pidStr := p["pid"]
 	if pidStr == "" {
 		return nil, nil, "缺少商户ID(pid)"
@@ -93,6 +98,9 @@ func (s *Server) validateEpayRequest(p map[string]string) (*model.User, *service
 	merchant, err := s.Store.UserByPid(pid)
 	if err != nil || merchant == nil {
 		return nil, nil, "商户ID不存在"
+	}
+	if ip != "" && !apiIPAllowed(merchant.ApiIPs, ip) {
+		return nil, nil, "来源 IP 不在商户 API 白名单内,请在商户中心-商户信息中配置"
 	}
 	if !service.VerifySign(p, merchant.Skey) {
 		return nil, nil, "签名校验失败,请检查商户密钥与签名算法"
@@ -145,7 +153,7 @@ func renderMsg(s *Server, w http.ResponseWriter, r *http.Request, title, msg str
 // handleEpaySubmit GET/POST /submit.php —— 页面跳转支付,校验后 302 到收银台
 func (s *Server) handleEpaySubmit(w http.ResponseWriter, r *http.Request) {
 	p := paramsOfForm(r)
-	merchant, req, errMsg := s.validateEpayRequest(p)
+	merchant, req, errMsg := s.validateEpayRequestIP(p, clientIP(r))
 	if errMsg != "" {
 		renderMsg(s, w, r, "支付失败", errMsg, http.StatusOK)
 		return
@@ -162,7 +170,7 @@ func (s *Server) handleEpaySubmit(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleEpayMapi(w http.ResponseWriter, r *http.Request) {
 	p := paramsOfForm(r)
 	out := map[string]any{}
-	merchant, req, errMsg := s.validateEpayRequest(p)
+	merchant, req, errMsg := s.validateEpayRequestIP(p, clientIP(r))
 	if errMsg != "" {
 		out["code"] = -1
 		out["msg"] = errMsg
@@ -202,6 +210,12 @@ func (s *Server) handleEpayApi(w http.ResponseWriter, r *http.Request) {
 	if err != nil || merchant == nil || key == "" || key != merchant.Skey {
 		out["code"] = -1
 		out["msg"] = "商户ID或密钥错误"
+		writeJSON(w, out)
+		return
+	}
+	if !apiIPAllowed(merchant.ApiIPs, clientIP(r)) {
+		out["code"] = -1
+		out["msg"] = "来源 IP 不在商户 API 白名单内"
 		writeJSON(w, out)
 		return
 	}

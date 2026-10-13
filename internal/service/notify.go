@@ -147,6 +147,7 @@ func (s *Store) RunBackground() {
 			s.checkDeviceAlerts()
 			s.checkLowBalance()
 			s.checkChannelHealth()
+			s.autoSettle()
 			if time.Since(lastMaint) >= 6*time.Hour {
 				lastMaint = time.Now()
 				s.cleanOldLogs(90)
@@ -231,6 +232,65 @@ func (s *Store) checkDeviceAlerts() {
 				}
 			}
 		}
+	}
+}
+
+// autoSettle 自动结算: 开启后,余额达到最低结算金额、已填收款方式且无待审核结算单的商户,
+// 每 15 分钟自动提交一笔结算申请(原子扣款,防止并发重复)。
+func (s *Store) autoSettle() {
+	if s.DB.MustSetting("auto_settle") != "1" {
+		return
+	}
+	minSettle := atofDefault(s.DB.MustSetting("min_settle"), 1000)
+	if minSettle <= 0 {
+		return
+	}
+	type cand struct {
+		id      int64
+		balance int64
+		typ     int
+		account string
+		name    string
+	}
+	var cands []cand
+	rows, err := s.DB.Query(`SELECT u.id,u.balance,u.settle_type,COALESCE(u.settle_account,''),COALESCE(u.settle_name,'')
+		FROM users u WHERE u.role='user' AND u.status=1 AND u.balance>=?
+		AND u.settle_account<>'' AND u.id NOT IN
+		(SELECT user_id FROM settle_logs WHERE status=0) LIMIT 10`, int64(minSettle))
+	if err != nil {
+		return
+	}
+	for rows.Next() {
+		var c cand
+		if rows.Scan(&c.id, &c.balance, &c.typ, &c.account, &c.name) == nil {
+			cands = append(cands, c)
+		}
+	}
+	rows.Close()
+	if len(cands) == 0 {
+		return
+	}
+	now := model.Now()
+	for _, c := range cands {
+		amount := c.balance // 全额结算
+		res, err := s.DB.Exec("UPDATE users SET balance=balance-? WHERE id=? AND balance>=?", amount, c.id, amount)
+		if err != nil {
+			continue
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			continue
+		}
+		if c.typ <= 0 {
+			c.typ = 1
+		}
+		_, _ = s.DB.Exec(`INSERT INTO settle_logs(user_id,amount,settle_type,account,name,status,note,created_at)
+			VALUES(?,?,?,?,?,0,?,?)`, c.id, amount, c.typ, c.account, c.name, "自动结算", now)
+		var before int64
+		_ = s.DB.QueryRow("SELECT balance FROM users WHERE id=?", c.id).Scan(&before)
+		_, _ = s.DB.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
+			VALUES(?,?,?,?,?,?,?)`, c.id, "settle", -amount, before+amount, before,
+			"自动结算申请 "+MoneyStr(amount), now)
+		log.Printf("[settle] 自动结算: 用户#%d %s", c.id, MoneyStr(amount))
 	}
 }
 

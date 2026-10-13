@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -35,7 +36,7 @@ func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 	u := &model.User{}
 	err := row.Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.QQ, &u.Role, &u.Status,
 		&u.Rate, &u.Balance, &u.Pid, &u.Skey, &u.SettleType, &u.SettleAccount, &u.SettleName,
-		&u.InviteCode, &u.InvitedBy, &u.CreatedAt, &u.LastLoginAt, &u.LastLoginIP, &u.Avatar)
+		&u.InviteCode, &u.InvitedBy, &u.CreatedAt, &u.LastLoginAt, &u.LastLoginIP, &u.Avatar, &u.ApiIPs)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +44,7 @@ func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 }
 
 const userCols = `id,username,email,password_hash,qq,role,status,rate,balance,pid,skey,
-	settle_type,settle_account,settle_name,invite_code,invited_by,created_at,last_login_at,last_login_ip,avatar`
+	settle_type,settle_account,settle_name,invite_code,invited_by,created_at,last_login_at,last_login_ip,avatar,COALESCE(api_ips,'')`
 
 func (s *Store) UserByID(id int64) (*model.User, error) {
 	u, err := scanUser(s.DB.QueryRow("SELECT "+userCols+" FROM users WHERE id=?", id))
@@ -424,6 +425,21 @@ func (s *Store) CompleteOrder(o *model.Order, buyer string) error {
 			VALUES(?,?,?,?,?,?,?)`,
 			merchant.ID, "order", income, before-income, before,
 			fmt.Sprintf("订单入账 %s (手续费%s)", MoneyStr(income), MoneyStr(fee)), now)
+
+		// 邀请返佣: 平台从手续费中按比例返给邀请人
+		if fee > 0 && merchant.InvitedBy > 0 && s.DB.MustSetting("invite_open") == "1" {
+			irate := atofDefault(s.DB.MustSetting("invite_rate"), 0)
+			if rebate := int64(float64(fee)*irate/100 + 0.5); rebate > 0 {
+				if _, err := s.DB.Exec("UPDATE users SET balance=balance+? WHERE id=?", rebate, merchant.InvitedBy); err == nil {
+					var invBefore int64
+					_ = s.DB.QueryRow("SELECT balance FROM users WHERE id=?", merchant.InvitedBy).Scan(&invBefore)
+					_, _ = s.DB.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
+						VALUES(?,?,?,?,?,?,?)`,
+						merchant.InvitedBy, "invite", rebate, invBefore-rebate, invBefore,
+						fmt.Sprintf("邀请返佣: 商户 %s 订单手续费 %s 的 %s%%", merchant.Username, MoneyStr(fee), trimRate(irate)), now)
+				}
+			}
+		}
 	}
 	// 立即异步通知 + 安排重试
 	_, _ = s.DB.Exec("UPDATE orders SET next_notify_at=? WHERE id=?", now, o.ID)
@@ -469,6 +485,12 @@ func atoiDefault(s string, def int) int {
 		return def
 	}
 	return v
+}
+
+// trimRate 费率展示: 去掉多余的小数尾零(10 → "10", 7.5 → "7.5")
+func trimRate(r float64) string {
+	s := strconv.FormatFloat(r, 'f', -1, 64)
+	return s
 }
 
 func atofDefault(s string, def float64) float64 {

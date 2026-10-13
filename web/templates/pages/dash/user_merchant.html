@@ -13,6 +13,15 @@
       <span class="k">订单查询</span><span class="v mono copyable" onclick="copyText('{{.BaseURL}}/api.php','已复制')">{{.BaseURL}}/api.php 📋</span>
     </div>
     <div class="alert info mt">密钥用于接口签名,请妥善保管。若怀疑泄露,请立即重置并更新到您的业务系统。</div>
+    <form class="form-item mt" method="post" action="/user/merchant/apiips">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <label>API IP 白名单(逗号分隔,支持 CIDR 如 203.0.113.0/24 与通配如 203.0.113.*;留空不限制)</label>
+      <div class="row" style="gap:8px">
+        <input class="input mono" type="text" name="api_ips" value="{{.Merchant.ApiIPs}}" placeholder="例如: 47.98.0.12,116.62.1.0/24" style="flex:1">
+        <button class="btn btn-primary btn-sm" type="submit">保存白名单</button>
+      </div>
+      <div class="muted" style="font-size:12px;margin-top:4px">配置后,白名单以外的服务器调用 submit.php / mapi.php / api.php 将被拒绝,即使密钥泄露也无法下单。</div>
+    </form>
     <form method="post" action="/user/merchant/regen" data-confirm="重置后旧密钥立即失效,确定要重置商户密钥吗?">
       <input type="hidden" name="_csrf" value="{{.CSRF}}">
       <button class="btn btn-danger btn-sm" type="submit">重置商户密钥</button>

@@ -3,6 +3,7 @@ package web
 import (
 	"crypto/subtle"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -156,4 +157,39 @@ func payRateLimitWrap(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// apiIPAllowed 判断来源 IP 是否命中商户 API 白名单。
+// 支持精确 IP、CIDR(如 203.0.113.0/24)、通配前缀(如 203.0.113.*);白名单为空表示不限制。
+func apiIPAllowed(list, ip string) bool {
+	list = strings.TrimSpace(list)
+	if list == "" {
+		return true
+	}
+	pip := net.ParseIP(strings.TrimSpace(ip))
+	if pip == nil {
+		return false
+	}
+	for _, entry := range strings.Split(list, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if strings.Contains(entry, "/") {
+			if _, ipnet, err := net.ParseCIDR(entry); err == nil && ipnet.Contains(pip) {
+				return true
+			}
+			continue
+		}
+		if strings.HasSuffix(entry, "*") {
+			if strings.HasPrefix(ip+".", strings.TrimSuffix(entry, "*")) {
+				return true
+			}
+			continue
+		}
+		if e := net.ParseIP(entry); e != nil && e.Equal(pip) {
+			return true
+		}
+	}
+	return false
 }
