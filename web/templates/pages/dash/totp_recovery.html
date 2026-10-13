@@ -1,0 +1,15 @@
+{{define "content"}}
+<div class="auth-card" style="width:520px;margin:0 auto">
+  <h2 style="text-align:center;font-size:20px;margin-bottom:6px">两步验证已开启 🎉</h2>
+  <div class="sub" style="text-align:center;color:var(--text-3);font-size:13px;margin-bottom:18px">
+    请立即保存以下 8 个一次性恢复代码 —— 手机丢失/验证器不可用时,可在登录页用它替代动态码登录,每个仅能使用一次
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">
+    {{range .Codes}}
+    <div class="mono" style="background:#f5f7fb;border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center;font-size:16px;letter-spacing:1px">{{.}}</div>
+    {{end}}
+  </div>
+  <div class="alert err" style="margin-bottom:16px">⚠️ 恢复代码仅此一次展示,关闭页面后无法再次查看。请截图或抄写到安全的地方。</div>
+  <a class="btn btn-primary" href="/user/settings" style="width:100%;text-align:center">我已保存,返回设置</a>
+</div>
+{{end}}

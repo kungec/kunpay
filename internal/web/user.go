@@ -486,6 +486,7 @@ func (s *Server) handleUserSettings(w http.ResponseWriter, r *http.Request) {
 	d["Merchant"] = u
 	d["Flash"] = r.URL.Query().Get("msg")
 	d["FlashErr"] = r.URL.Query().Get("err")
+	d["RecoveryN"] = s.Store.RecoveryCodesRemaining(u.ID)
 	s.render(w, "dash_user_settings", http.StatusOK, d)
 }
 
@@ -1128,7 +1129,30 @@ func (s *Server) handleUserTOTPEnable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = s.Store.SetUserTOTP(u.ID, secret)
-	http.Redirect(w, r, "/user/settings?msg="+urlEscape("两步验证已开启,下次登录需输入动态码"), http.StatusFound)
+	// 生成 8 个一次性恢复代码(仅此一次明文展示)
+	codes := service.GenerateRecoveryCodes()
+	_ = s.Store.SetUserRecoveryCodes(u.ID, service.HashRecoveryCodes(codes))
+	d := s.pageData(r)
+	d["Page"] = "user_settings"
+	d["Title"] = "恢复代码"
+	d["Codes"] = codes
+	s.render(w, "dash_totp_recovery", http.StatusOK, d)
+}
+
+// handleUserTOTPRecoveryRegen 重新生成恢复代码
+func (s *Server) handleUserTOTPRecoveryRegen(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	if u.TotpSecret == "" {
+		http.Redirect(w, r, "/user/settings", http.StatusFound)
+		return
+	}
+	codes := service.GenerateRecoveryCodes()
+	_ = s.Store.SetUserRecoveryCodes(u.ID, service.HashRecoveryCodes(codes))
+	d := s.pageData(r)
+	d["Page"] = "user_settings"
+	d["Title"] = "恢复代码"
+	d["Codes"] = codes
+	s.render(w, "dash_totp_recovery", http.StatusOK, d)
 }
 
 // handleUserTOTPDisable 关闭两步验证(需密码 + 动态码)
@@ -1149,6 +1173,7 @@ func (s *Server) handleUserTOTPDisable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = s.Store.SetUserTOTP(u.ID, "")
+	_ = s.Store.SetUserRecoveryCodes(u.ID, "")
 	http.Redirect(w, r, "/user/settings?msg="+urlEscape("两步验证已关闭"), http.StatusFound)
 }
 
@@ -1429,6 +1454,22 @@ func (s *Server) handleUserTicketReply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/user/tickets/"+strconv.FormatInt(id, 10)+"?msg="+urlEscape("回复已发送"), http.StatusFound)
+}
+
+// handleUserOrderClose 商户关闭自己的待支付订单(释放占用金额)
+func (s *Server) handleUserOrderClose(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	o := s.Store.OrderByID(atoint64(r.FormValue("id")))
+	if o == nil || o.Pid != u.Pid {
+		http.Redirect(w, r, "/user/orders?err="+urlEscape("订单不存在"), http.StatusFound)
+		return
+	}
+	if o.Status != 0 {
+		http.Redirect(w, r, "/user/orders?err="+urlEscape("仅待支付订单可关闭"), http.StatusFound)
+		return
+	}
+	_, _ = s.DB.Exec("UPDATE orders SET status=2, endtime=? WHERE id=? AND status=0", model.Now(), o.ID)
+	http.Redirect(w, r, "/user/orders?msg="+urlEscape("订单已关闭,占用金额已释放"), http.StatusFound)
 }
 
 func (s *Server) handleUserTicketClose(w http.ResponseWriter, r *http.Request) {

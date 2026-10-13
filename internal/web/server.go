@@ -308,6 +308,9 @@ func (s *Server) pageData(r *http.Request) map[string]any {
 	if u := s.currentUser(r); u != nil {
 		d["Me"] = u
 		d["CSRF"] = s.csrfToken(u)
+		if u.Role == "user" {
+			d["TicketRepliedN"] = s.repliedTicketCount(u.ID)
+		}
 	}
 	return d
 }
@@ -372,4 +375,11 @@ func (s *Server) InjectAlert() {
 			}
 		}
 	}
+}
+
+// repliedTicketCount 商户被平台回复且未再处理的工单数(侧栏提示)
+func (s *Server) repliedTicketCount(userID int64) int64 {
+	var n int64
+	_ = s.DB.QueryRow("SELECT COUNT(*) FROM tickets WHERE user_id=? AND status=1", userID).Scan(&n)
+	return n
 }

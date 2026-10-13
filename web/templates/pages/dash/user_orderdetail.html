@@ -24,7 +24,15 @@
     </div>
   </div>
   <div class="card">
-    <div class="card-title">到账记录</div>
+    {{if eq .Order.Status 0}}
+  <form method="post" action="/user/orders/close" class="mt" style="display:flex;gap:8px;align-items:center">
+    <input type="hidden" name="_csrf" value="{{.CSRF}}">
+    <input type="hidden" name="id" value="{{.Order.ID}}">
+    <button class="btn btn-ghost btn-sm" type="submit" data-confirm="确定关闭该订单?关闭后买家将无法继续支付,占用金额立即释放。">关闭订单</button>
+    <span class="muted" style="font-size:12px">买家无法付款时,可手动关闭并重新发起</span>
+  </form>
+  {{end}}
+  <div class="card-title">到账记录</div>
     {{if .Pays}}
     <div class="table-wrap">
       <table class="tbl">

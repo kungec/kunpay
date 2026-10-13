@@ -31,6 +31,7 @@ type User struct {
 	RsaPublic     string // 商户 RSA 公钥(PEM,空=使用 MD5 签名)
 	PayTypes      string // 商户可用支付方式(CSV,空=全部)
 	NotifyEmailOn int    // 收款成功邮件通知开关(需已填邮箱)
+	RecoveryCodes string // TOTP 恢复代码(SHA256 十六进制 CSV,空=未生成)
 }
 
 type Order struct {

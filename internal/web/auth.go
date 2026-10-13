@@ -358,15 +358,18 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 		s.render(w, "pub_login", http.StatusOK, d)
 		return
 	}
-	// 两步验证: 开启后必须携带有效动态码
-	if u.TotpSecret != "" && !service.VerifyTOTP(u.TotpSecret, r.FormValue("totp_code")) {
-		recordLoginFail(clientIP(r), username)
-		recordLoginFail("u", username)
-		d["Error"] = "两步验证码不正确"
-		d["NeedTOTP"] = true
-		s.newCaptchaData(d)
-		s.render(w, "pub_login", http.StatusOK, d)
-		return
+	// 两步验证: 开启后必须携带有效动态码(或一次性恢复代码)
+	if u.TotpSecret != "" {
+		code := r.FormValue("totp_code")
+		if !service.VerifyTOTP(u.TotpSecret, code) && !s.Store.ConsumeRecoveryCode(u.ID, code) {
+			recordLoginFail(clientIP(r), username)
+			recordLoginFail("u", username)
+			d["Error"] = "两步验证码不正确"
+			d["NeedTOTP"] = true
+			s.newCaptchaData(d)
+			s.render(w, "pub_login", http.StatusOK, d)
+			return
+		}
 	}
 	loginFails.Delete(loginKey(clientIP(r), username))
 	prevIP := u.LastLoginIP

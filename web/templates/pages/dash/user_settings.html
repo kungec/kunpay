@@ -109,6 +109,13 @@
       </div>
     </div>
     {{if .Merchant.TotpSecret}}
+    <div class="muted" style="font-size:12.5px;margin-top:6px">
+      剩余恢复代码:<b>{{.RecoveryN}}</b> 个(手机丢失时可在登录页替代动态码使用,每个仅一次)
+      <form method="post" action="/user/settings/totp/recovery" style="display:inline">
+        <input type="hidden" name="_csrf" value="{{.CSRF}}">
+        <button class="btn btn-ghost btn-sm" type="submit" data-confirm="重新生成将使旧恢复代码全部失效,确定?">重新生成</button>
+      </form>
+    </div>
     <form method="post" action="/user/settings/totp/off" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <input type="hidden" name="_csrf" value="{{.CSRF}}">
       <input class="input" type="password" name="password" placeholder="登录密码" required style="width:150px">

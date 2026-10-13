@@ -4,9 +4,11 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base32"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"net/url"
 	"strings"
@@ -70,4 +72,64 @@ func OTPAuthURL(secret, account, issuer string) string {
 	return "otpauth://totp/" + url.PathEscape(issuer+":"+account) +
 		"?secret=" + secret + "&issuer=" + url.QueryEscape(issuer) +
 		"&algorithm=SHA1&digits=6&period=" + fmt.Sprint(totpPeriod)
+}
+
+// GenerateRecoveryCodes 生成 8 个一次性恢复代码(展示用明文,形如 XXXX-XXXX)
+func GenerateRecoveryCodes() []string {
+	codes := make([]string, 8)
+	for i := range codes {
+		buf := make([]byte, 4)
+		_, _ = rand.Read(buf)
+		codes[i] = fmt.Sprintf("%04X-%04X", binary.BigEndian.Uint16(buf[:2]), binary.BigEndian.Uint16(buf[2:]))
+	}
+	return codes
+}
+
+// HashRecoveryCodes 明文恢复代码 → SHA256 十六进制 CSV(入库用)
+func HashRecoveryCodes(codes []string) string {
+	hashes := make([]string, 0, len(codes))
+	for _, c := range codes {
+		sum := sha256.Sum256([]byte(strings.ToUpper(strings.TrimSpace(c))))
+		hashes = append(hashes, hex.EncodeToString(sum[:]))
+	}
+	return strings.Join(hashes, ",")
+}
+
+// ConsumeRecoveryCode 校验并消费一个恢复代码(命中即从库中移除,一次性)
+func (s *Store) ConsumeRecoveryCode(userID int64, code string) bool {
+	code = strings.ToUpper(strings.TrimSpace(code))
+	if code == "" {
+		return false
+	}
+	sum := sha256.Sum256([]byte(code))
+	want := hex.EncodeToString(sum[:])
+	var raw string
+	if err := s.DB.QueryRow("SELECT COALESCE(recovery_codes,'') FROM users WHERE id=?", userID).Scan(&raw); err != nil || raw == "" {
+		return false
+	}
+	parts := strings.Split(raw, ",")
+	for i, h := range parts {
+		if subtle.ConstantTimeCompare([]byte(h), []byte(want)) == 1 {
+			parts = append(parts[:i], parts[i+1:]...)
+			_, _ = s.DB.Exec("UPDATE users SET recovery_codes=? WHERE id=?", strings.Join(parts, ","), userID)
+			return true
+		}
+	}
+	return false
+}
+
+// RecoveryCodesRemaining 剩余可用恢复代码数量
+func (s *Store) RecoveryCodesRemaining(userID int64) int {
+	var raw string
+	_ = s.DB.QueryRow("SELECT COALESCE(recovery_codes,'') FROM users WHERE id=?", userID).Scan(&raw)
+	if raw == "" {
+		return 0
+	}
+	return len(strings.Split(raw, ","))
+}
+
+// SetUserRecoveryCodes 写入恢复代码哈希
+func (s *Store) SetUserRecoveryCodes(userID int64, hashedCSV string) error {
+	_, err := s.DB.Exec("UPDATE users SET recovery_codes=? WHERE id=?", hashedCSV, userID)
+	return err
 }

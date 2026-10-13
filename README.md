@@ -63,6 +63,10 @@
 |---|---|
 | ![桌面监控助手](docs/screenshots/monitor_desktop.png) | ![安卓监控APP](docs/screenshots/monitor_android.png) |
 
+| 公开运行状态页 | 实时数据大屏 |
+|---|---|
+| ![运行状态](docs/screenshots/status.png) | ![数据大屏](docs/screenshots/screen.png) |
+
 ## 收款监控客户端
 
 | 端 | 产物 | 功能 |
