@@ -43,6 +43,8 @@ func (s *Store) signNotifyFor(merchant *model.User, params map[string]string) (s
 			if sig, err := SignRSA(priv, SortedRaw(params)); err == nil {
 				return sig, "RSA"
 			}
+		} else {
+			log.Printf("[notify] 商户 %s 已配置 RSA 公钥,但平台尚未生成 RSA 密钥对,通知回落 MD5 签名", merchant.Username)
 		}
 	}
 	return Sign(params, merchant.Skey), "MD5"

@@ -84,6 +84,14 @@ func (s *Server) currentUser(r *http.Request) *model.User {
 		}
 		lastSeenMu.Lock()
 		lastSeenAt[c.Value] = now
+		// 防无界增长: 条目过多时清掉陈旧 token 的记录
+		if len(lastSeenAt) > 4096 {
+			for tk, ts := range lastSeenAt {
+				if now-ts > 3600 {
+					delete(lastSeenAt, tk)
+				}
+			}
+		}
 		lastSeenMu.Unlock()
 	}
 	u, _ := s.Store.UserByID(userID)

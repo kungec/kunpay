@@ -905,6 +905,11 @@ func (s *Server) handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 	d["DBSize"] = pageCount * pageSize
 	d["UptimeH"] = int(time.Since(s.StartedAt).Hours())
 	d["GoVersion"] = runtime.Version()
+	if v, err := strconv.ParseFloat(s.DB.MustSetting("min_settle"), 64); err == nil && v > 0 {
+		d["MinSettleYuan"] = strconv.FormatFloat(v/100, 'f', -1, 64)
+	} else {
+		d["MinSettleYuan"] = "10"
+	}
 	s.render(w, "dash_admin_settings", http.StatusOK, d)
 }
 
@@ -958,6 +963,14 @@ func (s *Server) handleAdminSettingsSave(w http.ResponseWriter, r *http.Request)
 				v = "1"
 			} else {
 				v = "0"
+			}
+		}
+		if k == "min_settle" {
+			// 表单单位为元,存储按分
+			if fv, err := strconv.ParseFloat(v, 64); err == nil && fv > 0 {
+				v = strconv.FormatInt(int64(fv*100+0.5), 10)
+			} else {
+				continue
 			}
 		}
 		_ = s.DB.SetSetting(k, v)
@@ -1478,31 +1491,32 @@ func (s *Server) handleAdminChannelStats(w http.ResponseWriter, r *http.Request)
 		Rate        float64 // 成功率%
 		LastSuccess int64
 	}
+	// 单条 JOIN 查询一次取全(避免循环内嵌套查询: 连接池仅 1,嵌套会自锁)
 	var stats []chanStat
 	rows, err := s.DB.Query(`SELECT c.type, c.name, c.enabled,
 		COUNT(o.id) as total,
 		SUM(CASE WHEN o.status IN(1,3) THEN 1 ELSE 0 END) as paid,
 		SUM(CASE WHEN o.status=2 THEN 1 ELSE 0 END) as expired,
-		SUM(CASE WHEN o.status=0 THEN 1 ELSE 0 END) as pending
+		SUM(CASE WHEN o.status=0 THEN 1 ELSE 0 END) as pending,
+		COALESCE(MAX(CASE WHEN o.status IN(1,3) THEN o.endtime END),0) as last_success
 		FROM channels c LEFT JOIN orders o ON o.type=c.type AND o.addtime>strftime('%s','now')-7*86400
 		GROUP BY c.type, c.name, c.enabled ORDER BY c.id`)
 	if err == nil {
-		defer rows.Close()
 		for rows.Next() {
 			var cs chanStat
 			var typ, name string
 			var enabled int
-			if rows.Scan(&typ, &name, &enabled, &cs.Total, &cs.Paid, &cs.Expired, &cs.Pending) == nil {
+			if rows.Scan(&typ, &name, &enabled, &cs.Total, &cs.Paid, &cs.Expired, &cs.Pending, &cs.LastSuccess) == nil {
 				cs.Type = typ
 				cs.Name = name
 				cs.Enabled = enabled == 1
 				if cs.Total > 0 {
 					cs.Rate = float64(cs.Paid) / float64(cs.Total) * 100
 				}
-				s.DB.QueryRow("SELECT COALESCE(MAX(endtime),0) FROM orders WHERE type=? AND status IN(1,3)", typ).Scan(&cs.LastSuccess)
 				stats = append(stats, cs)
 			}
 		}
+		rows.Close()
 	}
 	d := s.pageData(r)
 	d["Page"] = "admin_chanstats"
