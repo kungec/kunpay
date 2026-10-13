@@ -41,6 +41,10 @@
       <div class="form-item">
         <label>邮箱</label>
         <input class="input" type="email" name="email" value="{{.Merchant.Email}}" placeholder="用于接收结算通知">
+        <label class="row" style="gap:7px;margin-top:8px;font-size:12.5px;color:var(--text-2)">
+          <input type="checkbox" name="notify_email" value="1" {{if .Merchant.NotifyEmailOn}}checked{{end}}>
+          收款成功邮件通知(需填写邮箱;关闭请取消勾选并清空邮箱)
+        </label>
       </div>
       <div class="form-item">
         <label>QQ 号码</label>

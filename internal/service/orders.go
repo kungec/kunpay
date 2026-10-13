@@ -42,7 +42,7 @@ func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 		&u.Rate, &u.Balance, &u.Pid, &u.Skey, &u.SettleType, &u.SettleAccount, &u.SettleName,
 		&u.InviteCode, &u.InvitedBy, &u.CreatedAt, &u.LastLoginAt, &u.LastLoginIP, &u.Avatar, &u.ApiIPs,
 		&u.TotpSecret, &u.NotifyWebhook, &u.LimitSingle, &u.LimitDaily,
-		&u.RsaPublic, &u.PayTypes)
+		&u.RsaPublic, &u.PayTypes, &u.NotifyEmailOn)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,7 @@ func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 }
 
 const userCols = `id,username,email,password_hash,qq,role,status,rate,balance,pid,skey,
-	settle_type,settle_account,settle_name,invite_code,invited_by,created_at,last_login_at,last_login_ip,avatar,COALESCE(api_ips,''),COALESCE(totp_secret,''),COALESCE(notify_webhook,''),COALESCE(limit_single,0),COALESCE(limit_daily,0),COALESCE(rsa_public,''),COALESCE(pay_types,'')`
+	settle_type,settle_account,settle_name,invite_code,invited_by,created_at,last_login_at,last_login_ip,avatar,COALESCE(api_ips,''),COALESCE(totp_secret,''),COALESCE(notify_webhook,''),COALESCE(limit_single,0),COALESCE(limit_daily,0),COALESCE(rsa_public,''),COALESCE(pay_types,''),COALESCE(notify_email_on,0)`
 
 func (s *Store) UserByID(id int64) (*model.User, error) {
 	u, err := scanUser(s.DB.QueryRow("SELECT "+userCols+" FROM users WHERE id=?", id))
@@ -469,6 +469,10 @@ func (s *Store) CompleteOrder(o *model.Order, buyer string) error {
 		msg := fmt.Sprintf("✅ 收款到账 %s\n订单: %s\n商品: %s", MoneyStr(o.Money), o.TradeNo, o.Name)
 		go SendWebhookAlert(hook, s.DB.MustSetting("site_name"), msg)
 	}
+	// 商户收款邮件通知(异步,由 web 层注入发送实现)
+	if merchant.NotifyEmailOn == 1 && merchant.Email != "" && PayEmailHook != nil {
+		go PayEmailHook(merchant, o)
+	}
 	// 立即异步通知 + 安排重试
 	_, _ = s.DB.Exec("UPDATE orders SET next_notify_at=? WHERE id=?", now, o.ID)
 	s.TriggerNotify(o.ID)
@@ -557,6 +561,19 @@ func (s *Store) SetUserPayTypes(userID int64, types []string) error {
 // SetUserRSAPublic 保存商户 RSA 公钥(空=回落 MD5)
 func (s *Store) SetUserRSAPublic(userID int64, pubPEM string) error {
 	_, err := s.DB.Exec("UPDATE users SET rsa_public=? WHERE id=?", pubPEM, userID)
+	return err
+}
+
+// PayEmailHook 由 web 层注入: 商户开启收款邮件通知后的发送实现
+var PayEmailHook func(merchant *model.User, o *model.Order)
+
+// SetUserNotifyEmail 设置收款邮件通知开关
+func (s *Store) SetUserNotifyEmail(userID int64, on bool) error {
+	v := 0
+	if on {
+		v = 1
+	}
+	_, err := s.DB.Exec("UPDATE users SET notify_email_on=? WHERE id=?", v, userID)
 	return err
 }
 

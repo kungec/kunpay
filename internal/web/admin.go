@@ -801,6 +801,7 @@ func (s *Server) handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 	d["Title"] = "系统设置"
 	d["S"] = st
 	d["Backups"] = s.backupList()
+	d["Downloads"] = s.downloadList()
 	d["Flash"] = r.URL.Query().Get("msg")
 	// 系统信息
 	var pageCount, pageSize int64
@@ -1083,6 +1084,31 @@ func (s *Server) handleAdminBackupCreate(w http.ResponseWriter, r *http.Request)
 }
 
 var backupNameRe = regexp.MustCompile(`^backup-\d{14}\.db$`)
+
+// downloadList 下载中心文件列表(名称/大小)
+func (s *Server) downloadList() []map[string]any {
+	dir := filepath.Join(s.DataDir, "downloads")
+	_ = os.MkdirAll(dir, 0o755)
+	var out []map[string]any
+	if ents, err := os.ReadDir(dir); err == nil {
+		for _, e := range ents {
+			if e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+				continue
+			}
+			info, err := e.Info()
+			if err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
+				continue
+			}
+			size := info.Size()
+			sizeText := fmt.Sprintf("%.1f KB", float64(size)/1024)
+			if size >= 1024*1024 {
+				sizeText = fmt.Sprintf("%.1f MB", float64(size)/1024/1024)
+			}
+			out = append(out, map[string]any{"Name": e.Name(), "SizeText": sizeText})
+		}
+	}
+	return out
+}
 
 // handleAdminBackupDownload 下载备份文件
 func (s *Server) handleAdminBackupDownload(w http.ResponseWriter, r *http.Request) {

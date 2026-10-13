@@ -504,8 +504,13 @@ func (s *Server) handleUserSettingsProfile(w http.ResponseWriter, r *http.Reques
 		http.Redirect(w, r, "/user/settings?err="+urlEscape("邮箱格式不正确"), http.StatusFound)
 		return
 	}
-	_, err := s.DB.Exec(`UPDATE users SET email=?, qq=?, settle_type=?, settle_account=?, settle_name=? WHERE id=?`,
-		email, qq, settleType, settleAccount, settleName, u.ID)
+	notifyEmail := r.FormValue("notify_email") == "1"
+	// 邮箱为空时强制关闭邮件通知
+	if email == "" {
+		notifyEmail = false
+	}
+	_, err := s.DB.Exec(`UPDATE users SET email=?, qq=?, settle_type=?, settle_account=?, settle_name=?, notify_email_on=? WHERE id=?`,
+		email, qq, settleType, settleAccount, settleName, boolToInt(notifyEmail), u.ID)
 	if err != nil {
 		http.Redirect(w, r, "/user/settings?err="+urlEscape("保存失败"), http.StatusFound)
 		return
@@ -1279,6 +1284,57 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "pub_download", http.StatusOK, d)
 }
 
+var downloadExtRe = regexp.MustCompile(`(?i)\.(apk|exe|dmg|pkg|zip|tar\.gz|tgz|msi|deb|rpm)$`)
+
+// handleAdminDownloadsUpload 管理员上传文件到下载中心(限安装包格式,≤200MB)
+func (s *Server) handleAdminDownloadsUpload(w http.ResponseWriter, r *http.Request) {
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		http.Redirect(w, r, "/admin/settings?err="+urlEscape("请选择文件"), http.StatusFound)
+		return
+	}
+	defer file.Close()
+	name := filepath.Base(header.Filename)
+	if !downloadExtRe.MatchString(name) || len(name) > 120 ||
+		strings.ContainsAny(name, "\\/") || strings.HasPrefix(name, ".") {
+		http.Redirect(w, r, "/admin/settings?err="+urlEscape("仅支持 apk/exe/dmg/pkg/zip/tar.gz/tgz/msi/deb/rpm 安装包文件名"), http.StatusFound)
+		return
+	}
+	if header.Size > 200<<20 {
+		http.Redirect(w, r, "/admin/settings?err="+urlEscape("文件不能超过 200MB"), http.StatusFound)
+		return
+	}
+	dir := filepath.Join(s.DataDir, "downloads")
+	_ = os.MkdirAll(dir, 0o755)
+	dst, err := os.Create(filepath.Join(dir, name))
+	if err != nil {
+		http.Redirect(w, r, "/admin/settings?err="+urlEscape("保存文件失败"), http.StatusFound)
+		return
+	}
+	defer dst.Close()
+	if _, err := io.Copy(dst, file); err != nil {
+		http.Redirect(w, r, "/admin/settings?err="+urlEscape("写入文件失败"), http.StatusFound)
+		return
+	}
+	s.audit(r, "download.upload", name)
+	http.Redirect(w, r, "/admin/settings?msg="+urlEscape("文件已上传到下载中心: "+name), http.StatusFound)
+}
+
+// handleAdminDownloadsDelete 管理员删除下载中心文件
+func (s *Server) handleAdminDownloadsDelete(w http.ResponseWriter, r *http.Request) {
+	name := filepath.Base(r.FormValue("name"))
+	if !downloadExtRe.MatchString(name) || strings.HasPrefix(name, ".") {
+		http.Redirect(w, r, "/admin/settings?err="+urlEscape("文件名不合法"), http.StatusFound)
+		return
+	}
+	if err := os.Remove(filepath.Join(s.DataDir, "downloads", name)); err != nil {
+		http.Redirect(w, r, "/admin/settings?err="+urlEscape("删除失败(文件不存在?)"), http.StatusFound)
+		return
+	}
+	s.audit(r, "download.delete", name)
+	http.Redirect(w, r, "/admin/settings?msg="+urlEscape("已删除: "+name), http.StatusFound)
+}
+
 // handleDownloadFile 提供下载(严格防目录穿越)
 func (s *Server) handleDownloadFile(w http.ResponseWriter, r *http.Request) {
 	name := filepath.Base(r.URL.Query().Get("name"))
@@ -1306,6 +1362,13 @@ func (s *Server) handleDownloadFile(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---------- 工单支持 ----------
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
 
 // handleUserTickets 商户工单列表 + 新建
 func (s *Server) handleUserTickets(w http.ResponseWriter, r *http.Request) {

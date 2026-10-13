@@ -280,6 +280,7 @@ func (d *DB) Migrate() error {
 	// 商户 RSA 公钥(空=MD5) / 商户可用支付方式(空=全部)
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN rsa_public TEXT DEFAULT ''")
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN pay_types TEXT DEFAULT ''")
+	_, _ = d.Exec("ALTER TABLE users ADD COLUMN notify_email_on INTEGER DEFAULT 0")
 	_, _ = d.Exec("ALTER TABLE channels ADD COLUMN alipay_uid TEXT DEFAULT ''")
 	// 旧版平台单一收款码迁移为多码 items
 	var itemN, qrN int

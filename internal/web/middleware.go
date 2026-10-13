@@ -31,11 +31,15 @@ func securityHeaders(next http.Handler) http.Handler {
 	})
 }
 
-// limitBody 请求体大小限制(10MB)
+// limitBody 请求体大小限制(默认 10MB;下载中心文件上传路由放宽到 200MB)
 func limitBody(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Body != nil {
-			r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+			limit := int64(10 << 20)
+			if r.Method == http.MethodPost && r.URL.Path == "/admin/downloads/upload" {
+				limit = 200 << 20
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, limit)
 		}
 		next.ServeHTTP(w, r)
 	})

@@ -30,6 +30,7 @@ type User struct {
 	LimitDaily    int64  // 单日收款限额(分,0=不限)
 	RsaPublic     string // 商户 RSA 公钥(PEM,空=使用 MD5 签名)
 	PayTypes      string // 商户可用支付方式(CSV,空=全部)
+	NotifyEmailOn int    // 收款成功邮件通知开关(需已填邮箱)
 }
 
 type Order struct {

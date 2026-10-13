@@ -116,6 +116,40 @@
     <div class="muted" style="font-size:12.5px;margin-top:6px">保存 SMTP 配置后点此验证;发送失败会显示具体原因。</div>
   </div>
   <div class="card">
+    <div class="card-title">下载中心文件管理</div>
+    <form method="post" action="/admin/downloads/upload" enctype="multipart/form-data" class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <label class="file-upload" style="flex:1;min-width:220px">
+        <span>选择安装包(apk/exe/dmg/zip…≤200MB)</span>
+        <input type="file" name="file" required onchange="this.closest('form').querySelector('button[type=submit]').click()">
+      </label>
+      <button class="btn btn-primary btn-sm" type="submit">上传到下载中心</button>
+    </form>
+    {{if .Downloads}}
+    <div class="table-wrap mt">
+      <table class="tbl">
+        <tr><th>文件</th><th class="money">大小</th><th class="right">操作</th></tr>
+        {{range .Downloads}}
+        <tr>
+          <td class="mono">{{.Name}}</td>
+          <td class="money mono">{{.SizeText}}</td>
+          <td class="right">
+            <form method="post" action="/admin/downloads/delete" style="display:inline" data-confirm="确定删除该文件?下载中心将不再提供。">
+              <input type="hidden" name="_csrf" value="{{.CSRF}}">
+              <input type="hidden" name="name" value="{{.Name}}">
+              <button class="btn btn-danger btn-sm" type="submit">删除</button>
+            </form>
+          </td>
+        </tr>
+        {{end}}
+      </table>
+    </div>
+    <div class="muted" style="font-size:12.5px;margin-top:6px">文件对外展示在 <a href="/download" target="_blank">/download 下载中心</a>。</div>
+    {{else}}
+    <div class="muted" style="font-size:12.5px;margin-top:6px">暂无文件。上传后将在 <a href="/download" target="_blank">/download 下载中心</a> 对外展示。</div>
+    {{end}}
+  </div>
+  <div class="card">
     <div class="card-title">自动备份(每日一次)</div>
     <form method="post" action="/admin/settings/save">
       <input type="hidden" name="_csrf" value="{{.CSRF}}">

@@ -218,6 +218,21 @@ var funcMap = template.FuncMap{
 	"divSize":         func(b int64) string { return fmt.Sprintf("%.2f", float64(b)/1024/1024) },
 }
 
+// injectPayEmail 商户收款邮件通知发送实现
+func (s *Server) injectPayEmail() {
+	service.PayEmailHook = func(m *model.User, o *model.Order) {
+		body := mailHTML("收款到账通知", []string{
+			"您的商户有一笔新的收款到账:",
+			"金额: ¥" + service.MoneyStr(o.Money),
+			"商品: " + o.Name,
+			"平台订单号: " + o.TradeNo,
+		})
+		if err := s.SendMail(m.Email, "【"+s.DB.MustSetting("site_name")+"】收款到账 ¥"+service.MoneyStr(o.Money), body); err != nil {
+			log.Printf("[paymail] 收款邮件发送失败: %v", err)
+		}
+	}
+}
+
 func (s *Server) loadTemplates() error {
 	tfs := webfs.Templates()
 	s.Tpl = map[string]*template.Template{}

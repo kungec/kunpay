@@ -128,6 +128,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /admin/settings/save", s.requireAdmin(s.requireCSRF(s.handleAdminSettingsSave)))
 	mux.HandleFunc("POST /admin/settings/rsa", s.requireAdmin(s.requireCSRF(s.handleAdminRSA)))
 	mux.HandleFunc("POST /admin/settings/smtp-test", s.requireAdmin(s.requireCSRF(s.handleAdminSMTPTest)))
+	mux.HandleFunc("POST /admin/downloads/upload", s.requireAdmin(s.requireCSRF(s.handleAdminDownloadsUpload)))
+	mux.HandleFunc("POST /admin/downloads/delete", s.requireAdmin(s.requireCSRF(s.handleAdminDownloadsDelete)))
 	mux.HandleFunc("POST /admin/backup/create", s.requireAdmin(s.requireCSRF(s.handleAdminBackupCreate)))
 	mux.HandleFunc("GET /admin/backup/download", s.requireAdmin(s.handleAdminBackupDownload))
 	mux.HandleFunc("POST /admin/mail/test", s.requireAdmin(s.requireCSRF(s.handleAdminMailTest)))
@@ -220,6 +222,7 @@ func noCacheHeader(next http.Handler) http.Handler {
 
 // Init 初始化: 加载模板等
 func (s *Server) Init() error {
+	s.injectPayEmail()
 	if err := s.loadTemplates(); err != nil {
 		return err
 	}
