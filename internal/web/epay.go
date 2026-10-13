@@ -99,8 +99,13 @@ func (s *Server) validateEpayRequestIP(p map[string]string, ip string) (*model.U
 	if err != nil || merchant == nil {
 		return nil, nil, "商户ID不存在"
 	}
-	if ip != "" && !apiIPAllowed(merchant.ApiIPs, ip) {
-		return nil, nil, "来源 IP 不在商户 API 白名单内,请在商户中心-商户信息中配置"
+	if ip != "" {
+		if bl := s.DB.MustSetting("ip_blacklist"); strings.TrimSpace(bl) != "" && apiIPAllowed(bl, ip) {
+			return nil, nil, "来源 IP 已被平台拉黑,如有疑问请联系管理员"
+		}
+		if !apiIPAllowed(merchant.ApiIPs, ip) {
+			return nil, nil, "来源 IP 不在商户 API 白名单内,请在商户中心-商户信息中配置"
+		}
 	}
 	// RSA 商户用 RSA-SHA256 验签(公钥为商户自行上传),其余走 MD5
 	if service.IsRSAType(p["sign_type"]) {

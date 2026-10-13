@@ -76,6 +76,10 @@
         <label class="row" style="gap:8px"><input type="checkbox" name="circuit_breaker" {{if eq (index .S "circuit_breaker") "1"}}checked{{end}}> 渠道自动熔断(近1小时≥10笔且成功率低于30%自动停用渠道,10分钟后自动恢复)</label>
       </div>
       <div class="form-item">
+        <label>下单 IP 黑名单(逗号分隔,支持 CIDR 与通配前缀;命中即拒绝下单,留空不限制)</label>
+        <input class="input mono" type="text" name="ip_blacklist" value="{{index .S "ip_blacklist"}}" placeholder="如: 203.0.113.7,198.51.100.0/24,10.0.0.*">
+      </div>
+      <div class="form-item">
         <label>邀请返佣比例(%)</label>
         <input class="input" type="number" name="invite_rate" min="0" max="100" step="0.1" value="{{index .S "invite_rate"}}" placeholder="被邀请商户每笔订单手续费返给邀请人的比例,0=不返佣">
       </div>
@@ -159,6 +163,14 @@
         <input class="input" type="number" name="backup_keep" min="1" max="100" value="{{index .S "backup_keep"}}">
       </div>
       <button class="btn btn-primary btn-sm" type="submit">保存备份设置</button>
+    </form>
+  </div>
+  <div class="card">
+    <div class="card-title">一键演示数据</div>
+    <form method="post" action="/admin/settings/seed" data-confirm="将生成 30 笔近 7 日的演示订单与一台演示设备(trade_no 前缀 DEMO),可在数据清理页移除。继续?">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <button class="btn btn-outline btn-sm" type="submit">生成演示数据</button>
+      <span class="muted" style="font-size:12.5px;margin-left:8px">新部署后快速体验面板图表与统计效果</span>
     </form>
   </div>
   <div class="card">

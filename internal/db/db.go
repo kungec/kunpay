@@ -251,6 +251,7 @@ var defaultSettings = map[string]string{
 	"backup_auto":        "0",
 	"backup_keep":        "10",
 	"statement_auto":     "0",
+	"ip_blacklist":       "",
 	"statement_last":     "",
 	"footer_text":        "© 2026 KunPay. 保留所有权利.",
 }

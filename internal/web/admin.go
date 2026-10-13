@@ -2,15 +2,18 @@ package web
 
 import (
 	"bufio"
+	crand "crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"math/big"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -75,6 +78,88 @@ func (s *Server) handleAdminHome(w http.ResponseWriter, r *http.Request) {
 	}
 	d["Days"] = days
 	d["TopMerchants"] = top
+
+	// ---- 系统自检 ----
+	type checkItem struct {
+		Name string
+		OK   bool
+		Note string
+	}
+	var checks []checkItem
+	// 数据库可写
+	if err := s.DB.SetSetting("_health_probe", fmt.Sprint(model.Now())); err == nil {
+		s.DB.SetSetting("_health_probe", "")
+		checks = append(checks, checkItem{Name: "数据库读写", OK: true, Note: "正常"})
+	} else {
+		checks = append(checks, checkItem{Name: "数据库读写", OK: false, Note: "写入失败,请检查磁盘"})
+	}
+	// 数据目录可写
+	probe := filepath.Join(s.DataDir, ".health_probe")
+	if f, err := os.Create(probe); err == nil {
+		f.Close()
+		os.Remove(probe)
+		checks = append(checks, checkItem{Name: "数据目录可写", OK: true, Note: s.DataDir})
+	} else {
+		checks = append(checks, checkItem{Name: "数据目录可写", OK: false, Note: "无法写入 " + s.DataDir})
+	}
+	// SMTP
+	if s.DB.MustSetting("smtp_host") != "" {
+		checks = append(checks, checkItem{Name: "邮件服务(SMTP)", OK: true, Note: "已配置 " + s.DB.MustSetting("smtp_host")})
+	} else {
+		checks = append(checks, checkItem{Name: "邮件服务(SMTP)", OK: false, Note: "未配置,告警/对账/找回密码邮件不可用"})
+	}
+	// 告警开关
+	if s.DB.MustSetting("device_alert") == "1" {
+		checks = append(checks, checkItem{Name: "系统告警", OK: true, Note: "已开启(邮件+机器人)"})
+	} else {
+		checks = append(checks, checkItem{Name: "系统告警", OK: false, Note: "未开启,设备离线/渠道异常不会通知"})
+	}
+	// 自动备份
+	var lastBackup string
+	if ents, err := os.ReadDir(filepath.Join(s.DataDir, "backups")); err == nil {
+		var names []string
+		for _, e := range ents {
+			if strings.HasPrefix(e.Name(), "backup-") || strings.HasPrefix(e.Name(), "auto-") {
+				names = append(names, e.Name())
+			}
+		}
+		sort.Strings(names)
+		if len(names) > 0 {
+			lastBackup = names[len(names)-1]
+		}
+	}
+	if s.DB.MustSetting("backup_auto") == "1" {
+		checks = append(checks, checkItem{Name: "自动备份", OK: true, Note: "已开启,最新: " + lastBackup})
+	} else if lastBackup != "" {
+		checks = append(checks, checkItem{Name: "自动备份", OK: false, Note: "未开启,最近手动备份: " + lastBackup})
+	} else {
+		checks = append(checks, checkItem{Name: "自动备份", OK: false, Note: "从未备份,数据库损坏将无法恢复"})
+	}
+	// 渠道
+	var chOn int64
+	_ = s.DB.QueryRow("SELECT COUNT(*) FROM channels WHERE enabled=1").Scan(&chOn)
+	if chOn > 0 {
+		checks = append(checks, checkItem{Name: "支付渠道", OK: true, Note: fmt.Sprintf("%d 个渠道启用中", chOn)})
+	} else {
+		checks = append(checks, checkItem{Name: "支付渠道", OK: false, Note: "无启用渠道,商户无法收款"})
+	}
+	// 监控设备
+	if devOnline > 0 {
+		checks = append(checks, checkItem{Name: "监控设备", OK: true, Note: fmt.Sprintf("%d/%d 在线", devOnline, devTotal)})
+	} else if devTotal == 0 {
+		checks = append(checks, checkItem{Name: "监控设备", OK: false, Note: "尚未添加监控设备"})
+	} else {
+		checks = append(checks, checkItem{Name: "监控设备", OK: false, Note: "0/%d 在线,无法自动确认到账"})
+	}
+	// TOTP(管理员)
+	me := s.currentUser(r)
+	if me != nil && me.TotpSecret != "" {
+		checks = append(checks, checkItem{Name: "管理员两步验证", OK: true, Note: "已开启"})
+	} else {
+		checks = append(checks, checkItem{Name: "管理员两步验证", OK: false, Note: "建议在个人设置开启 TOTP"})
+	}
+	d["Checks"] = checks
+
 	s.render(w, "dash_admin_home", http.StatusOK, d)
 }
 
@@ -853,7 +938,7 @@ func (s *Server) handleAdminSettingsSave(w http.ResponseWriter, r *http.Request)
 		"money_offset", "register_open", "min_settle", "pay_notice", "invite_open", "footer_text", "poll_interval",
 		"site_url", "smtp_host", "smtp_port", "smtp_user", "smtp_pass", "smtp_tls", "smtp_from", "admin_ip_whitelist",
 		"alert_email", "device_alert", "merchant_notice", "alert_webhook", "invite_rate", "auto_settle", "circuit_breaker",
-		"backup_auto", "backup_keep", "statement_auto"}
+		"backup_auto", "backup_keep", "statement_auto", "ip_blacklist"}
 	for _, k := range keys {
 		v := strings.TrimSpace(r.FormValue(k))
 		if r.Form[k] == nil {
@@ -1624,4 +1709,66 @@ func (s *Server) handleAdminTicketClose(w http.ResponseWriter, r *http.Request) 
 	}
 	s.audit(r, "ticket.close", "工单 #"+strconv.FormatInt(id, 10))
 	http.Redirect(w, r, "/admin/tickets?msg="+urlEscape("工单已关闭"), http.StatusFound)
+}
+
+// handleAdminSeed 一键生成演示数据(示例订单+监控设备,trade_no 带 DEMO 前缀便于识别)
+func (s *Server) handleAdminSeed(w http.ResponseWriter, r *http.Request) {
+	now := model.Now()
+	siteName := s.DB.MustSetting("site_name")
+	var devID int64
+	err := s.DB.QueryRow("SELECT id FROM devices WHERE name='演示手机'").Scan(&devID)
+	if err != nil {
+		res, ierr := s.DB.Exec(`INSERT INTO devices(name,token,last_heartbeat,last_ip,status,created_at)
+			VALUES('演示手机',?,?,'127.0.0.1',1,?)`, db.RandKey(48), now, now)
+		if ierr != nil {
+			http.Redirect(w, r, "/admin/settings?err="+urlEscape("创建演示设备失败: "+ierr.Error()), http.StatusFound)
+			return
+		}
+		devID, _ = res.LastInsertId()
+	} else {
+		s.DB.Exec("UPDATE devices SET last_heartbeat=?, status=1 WHERE id=?", now, devID)
+	}
+	var pid int64
+	var skey string
+	err = s.DB.QueryRow("SELECT pid,skey FROM users WHERE username='demo'").Scan(&pid, &skey)
+	if err != nil {
+		http.Redirect(w, r, "/admin/settings?err="+urlEscape("演示商户缺失,请先用全新数据库初始化"), http.StatusFound)
+		return
+	}
+	goods := []string{"会员月卡", "云服务器年付", "源码授权", "咨询顾问服务", "虚拟主机", "CDN 流量包"}
+	types := []string{"alipay", "wxpay", "qqpay"}
+	inserted := 0
+	for i := 0; i < 30; i++ {
+		dayOffset := int64(i % 7)
+		ts := now - dayOffset*86400 - int64(randInt(0, 86400))
+		base := []int64{1000, 2000, 5000, 8800, 19900, 29900, 9900}[randInt(0, 6)]
+		money := base + int64(randInt(1, 99))
+		typ := types[randInt(0, 2)]
+		tradeNo := "DEMO" + timeFormat(ts, "0102") + db.RandDigits(8)
+		status := 1
+		if i%9 == 0 {
+			status = 0
+		}
+		name := goods[randInt(0, len(goods)-1)]
+		fee := int64(float64(money) * 0.01)
+		res, err := s.DB.Exec(`INSERT INTO orders(trade_no,out_trade_no,pid,type,name,money,pay_money,status,fee,
+			addtime,endtime,expire_at,sitename,client_ip,channel_id)
+			VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`,
+			tradeNo, "DEMO-"+db.RandDigits(6), pid, typ, name, money, money, status, fee,
+			ts, ts+60, ts+300, siteName, "223.5.5."+db.RandDigits(2))
+		if err != nil {
+			http.Redirect(w, r, "/admin/settings?err="+urlEscape("演示订单写入失败: "+err.Error()), http.StatusFound)
+			return
+		}
+		if n, _ := res.RowsAffected(); n > 0 {
+			inserted++
+		}
+	}
+	s.audit(r, "data.seed", fmt.Sprintf("生成演示数据: %d 笔订单 + 演示设备", inserted))
+	http.Redirect(w, r, "/admin/settings?msg="+urlEscape(fmt.Sprintf("已生成 %d 笔演示订单(近7日分布)与演示设备,trade_no 前缀 DEMO 可用数据清理移除", inserted)), http.StatusFound)
+}
+
+func randInt(min, max int) int {
+	n, _ := crand.Int(crand.Reader, big.NewInt(int64(max-min+1)))
+	return int(n.Int64()) + min
 }
