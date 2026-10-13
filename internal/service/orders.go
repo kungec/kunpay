@@ -223,7 +223,7 @@ func (s *Store) CreateOrder(u *model.User, req *OrderReq, clientIP string) (*mod
 		if cbu != "" && !strings.HasPrefix(lu, "http://") && !strings.HasPrefix(lu, "https://") {
 			return nil, errors.New("通知地址仅支持 http/https 协议")
 		}
-		if cbu != "" && isInternalURL(cbu) {
+		if cbu != "" && IsInternalURL(cbu) {
 			return nil, errors.New("通知地址不允许指向内网地址")
 		}
 	}
@@ -310,7 +310,7 @@ func (s *Store) uniquePayMoney(typ string, money, now, ttl int64) int64 {
 }
 
 func genTradeNo() string {
-	return time.Now().Format("20060102150405") + db.RandDigits(5)
+	return time.Now().Format("20060102150405") + db.RandDigits(10)
 }
 
 func (s *Store) OrderByID(id int64) *model.Order {
@@ -667,7 +667,33 @@ func atofDefault(s string, def float64) float64 {
 
 // isInternalURL 检查URL是否指向内网/回环/链路本地地址(SSRF防护)
 // 允许 127.0.0.1 和 10.0.2.2(Android模拟器宿主)用于本地开发/测试
-func isInternalURL(rawURL string) bool {
+// IsInternalURLStrict 严格判定(无本地开发豁免): 用于商户可控的 Webhook 地址
+func IsInternalURLStrict(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return true
+	}
+	host := u.Hostname()
+	if host == "" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip != nil {
+		return ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return true // 无法解析的域名一律拒绝,不给探测机会
+	}
+	for _, resolved := range ips {
+		if resolved.IsPrivate() || resolved.IsLoopback() || resolved.IsLinkLocalUnicast() || resolved.IsUnspecified() {
+			return true
+		}
+	}
+	return false
+}
+
+func IsInternalURL(rawURL string) bool {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return true

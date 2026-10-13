@@ -1257,6 +1257,11 @@ func (s *Server) handleUserNotifyWebhook(w http.ResponseWriter, r *http.Request)
 	u := s.currentUser(r)
 	hook := strings.TrimSpace(r.FormValue("notify_webhook"))
 	if hook != "" {
+		// 防 SSRF: 商户可控地址禁止指向内网/回环(严格版,无本地开发豁免)
+		if service.IsInternalURLStrict(hook) {
+			http.Redirect(w, r, "/user/settings?err="+urlEscape("推送地址不允许指向内网/回环地址"), http.StatusFound)
+			return
+		}
 		if err := service.SendWebhookAlert(hook, s.DB.MustSetting("site_name"), "✅ 坤支付推送测试:配置成功,收款到账后将推送到这里。"); err != nil {
 			http.Redirect(w, r, "/user/settings?err="+urlEscape("测试推送失败,请检查地址(支持飞书/钉钉/企业微信机器人)"), http.StatusFound)
 			return

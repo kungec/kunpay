@@ -152,7 +152,8 @@ func payRateLimitWrap(next http.Handler) http.Handler {
 		// 只限频支付相关路径
 		if strings.Contains(r.URL.Path, "submit.php") ||
 			strings.Contains(r.URL.Path, "mapi.php") ||
-			strings.Contains(r.URL.Path, "api.php") {
+			strings.Contains(r.URL.Path, "api.php") ||
+			strings.HasSuffix(r.URL.Path, "/amount") {
 			if payRateLimited(clientIP(r)) {
 				w.Header().Set("Content-Type", "application/json; charset=utf-8")
 				w.WriteHeader(http.StatusTooManyRequests)
