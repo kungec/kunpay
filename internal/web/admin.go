@@ -799,6 +799,39 @@ func (s *Server) handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "dash_admin_settings", http.StatusOK, d)
 }
 
+// handleAdminRSA 平台 RSA 密钥对: 展示/生成
+func (s *Server) handleAdminRSA(w http.ResponseWriter, r *http.Request) {
+	action := r.FormValue("action")
+	if action == "generate" {
+		pub, priv, err := service.GenerateRSAKeypair()
+		if err != nil {
+			http.Redirect(w, r, "/admin/settings?err="+urlEscape("密钥生成失败: "+err.Error()), http.StatusFound)
+			return
+		}
+		_ = s.DB.SetSetting("platform_rsa_pub", pub)
+		_ = s.DB.SetSetting("platform_rsa_priv", priv)
+		s.audit(r, "settings.rsa", "重新生成平台 RSA 密钥对")
+		http.Redirect(w, r, "/admin/settings?msg="+urlEscape("平台 RSA 密钥对已生成,旧通知签名将随下一次请求切换"), http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, "/admin/settings", http.StatusFound)
+}
+
+// handleAdminSMTPTest 发送测试邮件
+func (s *Server) handleAdminSMTPTest(w http.ResponseWriter, r *http.Request) {
+	to := strings.TrimSpace(r.FormValue("to"))
+	if to == "" {
+		http.Redirect(w, r, "/admin/settings?err="+urlEscape("请填写测试收件邮箱"), http.StatusFound)
+		return
+	}
+	body := mailHTML("SMTP 配置测试", []string{"这是一封测试邮件,收到即说明邮件服务配置成功。", "时间: " + timeFormat(model.Now(), "2006-01-02 15:04:05")})
+	if err := s.SendMail(to, "【"+s.DB.MustSetting("site_name")+"】SMTP 配置测试", body); err != nil {
+		http.Redirect(w, r, "/admin/settings?err="+urlEscape("发送失败: "+err.Error()), http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, "/admin/settings?msg="+urlEscape("测试邮件已发送至 "+to+",请查收"), http.StatusFound)
+}
+
 func (s *Server) handleAdminSettingsSave(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	keys := []string{"site_name", "site_title", "announcement", "kefu", "fee_rate", "order_timeout",

@@ -3,6 +3,7 @@ package web
 import (
 	"bufio"
 	"database/sql"
+	"encoding/pem"
 	"fmt"
 	"github.com/skip2/go-qrcode"
 	"io"
@@ -433,6 +434,48 @@ func (s *Server) handleUserSettleApply(w http.ResponseWriter, r *http.Request) {
 	_, _ = s.DB.Exec(`INSERT INTO settle_logs(user_id,amount,settle_type,account,name,status,created_at)
 		VALUES(?,?,?,?,?,0,?)`, u.ID, amount, u.SettleType, u.SettleAccount, u.SettleName, model.Now())
 	http.Redirect(w, r, "/user/settle?msg="+urlEscape("提现申请已提交,请等待管理员处理"), http.StatusFound)
+}
+
+// handleUserMerchantRSA 保存商户 RSA 公钥(空=回落 MD5)
+func (s *Server) handleUserMerchantRSA(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	pub := strings.TrimSpace(r.FormValue("rsa_public"))
+	if len(pub) > 4000 {
+		http.Redirect(w, r, "/user/merchant?err="+urlEscape("公钥内容过长"), http.StatusFound)
+		return
+	}
+	if pub != "" && !service.VerifyRSA(pub, "probe", "invalid") {
+		// VerifyRSA 对无效签名必返回 false,这里仅校验公钥本身可解析
+		if block, _ := pem.Decode([]byte(pub)); block == nil {
+			http.Redirect(w, r, "/user/merchant?err="+urlEscape("公钥格式不正确,请粘贴 PEM 格式公钥"), http.StatusFound)
+			return
+		}
+	}
+	if err := s.Store.SetUserRSAPublic(u.ID, pub); err != nil {
+		http.Redirect(w, r, "/user/merchant?err="+urlEscape("保存失败"), http.StatusFound)
+		return
+	}
+	if pub == "" {
+		http.Redirect(w, r, "/user/merchant?msg="+urlEscape("已清除 RSA 公钥,接口回落 MD5 签名"), http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, "/user/merchant?msg="+urlEscape("RSA 公钥已保存,请求 sign_type=RSA 即可使用 RSA 签名"), http.StatusFound)
+}
+
+// handleUserPayTypes 保存商户可用支付方式
+func (s *Server) handleUserPayTypes(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	var types []string
+	for _, t := range []string{"alipay", "wxpay", "qqpay"} {
+		if r.FormValue(t) == "1" {
+			types = append(types, t)
+		}
+	}
+	if err := s.Store.SetUserPayTypes(u.ID, types); err != nil {
+		http.Redirect(w, r, "/user/merchant?err="+urlEscape("保存失败"), http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, "/user/merchant?msg="+urlEscape("可用支付方式已更新"), http.StatusFound)
 }
 
 func (s *Server) handleUserSettings(w http.ResponseWriter, r *http.Request) {

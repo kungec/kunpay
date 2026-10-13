@@ -1,19 +1,22 @@
 package service
 
 import (
+	"crypto"
 	"crypto/md5"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/pem"
 	"fmt"
 	"sort"
 	"strings"
 )
 
-// Sign 按易支付标准签名规则计算签名:
-// 1. 过滤空值、sign、sign_type
-// 2. 参数名 ASCII 升序排序
-// 3. 拼接为 a=b&c=d 形式(值不做 URL 编码)
-// 4. 末尾拼接商户密钥后取 MD5,输出小写
-func Sign(params map[string]string, key string) string {
+// SortedRaw 按易支付规则构造排序串(过滤空值与 sign/sign_type,ASCII 升序,a=b&c=d)
+func SortedRaw(params map[string]string) string {
 	keys := make([]string, 0, len(params))
 	for k, v := range params {
 		if v == "" || k == "sign" || k == "sign_type" {
@@ -26,9 +29,91 @@ func Sign(params map[string]string, key string) string {
 	for _, k := range keys {
 		parts = append(parts, k+"="+params[k])
 	}
-	raw := strings.Join(parts, "&") + key
+	return strings.Join(parts, "&")
+}
+
+// Sign 按易支付标准签名规则计算签名:
+// 1. 过滤空值、sign、sign_type
+// 2. 参数名 ASCII 升序排序
+// 3. 拼接为 a=b&c=d 形式(值不做 URL 编码)
+// 4. 末尾拼接商户密钥后取 MD5,输出小写
+func Sign(params map[string]string, key string) string {
+	raw := SortedRaw(params) + key
 	sum := md5.Sum([]byte(raw))
 	return hex.EncodeToString(sum[:])
+}
+
+// GenerateRSAKeypair 生成 2048 位 RSA 密钥对(PEM)
+func GenerateRSAKeypair() (pubPEM, privPEM string, err error) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return "", "", err
+	}
+	privPEM = string(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)}))
+	pubBytes, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		return "", "", err
+	}
+	pubPEM = string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubBytes}))
+	return pubPEM, privPEM, nil
+}
+
+// SignRSA RSA-SHA256 签名,输出 Base64(平台私钥,用于通知签名)
+func SignRSA(privPEM, data string) (string, error) {
+	block, _ := pem.Decode([]byte(privPEM))
+	if block == nil {
+		return "", fmt.Errorf("私钥格式错误")
+	}
+	key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+		if k, e2 := x509.ParsePKCS8PrivateKey(block.Bytes); e2 == nil {
+			if rk, ok := k.(*rsa.PrivateKey); ok {
+				key = rk
+			} else {
+				return "", e2
+			}
+		} else {
+			return "", err
+		}
+	}
+	sum := sha256.Sum256([]byte(data))
+	sig, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, sum[:])
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(sig), nil
+}
+
+// VerifyRSA 校验商户请求的 RSA-SHA256 签名(商户公钥)
+func VerifyRSA(pubPEM, data, signB64 string) bool {
+	block, _ := pem.Decode([]byte(pubPEM))
+	if block == nil {
+		return false
+	}
+	pubAny, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		if k, e2 := x509.ParsePKCS1PublicKey(block.Bytes); e2 == nil {
+			pubAny = k
+		} else {
+			return false
+		}
+	}
+	pub, ok := pubAny.(*rsa.PublicKey)
+	if !ok {
+		return false
+	}
+	sig, err := base64.StdEncoding.DecodeString(strings.TrimSpace(signB64))
+	if err != nil || len(sig) == 0 {
+		return false
+	}
+	sum := sha256.Sum256([]byte(data))
+	return rsa.VerifyPKCS1v15(pub, crypto.SHA256, sum[:], sig) == nil
+}
+
+// IsRSAType 请求是否使用 RSA 签名
+func IsRSAType(signType string) bool {
+	t := strings.ToUpper(strings.TrimSpace(signType))
+	return t == "RSA" || t == "RSA2"
 }
 
 // VerifySign 校验签名(不变异原 map)

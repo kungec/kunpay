@@ -28,6 +28,8 @@ type User struct {
 	NotifyWebhook string // 收款成功 IM 推送(飞书/钉钉/企微机器人地址)
 	LimitSingle   int64  // 单笔收款限额(分,0=不限)
 	LimitDaily    int64  // 单日收款限额(分,0=不限)
+	RsaPublic     string // 商户 RSA 公钥(PEM,空=使用 MD5 签名)
+	PayTypes      string // 商户可用支付方式(CSV,空=全部)
 }
 
 type Order struct {

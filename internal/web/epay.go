@@ -102,7 +102,15 @@ func (s *Server) validateEpayRequestIP(p map[string]string, ip string) (*model.U
 	if ip != "" && !apiIPAllowed(merchant.ApiIPs, ip) {
 		return nil, nil, "来源 IP 不在商户 API 白名单内,请在商户中心-商户信息中配置"
 	}
-	if !service.VerifySign(p, merchant.Skey) {
+	// RSA 商户用 RSA-SHA256 验签(公钥为商户自行上传),其余走 MD5
+	if service.IsRSAType(p["sign_type"]) {
+		if merchant.RsaPublic == "" {
+			return nil, nil, "商户未配置 RSA 公钥,无法使用 RSA 签名"
+		}
+		if !service.VerifyRSA(merchant.RsaPublic, service.SortedRaw(p), p["sign"]) {
+			return nil, nil, "RSA 签名校验失败,请检查私钥与签名算法(RSA-SHA256)"
+		}
+	} else if !service.VerifySign(p, merchant.Skey) {
 		return nil, nil, "签名校验失败,请检查商户密钥与签名算法"
 	}
 	typ := p["type"]

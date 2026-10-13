@@ -32,6 +32,18 @@ func (s *Store) TriggerNotify(orderID int64) {
 	}()
 }
 
+// signNotifyFor 按商户配置选择通知签名方式: 配置了 RSA 公钥的商户用平台私钥 RSA-SHA256,否则 MD5
+func (s *Store) signNotifyFor(merchant *model.User, params map[string]string) (string, string) {
+	if merchant.RsaPublic != "" {
+		if priv := s.DB.MustSetting("platform_rsa_priv"); priv != "" {
+			if sig, err := SignRSA(priv, SortedRaw(params)); err == nil {
+				return sig, "RSA"
+			}
+		}
+	}
+	return Sign(params, merchant.Skey), "MD5"
+}
+
 func (s *Store) sendNotify(orderID int64) {
 	o := s.OrderByID(orderID)
 	if o == nil || o.Status != 1 || o.NotifyOK == 1 || o.NotifyURL == "" {
@@ -53,8 +65,9 @@ func (s *Store) sendNotify(orderID int64) {
 	if o.Param != "" {
 		params["param"] = o.Param
 	}
-	params["sign"] = Sign(params, merchant.Skey)
-	params["sign_type"] = "MD5"
+	sign, signType := s.signNotifyFor(merchant, params)
+	params["sign"] = sign
+	params["sign_type"] = signType
 
 	q := url.Values{}
 	for k, v := range params {
@@ -121,8 +134,9 @@ func (s *Store) BuildReturnURL(o *model.Order) string {
 	if o.Param != "" {
 		params["param"] = o.Param
 	}
-	params["sign"] = Sign(params, merchant.Skey)
-	params["sign_type"] = "MD5"
+	sign, signType := s.signNotifyFor(merchant, params)
+	params["sign"] = sign
+	params["sign_type"] = signType
 	q := url.Values{}
 	for k, v := range params {
 		q.Set(k, v)

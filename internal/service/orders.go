@@ -23,6 +23,7 @@ var (
 	ErrMoneyRange       = errors.New("支付金额超出渠道限额")
 	ErrLimitSingle      = errors.New("支付金额超出商户单笔限额")
 	ErrLimitDaily       = errors.New("超出商户当日收款限额")
+	ErrTypeNotOpen      = errors.New("该支付方式未开放,请联系商户")
 	ErrOrderPaid        = errors.New("订单号已存在且已支付,请勿重复提交")
 	ErrBadMoney         = errors.New("金额格式错误,最多两位小数")
 )
@@ -39,7 +40,8 @@ func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 	err := row.Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.QQ, &u.Role, &u.Status,
 		&u.Rate, &u.Balance, &u.Pid, &u.Skey, &u.SettleType, &u.SettleAccount, &u.SettleName,
 		&u.InviteCode, &u.InvitedBy, &u.CreatedAt, &u.LastLoginAt, &u.LastLoginIP, &u.Avatar, &u.ApiIPs,
-		&u.TotpSecret, &u.NotifyWebhook, &u.LimitSingle, &u.LimitDaily)
+		&u.TotpSecret, &u.NotifyWebhook, &u.LimitSingle, &u.LimitDaily,
+		&u.RsaPublic, &u.PayTypes)
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +49,7 @@ func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 }
 
 const userCols = `id,username,email,password_hash,qq,role,status,rate,balance,pid,skey,
-	settle_type,settle_account,settle_name,invite_code,invited_by,created_at,last_login_at,last_login_ip,avatar,COALESCE(api_ips,''),COALESCE(totp_secret,''),COALESCE(notify_webhook,''),COALESCE(limit_single,0),COALESCE(limit_daily,0)`
+	settle_type,settle_account,settle_name,invite_code,invited_by,created_at,last_login_at,last_login_ip,avatar,COALESCE(api_ips,''),COALESCE(totp_secret,''),COALESCE(notify_webhook,''),COALESCE(limit_single,0),COALESCE(limit_daily,0),COALESCE(rsa_public,''),COALESCE(pay_types,'')`
 
 func (s *Store) UserByID(id int64) (*model.User, error) {
 	u, err := scanUser(s.DB.QueryRow("SELECT "+userCols+" FROM users WHERE id=?", id))
@@ -128,6 +130,9 @@ func (s *Store) CreateOrder(u *model.User, req *OrderReq, clientIP string) (*mod
 	}
 	if ch == nil || ch.Enabled != 1 {
 		return nil, ErrChannelDisabled
+	}
+	if u.PayTypes != "" && !payTypeAllowed(u.PayTypes, req.Type) {
+		return nil, ErrTypeNotOpen
 	}
 	if money < ch.MinMoney || money > ch.MaxMoney {
 		return nil, ErrMoneyRange
@@ -522,6 +527,35 @@ func (s *Store) SetUserNotifyWebhook(userID int64, hook string) error {
 // SetUserTOTP 开启/关闭两步验证
 func (s *Store) SetUserTOTP(userID int64, secret string) error {
 	_, err := s.DB.Exec("UPDATE users SET totp_secret=? WHERE id=?", secret, userID)
+	return err
+}
+
+// payTypeAllowed 检查支付方式是否在商户开放列表(CSV)
+func payTypeAllowed(csvList, typ string) bool {
+	for _, t := range strings.Split(csvList, ",") {
+		if strings.TrimSpace(t) == typ {
+			return true
+		}
+	}
+	return false
+}
+
+// SetUserPayTypes 设置商户可用支付方式(空=全部开放)
+func (s *Store) SetUserPayTypes(userID int64, types []string) error {
+	clean := make([]string, 0, len(types))
+	for _, t := range types {
+		t = strings.TrimSpace(t)
+		if t == "alipay" || t == "wxpay" || t == "qqpay" {
+			clean = append(clean, t)
+		}
+	}
+	_, err := s.DB.Exec("UPDATE users SET pay_types=? WHERE id=?", strings.Join(clean, ","), userID)
+	return err
+}
+
+// SetUserRSAPublic 保存商户 RSA 公钥(空=回落 MD5)
+func (s *Store) SetUserRSAPublic(userID int64, pubPEM string) error {
+	_, err := s.DB.Exec("UPDATE users SET rsa_public=? WHERE id=?", pubPEM, userID)
 	return err
 }
 

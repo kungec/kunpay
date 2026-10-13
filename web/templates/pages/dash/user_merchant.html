@@ -13,6 +13,34 @@
       <span class="k">订单查询</span><span class="v mono copyable" onclick="copyText('{{.BaseURL}}/api.php','已复制')">{{.BaseURL}}/api.php 📋</span>
     </div>
     <div class="alert info mt">密钥用于接口签名,请妥善保管。若怀疑泄露,请立即重置并更新到您的业务系统。</div>
+    <div class="form-item mt">
+      <label>可用支付方式(不勾选任何项 = 全部开放)</label>
+      <form method="post" action="/user/paytypes" class="row" style="gap:18px;flex-wrap:wrap;align-items:center">
+        <input type="hidden" name="_csrf" value="{{.CSRF}}">
+        {{$pt := .Merchant.PayTypes}}
+        <label class="row" style="gap:6px;margin:0"><input type="checkbox" name="alipay" value="1" {{if or (eq $pt "") (printf "%s" $pt | stringsContains "alipay")}}checked{{end}}> 支付宝</label>
+        <label class="row" style="gap:6px;margin:0"><input type="checkbox" name="wxpay" value="1" {{if or (eq $pt "") (printf "%s" $pt | stringsContains "wxpay")}}checked{{end}}> 微信支付</label>
+        <label class="row" style="gap:6px;margin:0"><input type="checkbox" name="qqpay" value="1" {{if or (eq $pt "") (printf "%s" $pt | stringsContains "qqpay")}}checked{{end}}> QQ钱包</label>
+        <button class="btn btn-primary btn-sm" type="submit">保存</button>
+      </form>
+    </div>
+    <div class="form-item mt">
+      <label>RSA 公钥(选填,启用 RSA-SHA256 签名对接;留空使用 MD5)</label>
+      <form method="post" action="/user/merchant/rsa">
+        <input type="hidden" name="_csrf" value="{{.CSRF}}">
+        <textarea class="input mono" name="rsa_public" rows="4" placeholder="粘贴您的 RSA 公钥(PEM 格式)">{{.Merchant.RsaPublic}}</textarea>
+        <div class="row mt" style="gap:8px">
+          <button class="btn btn-primary btn-sm" type="submit">保存公钥</button>
+          <span class="muted" style="font-size:12px">启用后:请求带 sign_type=RSA,用您的私钥对排序串做 RSA-SHA256 签名;平台异步通知将用平台公钥签名(见下方)。</span>
+        </div>
+      </form>
+    </div>
+    {{if index .Settings "platform_rsa_pub"}}
+    <div class="form-item">
+      <label>平台公钥(验证平台异步通知签名用,点击复制)</label>
+      <textarea class="input mono" rows="4" readonly onclick="copyText(this.value,'平台公钥已复制')" style="cursor:pointer">{{index .Settings "platform_rsa_pub"}}</textarea>
+    </div>
+    {{end}}
     <form class="form-item mt" method="post" action="/user/merchant/apiips">
       <input type="hidden" name="_csrf" value="{{.CSRF}}">
       <label>API IP 白名单(逗号分隔,支持 CIDR 如 203.0.113.0/24 与通配如 203.0.113.*;留空不限制)</label>
