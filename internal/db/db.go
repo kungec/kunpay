@@ -216,6 +216,10 @@ CREATE TABLE IF NOT EXISTS ticket_msgs (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_tmsgs ON ticket_msgs(ticket_id);
+CREATE INDEX IF NOT EXISTS idx_balance_user ON balance_logs(user_id, type, created_at);
+CREATE INDEX IF NOT EXISTS idx_nlogs_order ON notify_logs(order_id);
+CREATE INDEX IF NOT EXISTS idx_plogs_time ON pay_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_audits_time ON audit_logs(created_at);
 `
 
 // 默认配置项
@@ -284,6 +288,10 @@ func (d *DB) Migrate() error {
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN rsa_public TEXT DEFAULT ''")
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN pay_types TEXT DEFAULT ''")
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN notify_email_on INTEGER DEFAULT 0")
+	_, _ = d.Exec("ALTER TABLE users ADD COLUMN notify_post INTEGER DEFAULT 0")
+	// 热查询复合索引(依赖上方 ALTER 出的列,须在其后创建)
+	_, _ = d.Exec("CREATE INDEX IF NOT EXISTS idx_orders_pitem ON orders(p_item_id)")
+	_, _ = d.Exec("CREATE INDEX IF NOT EXISTS idx_orders_mitem ON orders(m_item_id)")
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN recovery_codes TEXT DEFAULT ''")
 	// 会话设备信息(登录设备管理)
 	_, _ = d.Exec("ALTER TABLE sessions ADD COLUMN ip TEXT DEFAULT ''")

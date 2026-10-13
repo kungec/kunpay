@@ -1484,6 +1484,16 @@ func (s *Server) handleUserOrderClose(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/user/orders?msg="+urlEscape("订单已关闭,占用金额已释放"), http.StatusFound)
 }
 
+// handleUserNotifyPost 保存异步通知请求方式
+func (s *Server) handleUserNotifyPost(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	if err := s.Store.SetUserNotifyPost(u.ID, r.FormValue("notify_post") == "1"); err != nil {
+		http.Redirect(w, r, "/user/merchant?err="+urlEscape("保存失败"), http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, "/user/merchant?msg="+urlEscape("异步通知请求方式已更新"), http.StatusFound)
+}
+
 // handleUserSessionsRevoke 下线其他设备
 func (s *Server) handleUserSessionsRevoke(w http.ResponseWriter, r *http.Request) {
 	u := s.currentUser(r)

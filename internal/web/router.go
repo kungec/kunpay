@@ -80,6 +80,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /user/merchant/regen", s.requireLogin(s.requireCSRF(s.handleUserMerchantRegen)))
 	mux.HandleFunc("POST /user/merchant/apiips", s.requireLogin(s.requireCSRF(s.handleUserApiIPs)))
 	mux.HandleFunc("POST /user/merchant/rsa", s.requireLogin(s.requireCSRF(s.handleUserMerchantRSA)))
+	mux.HandleFunc("POST /user/merchant/notifypost", s.requireLogin(s.requireCSRF(s.handleUserNotifyPost)))
 	mux.HandleFunc("POST /user/paytypes", s.requireLogin(s.requireCSRF(s.handleUserPayTypes)))
 	mux.HandleFunc("GET /user/channels", s.requireLogin(s.handleUserChannels))
 	mux.HandleFunc("POST /user/channels/upload", s.requireLogin(s.requireCSRF(s.handleUserChannelsUpload)))

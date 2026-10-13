@@ -77,19 +77,28 @@ func (s *Store) sendNotify(orderID int64) {
 	for k, v := range params {
 		q.Set(k, v)
 	}
-	target := o.NotifyURL
-	if strings.Contains(target, "?") {
-		target += "&" + q.Encode()
-	} else {
-		target += "?" + q.Encode()
-	}
-
 	client := &http.Client{Timeout: 10 * time.Second}
 	ok := 0
 	resp := ""
-	r, err := client.Get(target)
-	if err != nil {
-		resp = "请求失败: " + err.Error()
+	var r *http.Response
+	var reqErr error
+	var loggedURL string
+	if merchant.NotifyPost == 1 {
+		// POST 模式: 参数放表单体,URL 不带查询串
+		r, reqErr = client.Post(o.NotifyURL, "application/x-www-form-urlencoded", strings.NewReader(q.Encode()))
+		loggedURL = o.NotifyURL
+	} else {
+		target := o.NotifyURL
+		if strings.Contains(target, "?") {
+			target += "&" + q.Encode()
+		} else {
+			target += "?" + q.Encode()
+		}
+		loggedURL = target
+		r, reqErr = client.Get(target)
+	}
+	if reqErr != nil {
+		resp = "请求失败: " + reqErr.Error()
 	} else {
 		defer r.Body.Close()
 		buf := make([]byte, 512)
@@ -99,6 +108,7 @@ func (s *Store) sendNotify(orderID int64) {
 			ok = 1
 		}
 	}
+	target := loggedURL
 	now := model.Now()
 	_, _ = s.DB.Exec("INSERT INTO notify_logs(order_id,url,response,ok,created_at) VALUES(?,?,?,?,?)",
 		o.ID, truncate(target, 500), truncate(resp, 300), ok, now)

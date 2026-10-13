@@ -12,6 +12,16 @@
       <span class="k">API 支付</span><span class="v mono copyable" onclick="copyText('{{.BaseURL}}/mapi.php','已复制')">{{.BaseURL}}/mapi.php 📋</span>
       <span class="k">订单查询</span><span class="v mono copyable" onclick="copyText('{{.BaseURL}}/api.php','已复制')">{{.BaseURL}}/api.php 📋</span>
     </div>
+    <form class="form-item mt" method="post" action="/user/merchant/notifypost">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <label class="row" style="gap:8px;margin:0;font-size:13px;color:var(--text-2)">
+        <input type="checkbox" name="notify_post" value="1" {{if .Merchant.NotifyPost}}checked{{end}}>
+        异步通知使用 <b>POST</b> 方式(默认 GET;参数一致、签名一致,按您的服务端框架选择)
+      </label>
+      <div class="row mt" style="gap:8px">
+        <button class="btn btn-primary btn-sm" type="submit">保存通知方式</button>
+      </div>
+    </form>
     <div class="alert info mt">密钥用于接口签名,请妥善保管。若怀疑泄露,请立即重置并更新到您的业务系统。</div>
     <div class="form-item mt">
       <label>可用支付方式(不勾选任何项 = 全部开放)</label>
