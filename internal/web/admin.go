@@ -323,6 +323,7 @@ func (s *Server) handleAdminChannels(w http.ResponseWriter, r *http.Request) {
 		Name    string
 		Qrcode  string
 		Enabled bool
+		Weight  int64
 		Count   int64
 		Amount  int64
 	}
@@ -344,7 +345,7 @@ func (s *Server) handleAdminChannels(w http.ResponseWriter, r *http.Request) {
 			var cnt, amt int64
 			_ = s.DB.QueryRow("SELECT COUNT(*),COALESCE(SUM(money-fee),0) FROM orders WHERE p_item_id=? AND status IN(1,3)", it.ID).
 				Scan(&cnt, &amt)
-			v.Items = append(v.Items, platItemView{ID: it.ID, Name: it.Name, Qrcode: it.Qrcode, Enabled: it.Enabled == 1, Count: cnt, Amount: amt})
+			v.Items = append(v.Items, platItemView{ID: it.ID, Name: it.Name, Qrcode: it.Qrcode, Enabled: it.Enabled == 1, Weight: it.Weight, Count: cnt, Amount: amt})
 		}
 		v.Rotate = s.Store.PlatformRotate(c.Type)
 		v.CanRotate = v.EnabledN >= 2
@@ -430,7 +431,7 @@ func (s *Server) handleAdminChannelsItemAdd(w http.ResponseWriter, r *http.Reque
 		http.Redirect(w, r, "/admin/channels?err="+urlEscape("写入文件失败"), http.StatusFound)
 		return
 	}
-	if err := s.Store.AddPlatformItem(typ, name, "/uploads/"+fn); err != nil {
+	if err := s.Store.AddPlatformItem(typ, name, "/uploads/"+fn, atoint64(r.FormValue("weight"))); err != nil {
 		http.Redirect(w, r, "/admin/channels?err="+urlEscape("保存失败"), http.StatusFound)
 		return
 	}
@@ -448,6 +449,30 @@ func (s *Server) handleAdminChannelsItemToggle(w http.ResponseWriter, r *http.Re
 		return
 	}
 	http.Redirect(w, r, "/admin/channels?msg="+urlEscape("收款码状态已更新"), http.StatusFound)
+}
+
+func (s *Server) handleAdminChannelsItemWeight(w http.ResponseWriter, r *http.Request) {
+	id := atoint64(r.FormValue("id"))
+	if err := s.Store.SetPlatformItemWeight(id, atoint64(r.FormValue("weight"))); err != nil {
+		http.Redirect(w, r, "/admin/channels?err="+urlEscape("操作失败"), http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, "/admin/channels?msg="+urlEscape("权重已更新,平台轮询将按新比例分配订单"), http.StatusFound)
+}
+
+// handleAdminOrderRemark 保存订单备注
+func (s *Server) handleAdminOrderRemark(w http.ResponseWriter, r *http.Request) {
+	id := atoint64(r.FormValue("id"))
+	remark := strings.TrimSpace(r.FormValue("remark"))
+	if len(remark) > 500 {
+		remark = remark[:500]
+	}
+	if err := s.Store.SetOrderRemark(id, remark); err != nil {
+		http.Redirect(w, r, "/admin/order?id="+strconv.FormatInt(id, 10)+"&err="+urlEscape("保存失败"), http.StatusFound)
+		return
+	}
+	s.audit(r, "order.remark", "订单 #"+strconv.FormatInt(id, 10)+" 备注: "+remark)
+	http.Redirect(w, r, "/admin/order?id="+strconv.FormatInt(id, 10)+"&msg="+urlEscape("备注已保存"), http.StatusFound)
 }
 
 func (s *Server) handleAdminChannelsItemDel(w http.ResponseWriter, r *http.Request) {
@@ -1371,4 +1396,76 @@ func (s *Server) handleAdminRevenue(w http.ResponseWriter, r *http.Request) {
 	d["MonthOrders"] = monthOrders
 	d["Revenue"] = rev
 	s.render(w, "dash_admin_revenue", http.StatusOK, d)
+}
+
+// handleAdminScreen 实时数据大屏(全屏暗色监控页面)
+func (s *Server) handleAdminScreen(w http.ResponseWriter, r *http.Request) {
+	dayStart := todayStart()
+	var todayOrders, todayMoney, todayFee, totalMerchants, onlineDevices int64
+	var totalRevenue int64
+	s.DB.QueryRow("SELECT COUNT(*),COALESCE(SUM(money),0),COALESCE(SUM(fee),0) FROM orders WHERE status IN(1,3) AND addtime>=?", dayStart).Scan(&todayOrders, &todayMoney, &todayFee)
+	s.DB.QueryRow("SELECT COUNT(*) FROM users WHERE role='user'").Scan(&totalMerchants)
+	s.DB.QueryRow("SELECT COUNT(*) FROM devices WHERE status=1 AND last_heartbeat>?", model.Now()-120).Scan(&onlineDevices)
+	s.DB.QueryRow("SELECT COALESCE(SUM(fee),0) FROM orders WHERE status IN(1,3)").Scan(&totalRevenue)
+
+	// 最近 20 笔订单
+	type orderFeed struct {
+		TradeNo string
+		Type    string
+		Name    string
+		Money   string
+		Buyer   string
+		Time    string
+	}
+	var feed []orderFeed
+	rows, err := s.DB.Query(`SELECT trade_no,type,name,COALESCE(buyer,''),money,endtime
+		FROM orders WHERE status IN(1,3) ORDER BY id DESC LIMIT 20`)
+	if err == nil {
+		for rows.Next() {
+			var f orderFeed
+			var money int64
+			var endtime int64
+			if rows.Scan(&f.TradeNo, &f.Type, &f.Name, &f.Buyer, &money, &endtime) == nil {
+				f.Money = service.MoneyStr(money)
+				f.Time = timeFormat(endtime, "15:04:05")
+				f.Type = typeName(f.Type)
+				feed = append(feed, f)
+			}
+		}
+		rows.Close() // 1 连接池: 下一个查询前必须释放
+	}
+
+	// 渠道状态
+	type chStatus struct {
+		Name    string
+		Enabled bool
+		Count   int64
+	}
+	var chSt []chStatus
+	chRows, err := s.DB.Query(`SELECT c.name,c.enabled,
+		COUNT(CASE WHEN o.status IN(1,3) THEN 1 END) as cnt
+		FROM channels c LEFT JOIN orders o ON o.type=c.type AND o.addtime>strftime('%s','now')-86400
+		GROUP BY c.type,c.name,c.enabled ORDER BY c.id`)
+	if err == nil {
+		for chRows.Next() {
+			var cs chStatus
+			if chRows.Scan(&cs.Name, &cs.Enabled, &cs.Count) == nil {
+				chSt = append(chSt, cs)
+			}
+		}
+		chRows.Close()
+	}
+
+	d := s.pageData(r)
+	d["Page"] = "admin_screen"
+	d["Title"] = "实时数据大屏"
+	d["TodayOrders"] = todayOrders
+	d["TodayMoney"] = service.MoneyStr(todayMoney)
+	d["TodayFee"] = service.MoneyStr(todayFee)
+	d["TotalMerchants"] = totalMerchants
+	d["OnlineDevices"] = onlineDevices
+	d["TotalRevenue"] = service.MoneyStr(totalRevenue)
+	d["Feed"] = feed
+	d["ChanStatus"] = chSt
+	s.render(w, "dash_admin_screen", http.StatusOK, d)
 }

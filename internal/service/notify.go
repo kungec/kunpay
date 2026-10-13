@@ -162,26 +162,29 @@ var AlertFn func(msg string)
 var lowBalanceAlerted sync.Map
 
 func (s *Store) checkLowBalance() {
-	var uid, balance int64
-	var username, email string
-	rows, err := s.DB.Query(`SELECT id,username,COALESCE(email,''),balance FROM users
+	type lowUser struct {
+		uid      int64
+		username string
+	}
+	var lows []lowUser
+	rows, err := s.DB.Query(`SELECT id,username FROM users
 		WHERE role='user' AND status=1 AND balance < 1000 AND balance > 0 AND email != ''`)
 	if err != nil {
 		return
 	}
-	defer rows.Close()
 	for rows.Next() {
-		if rows.Scan(&uid, &username, &email, &balance) == nil {
-			if balance < 1000 { // < ¥10
-				key := fmt.Sprintf("lowbal_%d", uid)
-				if _, ok := lowBalanceAlerted.Load(key); !ok {
-					lowBalanceAlerted.Store(key, time.Now())
-					if AlertFn != nil {
-						AlertFn(fmt.Sprintf("商户 %s 余额不足 ¥10.00,请及时充值。", username))
-					}
-				}
-			} else {
-				lowBalanceAlerted.Delete(fmt.Sprintf("lowbal_%d", uid))
+		var u lowUser
+		if rows.Scan(&u.uid, &u.username) == nil {
+			lows = append(lows, u)
+		}
+	}
+	rows.Close() // 先关闭结果集再发告警(连接池仅 1 个连接,回调里再查库会自锁)
+	for _, u := range lows {
+		key := fmt.Sprintf("lowbal_%d", u.uid)
+		if _, ok := lowBalanceAlerted.Load(key); !ok {
+			lowBalanceAlerted.Store(key, time.Now())
+			if AlertFn != nil {
+				AlertFn(fmt.Sprintf("商户 %s 余额不足 ¥10.00,请及时充值。", u.username))
 			}
 		}
 	}
@@ -307,20 +310,31 @@ func (s *Store) checkChannelHealth() {
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	type chStat struct {
+		typ, name string
+		total     int64
+		paid      int64
+	}
+	var stats []chStat
 	for rows.Next() {
-		var typ, name string
-		var total, paid int64
-		if rows.Scan(&typ, &name, &total, &paid) == nil && total >= 10 {
-			rate := float64(paid) / float64(total) * 100
-			key := "chan_" + typ
-			if _, ok := lowBalanceAlerted.Load(key); !ok && rate < 50 {
-				lowBalanceAlerted.Store(key, time.Now())
-				msg := fmt.Sprintf("渠道 %s(%s) 近1小时成功率仅 %.1f%%(%d/%d),请检查收款码和监控设备。", name, typ, rate, paid, total)
-				log.Println("[alert] " + msg)
-				if AlertFn != nil {
-					AlertFn(msg)
-				}
+		var c chStat
+		if rows.Scan(&c.typ, &c.name, &c.total, &c.paid) == nil {
+			stats = append(stats, c)
+		}
+	}
+	rows.Close() // 先关闭结果集再发告警(同上,防连接自锁)
+	for _, c := range stats {
+		if c.total < 10 {
+			continue
+		}
+		rate := float64(c.paid) / float64(c.total) * 100
+		key := "chan_" + c.typ
+		if _, ok := lowBalanceAlerted.Load(key); !ok && rate < 50 {
+			lowBalanceAlerted.Store(key, time.Now())
+			msg := fmt.Sprintf("渠道 %s(%s) 近1小时成功率仅 %.1f%%(%d/%d),请检查收款码和监控设备。", c.name, c.typ, rate, c.paid, c.total)
+			log.Println("[alert] " + msg)
+			if AlertFn != nil {
+				AlertFn(msg)
 			}
 		}
 	}

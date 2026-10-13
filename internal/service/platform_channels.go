@@ -11,11 +11,11 @@ import (
 
 var ErrPlatformRotateNeedTwo = errors.New("开启轮询需要至少 2 个启用的收款码")
 
-const platItemCols = "id,type,name,qrcode,enabled,created_at,last_used_at"
+const platItemCols = "id,type,name,qrcode,enabled,COALESCE(weight,1),created_at,last_used_at"
 
 func scanPlatItem(row interface{ Scan(...any) error }) (*model.MerchantItem, error) {
 	it := &model.MerchantItem{}
-	err := row.Scan(&it.ID, &it.Type, &it.Name, &it.Qrcode, &it.Enabled, &it.CreatedAt, &it.LastUsedAt)
+	err := row.Scan(&it.ID, &it.Type, &it.Name, &it.Qrcode, &it.Enabled, &it.Weight, &it.CreatedAt, &it.LastUsedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -48,9 +48,15 @@ func (s *Store) PlatformRotate(typ string) bool {
 }
 
 // AddPlatformItem 添加平台收款码
-func (s *Store) AddPlatformItem(typ, name, qrcode string) error {
-	_, err := s.DB.Exec(`INSERT INTO platform_channel_items(type,name,qrcode,enabled,created_at,last_used_at)
-		VALUES(?,?,?,1,?,0)`, typ, name, qrcode, model.Now())
+func (s *Store) AddPlatformItem(typ, name, qrcode string, weight int64) error {
+	_, err := s.DB.Exec(`INSERT INTO platform_channel_items(type,name,qrcode,enabled,weight,created_at,last_used_at)
+		VALUES(?,?,?,1,?,?,0)`, typ, name, qrcode, clampWeight(weight), model.Now())
+	return err
+}
+
+// SetPlatformItemWeight 调整平台收款码权重
+func (s *Store) SetPlatformItemWeight(id int64, weight int64) error {
+	_, err := s.DB.Exec("UPDATE platform_channel_items SET weight=? WHERE id=?", clampWeight(weight), id)
 	return err
 }
 
@@ -126,7 +132,7 @@ func (s *Store) PickPlatformQR(orderID int64, typ string) (string, int64) {
 	rotate := s.PlatformRotate(typ)
 	idx := 0
 	if rotate && len(enabled) >= 2 {
-		idx = int(orderID % int64(len(enabled)))
+		idx = weightedIndex(enabled, func(i int) int64 { return enabled[i].Weight }, orderID)
 	}
 	pick := enabled[idx]
 	_, _ = s.DB.Exec("UPDATE platform_channel_items SET last_used_at=? WHERE id=?", model.Now(), pick.ID)

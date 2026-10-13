@@ -650,3 +650,9 @@ body.kp-leaving .demo-wrap, body.kp-leaving .doc-layout { opacity: .55; transiti
   .print-area { position: absolute; left: 0; top: 0; width: 100%; }
   .no-print { display: none !important; }
 }
+
+/* 收款码权重编辑 */
+.wt-form { display:flex; align-items:center; gap:5px; }
+.wt-label { font-size:11.5px; color:var(--muted,#7a8699); white-space:nowrap; }
+.wt-input { width:64px !important; padding:5px 7px !important; font-size:12.5px; text-align:center; }
+@media (max-width:560px){ .wt-label{display:none} .wt-input{width:52px !important} }

@@ -13,14 +13,14 @@ var ErrRotateNeedTwo = errors.New("开启轮询需要至少 2 个启用的收款
 
 func scanItem(row interface{ Scan(...any) error }) (*model.MerchantItem, error) {
 	it := &model.MerchantItem{}
-	err := row.Scan(&it.ID, &it.UserID, &it.Type, &it.Name, &it.Qrcode, &it.Enabled, &it.CreatedAt, &it.LastUsedAt)
+	err := row.Scan(&it.ID, &it.UserID, &it.Type, &it.Name, &it.Qrcode, &it.Enabled, &it.Weight, &it.CreatedAt, &it.LastUsedAt)
 	if err != nil {
 		return nil, err
 	}
 	return it, nil
 }
 
-const itemCols = "id,user_id,type,name,qrcode,enabled,created_at,last_used_at"
+const itemCols = "id,user_id,type,name,qrcode,enabled,COALESCE(weight,1),created_at,last_used_at"
 
 // MerchantItems 商户某类型的全部收款码
 func (s *Store) MerchantItems(userID int64, typ string) ([]model.MerchantItem, error) {
@@ -48,10 +48,28 @@ func (s *Store) MerchantRotate(userID int64, typ string) bool {
 }
 
 // AddMerchantItem 添加收款码
-func (s *Store) AddMerchantItem(userID int64, typ, name, qrcode string) error {
-	_, err := s.DB.Exec(`INSERT INTO merchant_channel_items(user_id,type,name,qrcode,enabled,created_at,last_used_at)
-		VALUES(?,?,?,?,1,?,0)`, userID, typ, strings.TrimSpace(name), qrcode, model.Now())
+func (s *Store) AddMerchantItem(userID int64, typ, name, qrcode string, weight int64) error {
+	weight = clampWeight(weight)
+	_, err := s.DB.Exec(`INSERT INTO merchant_channel_items(user_id,type,name,qrcode,enabled,weight,created_at,last_used_at)
+		VALUES(?,?,?,?,1,?,?,0)`, userID, typ, strings.TrimSpace(name), qrcode, weight, model.Now())
 	return err
+}
+
+// SetMerchantItemWeight 调整收款码权重(轮询按权重比例分配订单)
+func (s *Store) SetMerchantItemWeight(userID, itemID int64, weight int64) error {
+	_, err := s.DB.Exec("UPDATE merchant_channel_items SET weight=? WHERE id=? AND user_id=?",
+		clampWeight(weight), itemID, userID)
+	return err
+}
+
+func clampWeight(w int64) int64 {
+	if w < 1 {
+		return 1
+	}
+	if w > 1000 {
+		return 1000
+	}
+	return w
 }
 
 // MerchantItemOf 取商户的一个收款码(校验归属)
@@ -136,11 +154,32 @@ func (s *Store) PickMerchantQR(orderID int64, userID int64, typ string) (string,
 	rotate := s.MerchantRotate(userID, typ)
 	idx := 0
 	if rotate && len(enabled) >= 2 {
-		idx = int(orderID % int64(len(enabled)))
+		idx = weightedIndex(enabled, func(i int) int64 { return enabled[i].Weight }, orderID)
 	}
 	pick := enabled[idx]
 	_, _ = s.DB.Exec("UPDATE merchant_channel_items SET last_used_at=? WHERE id=?", model.Now(), pick.ID)
 	return pick.Qrcode, pick.ID
+}
+
+// weightedIndex 按权重确定性选码: r = orderID % 总权重,落在哪个累计区间就选哪个。
+// 同一订单刷新多次仍命中同一码,高权重码按比例获得更多订单。
+func weightedIndex[T any](items []T, weightOf func(int) int64, orderID int64) int {
+	total := int64(0)
+	for i := range items {
+		total += clampWeight(weightOf(i))
+	}
+	if total <= 0 {
+		return 0
+	}
+	r := orderID % total
+	var acc int64
+	for i := range items {
+		acc += clampWeight(weightOf(i))
+		if r < acc {
+			return i
+		}
+	}
+	return 0
 }
 
 func boolToInt(b bool) int {

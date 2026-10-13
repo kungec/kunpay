@@ -1,0 +1,87 @@
+{{define "base"}}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>实时数据大屏 - KunPay</title>
+<meta http-equiv="refresh" content="10">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
+  background:#0a0e1a; color:#e0e6f0; min-height:100vh; padding:20px;
+}
+.header { text-align:center; padding:10px 0 20px; }
+.header h1 { font-size:28px; color:#5b8bff; letter-spacing:4px; }
+.header .sub { font-size:12px; color:#6a7a9a; margin-top:4px; }
+.grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:20px; }
+.stat {
+  background:linear-gradient(135deg,rgba(46,99,246,.15),rgba(46,99,246,.05));
+  border:1px solid rgba(46,99,246,.3); border-radius:14px; padding:20px; text-align:center;
+}
+.stat .v { font-size:32px; font-weight:800; color:#5b8bff; }
+.stat .v.money { color:#00e676; }
+.stat .l { font-size:13px; color:#8a9ab0; margin-top:6px; }
+.section { background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:18px; margin-bottom:16px; }
+.section h3 { font-size:15px; color:#8ab4ff; margin-bottom:14px; border-left:3px solid #5b8bff; padding-left:10px; }
+.feed { max-height:300px; overflow-y:auto; }
+.feed-item { display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid rgba(255,255,255,.05); font-size:13px; }
+.feed-item:last-child { border-bottom:0; }
+.feed-item .time { color:#5a6a80; font-family:monospace; font-size:12px; }
+.feed-item .money { color:#00e676; font-weight:700; margin-left:auto; }
+.feed-item .tno { color:#5a6a80; font-family:monospace; font-size:11px; }
+.chan-badge { display:inline-flex; align-items:center; gap:6px; background:rgba(255,255,255,.06); border-radius:16px; padding:6px 14px; margin:4px; font-size:13px; }
+.chan-dot { width:8px; height:8px; border-radius:50%; }
+.chan-dot.on { background:#00e676; box-shadow:0 0 8px #00e676; }
+.chan-dot.off { background:#ff5252; }
+.footer { text-align:center; padding:16px; color:#4a5a70; font-size:11px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>⚡ 坤支付 · 实时数据大屏</h1>
+  <div class="sub">自动刷新 · 10秒间隔</div>
+</div>
+
+<div class="grid">
+  <div class="stat"><div class="v money">¥{{.TodayMoney}}</div><div class="l">今日交易额</div></div>
+  <div class="stat"><div class="v">{{.TodayOrders}}</div><div class="l">今日订单</div></div>
+  <div class="stat"><div class="v">¥{{.TodayFee}}</div><div class="l">今日手续费</div></div>
+  <div class="stat"><div class="v">{{.OnlineDevices}}</div><div class="l">在线设备</div></div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+  <div class="section">
+    <h3>📡 实时订单</h3>
+    <div class="feed">
+      {{range .Feed}}
+      <div class="feed-item">
+        <span class="time">{{.Time}}</span>
+        <span>{{.Type}}</span>
+        <span class="money">¥{{.Money}}</span>
+        <span class="tno">{{.TradeNo}}</span>
+      </div>
+      {{else}}
+      <div style="color:#5a6a80;text-align:center;padding:20px;font-size:13px">暂无成交</div>
+      {{end}}
+    </div>
+  </div>
+  <div class="section">
+    <h3>渠道状态</h3>
+    {{range .ChanStatus}}
+    <div class="chan-badge">
+      <span class="chan-dot {{if .Enabled}}on{{else}}off{{end}}"></span>
+      {{.Name}} · 今日 {{.Count}} 笔
+    </div>
+    {{end}}
+  </div>
+</div>
+
+<div class="footer">
+  坤支付 KunPay 实时数据大屏 · <a href="/admin" style="color:#5b8bff">返回管理后台</a>
+</div>
+<script>setTimeout(function(){location.reload()},10000);</script>
+</body>
+</html>
+{{end}}

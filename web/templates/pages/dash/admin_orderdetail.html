@@ -23,9 +23,22 @@
       <span class="k">完成时间</span><span class="v">{{fdate .Order.Endtime}}</span>
       <span class="k">扩展参数</span><span class="v mono">{{if .Order.Param}}{{.Order.Param}}{{else}}—{{end}}</span>
       <span class="k">客户端 IP</span><span class="v mono">{{if .Order.ClientIP}}{{.Order.ClientIP}}{{else}}—{{end}}</span>
+      <span class="k">订单备注</span><span class="v">{{if .Order.Remark}}{{.Order.Remark}}{{else}}<span class="muted">无</span>{{end}}</span>
       {{if .Order.NotifyURL}}<span class="k">异步通知地址</span><span class="v mono" style="word-break:break-all">{{.Order.NotifyURL}}</span>{{end}}
       {{if .Order.ReturnURL}}<span class="k">跳转通知地址</span><span class="v mono" style="word-break:break-all">{{.Order.ReturnURL}}</span>{{end}}
     </div>
+  </div>
+  <div class="card">
+    <div class="card-title">备注 / 客服记录</div>
+    <form method="post" action="/admin/order/remark">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <input type="hidden" name="id" value="{{.Order.ID}}">
+      <textarea class="input" name="remark" rows="3" maxlength="500" placeholder="内部备注,仅管理员可见(如: 已与买家核实、投诉处理进度等)">{{.Order.Remark}}</textarea>
+      <div class="row mt" style="gap:8px">
+        <button class="btn btn-primary btn-sm" type="submit">保存备注</button>
+        <span class="muted" style="font-size:12px">最多 500 字,保存后记录审计日志</span>
+      </div>
+    </form>
   </div>
   <div class="card">
     <div class="card-title">关联到账流水</div>

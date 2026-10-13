@@ -102,6 +102,7 @@ CREATE TABLE IF NOT EXISTS platform_channel_items (
   name TEXT DEFAULT '',
   qrcode TEXT NOT NULL,
   enabled INTEGER DEFAULT 1,
+  weight INTEGER DEFAULT 1,
   created_at INTEGER NOT NULL,
   last_used_at INTEGER DEFAULT 0
 );
@@ -193,6 +194,7 @@ CREATE TABLE IF NOT EXISTS merchant_channel_items (
   name TEXT DEFAULT '',
   qrcode TEXT NOT NULL,
   enabled INTEGER DEFAULT 1,
+  weight INTEGER DEFAULT 1,
   created_at INTEGER NOT NULL,
   last_used_at INTEGER DEFAULT 0
 );
@@ -201,32 +203,32 @@ CREATE INDEX IF NOT EXISTS idx_mci ON merchant_channel_items(user_id, type, enab
 
 // 默认配置项
 var defaultSettings = map[string]string{
-	"site_name":       "KunPay 码支付",
-	"site_title":      "专业可靠的码支付解决方案",
-	"announcement":    "请务必按上方金额付款(包含小数尾数),否则系统无法自动确认到账。",
-	"kefu":            "",
-	"fee_rate":        "1.0",
-	"order_timeout":   "5",
-	"money_offset":    "1",
-	"register_open":   "1",
-	"min_settle":      "1000",
-	"auto_settle":     "0",
-	"pay_notice":      "扫码后请输入上方金额付款,付款完成后本页面会自动跳转。",
-	"poll_interval":   "3",
-	"site_url":        "",
-	"smtp_host":       "",
-	"smtp_port":       "465",
-	"smtp_user":       "",
-	"smtp_pass":       "",
-	"smtp_tls":        "ssl",
-	"smtp_from":       "",
-	"alert_email":     "",
-	"device_alert":    "0",
-	"merchant_notice": "",
+	"site_name":          "KunPay 码支付",
+	"site_title":         "专业可靠的码支付解决方案",
+	"announcement":       "请务必按上方金额付款(包含小数尾数),否则系统无法自动确认到账。",
+	"kefu":               "",
+	"fee_rate":           "1.0",
+	"order_timeout":      "5",
+	"money_offset":       "1",
+	"register_open":      "1",
+	"min_settle":         "1000",
+	"auto_settle":        "0",
+	"pay_notice":         "扫码后请输入上方金额付款,付款完成后本页面会自动跳转。",
+	"poll_interval":      "3",
+	"site_url":           "",
+	"smtp_host":          "",
+	"smtp_port":          "465",
+	"smtp_user":          "",
+	"smtp_pass":          "",
+	"smtp_tls":           "ssl",
+	"smtp_from":          "",
+	"alert_email":        "",
+	"device_alert":       "0",
+	"merchant_notice":    "",
 	"admin_ip_whitelist": "",
-	"demo_pid":        "1001",
-	"invite_open":     "1",
-	"footer_text":     "© 2026 KunPay. 保留所有权利.",
+	"demo_pid":           "1001",
+	"invite_open":        "1",
+	"footer_text":        "© 2026 KunPay. 保留所有权利.",
 }
 
 func (d *DB) Migrate() error {
@@ -240,6 +242,10 @@ func (d *DB) Migrate() error {
 	_, _ = d.Exec("ALTER TABLE orders ADD COLUMN m_item_id INTEGER DEFAULT 0")
 	_, _ = d.Exec("ALTER TABLE orders ADD COLUMN p_item_id INTEGER DEFAULT 0")
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN avatar TEXT DEFAULT ''")
+	// 收款码权重(轮询按权重分配);订单备注
+	_, _ = d.Exec("ALTER TABLE platform_channel_items ADD COLUMN weight INTEGER DEFAULT 1")
+	_, _ = d.Exec("ALTER TABLE merchant_channel_items ADD COLUMN weight INTEGER DEFAULT 1")
+	_, _ = d.Exec("ALTER TABLE orders ADD COLUMN remark TEXT DEFAULT ''")
 	_, _ = d.Exec("ALTER TABLE channels ADD COLUMN alipay_uid TEXT DEFAULT ''")
 	// 旧版平台单一收款码迁移为多码 items
 	var itemN, qrN int

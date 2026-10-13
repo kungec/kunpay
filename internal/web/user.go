@@ -99,6 +99,7 @@ type chanItemView struct {
 	Name    string
 	Qrcode  string
 	Enabled bool
+	Weight  int64
 	Count   int64
 	Amount  int64
 }
@@ -131,7 +132,7 @@ func (s *Server) handleUserChannels(w http.ResponseWriter, r *http.Request) {
 				Scan(&cnt, &amt)
 			v.Items = append(v.Items, chanItemView{
 				ID: it.ID, Name: it.Name, Qrcode: it.Qrcode, Enabled: it.Enabled == 1,
-				Count: cnt, Amount: amt,
+				Weight: it.Weight, Count: cnt, Amount: amt,
 			})
 		}
 		v.Rotate = s.Store.MerchantRotate(u.ID, c.Type)
@@ -189,7 +190,7 @@ func (s *Server) handleUserChannelsUpload(w http.ResponseWriter, r *http.Request
 		http.Redirect(w, r, "/user/channels?err="+urlEscape("写入文件失败"), http.StatusFound)
 		return
 	}
-	if err := s.Store.AddMerchantItem(u.ID, typ, name, "/uploads/"+fn); err != nil {
+	if err := s.Store.AddMerchantItem(u.ID, typ, name, "/uploads/"+fn, atoint64(r.FormValue("weight"))); err != nil {
 		http.Redirect(w, r, "/user/channels?err="+urlEscape("保存失败"), http.StatusFound)
 		return
 	}
@@ -208,6 +209,16 @@ func (s *Server) handleUserChannelsItemToggle(w http.ResponseWriter, r *http.Req
 		return
 	}
 	http.Redirect(w, r, "/user/channels?msg="+urlEscape("收款码状态已更新"), http.StatusFound)
+}
+
+func (s *Server) handleUserChannelsItemWeight(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	id := atoint64(r.FormValue("id"))
+	if err := s.Store.SetMerchantItemWeight(u.ID, id, atoint64(r.FormValue("weight"))); err != nil {
+		http.Redirect(w, r, "/user/channels?err="+urlEscape("操作失败"), http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, "/user/channels?msg="+urlEscape("权重已更新,轮询将按新比例分配订单"), http.StatusFound)
 }
 
 func (s *Server) handleUserChannelsItemDel(w http.ResponseWriter, r *http.Request) {

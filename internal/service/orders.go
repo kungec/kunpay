@@ -252,12 +252,12 @@ func genTradeNo() string {
 func (s *Store) OrderByID(id int64) *model.Order {
 	o := &model.Order{}
 	err := s.DB.QueryRow(`SELECT id,trade_no,out_trade_no,pid,type,name,money,pay_money,param,notify_url,
-		return_url,sitename,device,channel_id,status,fee,buyer,addtime,endtime,expire_at,notify_count,notify_ok,next_notify_at,client_ip,m_item_id,p_item_id
+		return_url,sitename,device,channel_id,status,fee,buyer,addtime,endtime,expire_at,notify_count,notify_ok,next_notify_at,client_ip,m_item_id,p_item_id,COALESCE(remark,'')
 		FROM orders WHERE id=?`, id).
 		Scan(&o.ID, &o.TradeNo, &o.OutTradeNo, &o.Pid, &o.Type, &o.Name, &o.Money, &o.PayMoney, &o.Param,
 			&o.NotifyURL, &o.ReturnURL, &o.Sitename, &o.Device, &o.ChannelID, &o.Status, &o.Fee, &o.Buyer,
 			&o.Addtime, &o.Endtime, &o.ExpireAt, &o.NotifyCount, &o.NotifyOK, &o.NextNotifyAt, &o.ClientIP,
-			&o.MerchantItemID, &o.PlatformItemID)
+			&o.MerchantItemID, &o.PlatformItemID, &o.Remark)
 	if err != nil {
 		return nil
 	}
@@ -267,12 +267,12 @@ func (s *Store) OrderByID(id int64) *model.Order {
 func (s *Store) OrderByTradeNo(tradeNo string) *model.Order {
 	o := &model.Order{}
 	err := s.DB.QueryRow(`SELECT id,trade_no,out_trade_no,pid,type,name,money,pay_money,param,notify_url,
-		return_url,sitename,device,channel_id,status,fee,buyer,addtime,endtime,expire_at,notify_count,notify_ok,next_notify_at,client_ip,m_item_id,p_item_id
+		return_url,sitename,device,channel_id,status,fee,buyer,addtime,endtime,expire_at,notify_count,notify_ok,next_notify_at,client_ip,m_item_id,p_item_id,COALESCE(remark,'')
 		FROM orders WHERE trade_no=?`, tradeNo).
 		Scan(&o.ID, &o.TradeNo, &o.OutTradeNo, &o.Pid, &o.Type, &o.Name, &o.Money, &o.PayMoney, &o.Param,
 			&o.NotifyURL, &o.ReturnURL, &o.Sitename, &o.Device, &o.ChannelID, &o.Status, &o.Fee, &o.Buyer,
 			&o.Addtime, &o.Endtime, &o.ExpireAt, &o.NotifyCount, &o.NotifyOK, &o.NextNotifyAt, &o.ClientIP,
-			&o.MerchantItemID, &o.PlatformItemID)
+			&o.MerchantItemID, &o.PlatformItemID, &o.Remark)
 	if err != nil {
 		return nil
 	}
@@ -282,16 +282,22 @@ func (s *Store) OrderByTradeNo(tradeNo string) *model.Order {
 func (s *Store) OrderByOutTradeNo(pid int64, outTradeNo string) *model.Order {
 	o := &model.Order{}
 	err := s.DB.QueryRow(`SELECT id,trade_no,out_trade_no,pid,type,name,money,pay_money,param,notify_url,
-		return_url,sitename,device,channel_id,status,fee,buyer,addtime,endtime,expire_at,notify_count,notify_ok,next_notify_at,client_ip,m_item_id,p_item_id
+		return_url,sitename,device,channel_id,status,fee,buyer,addtime,endtime,expire_at,notify_count,notify_ok,next_notify_at,client_ip,m_item_id,p_item_id,COALESCE(remark,'')
 		FROM orders WHERE pid=? AND out_trade_no=?`, pid, outTradeNo).
 		Scan(&o.ID, &o.TradeNo, &o.OutTradeNo, &o.Pid, &o.Type, &o.Name, &o.Money, &o.PayMoney, &o.Param,
 			&o.NotifyURL, &o.ReturnURL, &o.Sitename, &o.Device, &o.ChannelID, &o.Status, &o.Fee, &o.Buyer,
 			&o.Addtime, &o.Endtime, &o.ExpireAt, &o.NotifyCount, &o.NotifyOK, &o.NextNotifyAt, &o.ClientIP,
-			&o.MerchantItemID, &o.PlatformItemID)
+			&o.MerchantItemID, &o.PlatformItemID, &o.Remark)
 	if err != nil {
 		return nil
 	}
 	return o
+}
+
+// SetOrderRemark 设置订单备注(管理后台用)
+func (s *Store) SetOrderRemark(id int64, remark string) error {
+	_, err := s.DB.Exec("UPDATE orders SET remark=? WHERE id=?", remark, id)
+	return err
 }
 
 // ReportPayment 监控设备上报一笔到账,尝试匹配待支付订单。
@@ -322,7 +328,7 @@ func (s *Store) ReportPayment(deviceID int64, typ string, money int64, content s
 	if matched == nil {
 		var candidates []*model.Order
 		rows, err := s.DB.Query(`SELECT id,trade_no,out_trade_no,pid,type,name,money,pay_money,param,notify_url,
-			return_url,sitename,device,channel_id,status,fee,buyer,addtime,endtime,expire_at,notify_count,notify_ok,next_notify_at,client_ip,m_item_id,p_item_id
+			return_url,sitename,device,channel_id,status,fee,buyer,addtime,endtime,expire_at,notify_count,notify_ok,next_notify_at,client_ip,m_item_id,p_item_id,COALESCE(remark,'')
 			FROM orders WHERE status=0 AND type=? AND pay_money=? AND expire_at>? ORDER BY id ASC LIMIT 5`,
 			typ, money, now-300)
 		if err == nil {
@@ -331,7 +337,7 @@ func (s *Store) ReportPayment(deviceID int64, typ string, money int64, content s
 				if err := rows.Scan(&o.ID, &o.TradeNo, &o.OutTradeNo, &o.Pid, &o.Type, &o.Name, &o.Money, &o.PayMoney,
 					&o.Param, &o.NotifyURL, &o.ReturnURL, &o.Sitename, &o.Device, &o.ChannelID, &o.Status, &o.Fee,
 					&o.Buyer, &o.Addtime, &o.Endtime, &o.ExpireAt, &o.NotifyCount, &o.NotifyOK, &o.NextNotifyAt, &o.ClientIP,
-					&o.MerchantItemID, &o.PlatformItemID); err == nil {
+					&o.MerchantItemID, &o.PlatformItemID, &o.Remark); err == nil {
 					candidates = append(candidates, o)
 				}
 			}

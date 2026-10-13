@@ -51,8 +51,9 @@ type Order struct {
 	NextNotifyAt int64
 	ClientIP     string
 
-	MerchantItemID int64 // 使用的商户自有码
-	PlatformItemID int64 // 使用的平台码
+	MerchantItemID int64  // 使用的商户自有码
+	PlatformItemID int64  // 使用的平台码
+	Remark         string // 运营/客服备注
 }
 
 type Channel struct {
@@ -144,6 +145,7 @@ type MerchantItem struct {
 	Name       string
 	Qrcode     string
 	Enabled    int
+	Weight     int64
 	CreatedAt  int64
 	LastUsedAt int64
 }

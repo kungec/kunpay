@@ -172,7 +172,7 @@ func dict(kv ...any) map[string]any {
 	return m
 }
 
-func addInt(a, b int64) int64 { return a + b }
+func addInt(a, b any) int64 { return toI64(a) + toI64(b) }
 
 func pagerQuery(parts ...string) string {
 	q := ""
