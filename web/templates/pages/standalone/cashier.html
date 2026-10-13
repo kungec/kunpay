@@ -49,6 +49,40 @@
         <p class="muted">订单超时未支付,请返回商户重新发起付款。</p>
       </div>
     {{else}}
+      {{if .IsCustom}}
+      <div style="margin-top:6px">
+        <p class="muted">请输入您想支付的金额(元)</p>
+        <div style="display:flex;justify-content:center;gap:8px;margin-top:12px">
+          <input id="cAmt" class="input" type="text" inputmode="decimal" placeholder="0.00"
+                 style="width:190px;text-align:center;font-size:20px;font-weight:700;letter-spacing:1px">
+          <button class="btn btn-primary" id="cGo" type="button">确 定</button>
+        </div>
+        <div class="qr-hint" id="cErr" style="color:var(--danger);min-height:18px"></div>
+      </div>
+      <script>
+      (function () {
+        var btn = document.getElementById('cGo');
+        btn.addEventListener('click', function () {
+          var v = document.getElementById('cAmt').value.trim();
+          if (!v || parseFloat(v) <= 0) { document.getElementById('cErr').textContent = '请输入正确的金额'; return; }
+          btn.disabled = true; btn.textContent = '提交中...';
+          var fd = new FormData();
+          fd.append('money', v);
+          fetch('/pay/{{.Order.TradeNo}}/amount', { method: 'POST', body: fd })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+              if (j.code !== 1) {
+                btn.disabled = false; btn.textContent = '确 定';
+                document.getElementById('cErr').textContent = j.msg || '提交失败';
+                return;
+              }
+              location.reload();
+            })
+            .catch(function () { btn.disabled = false; btn.textContent = '确 定'; document.getElementById('cErr').textContent = '网络错误,请重试'; });
+        });
+      })();
+      </script>
+      {{else}}
       {{if .IsMobileUA}}
       <div class="app-launch">
         {{if .AlipayScheme}}<a class="app-btn alipay" href="{{.AlipayScheme}}">
@@ -75,6 +109,7 @@
       <div class="countdown" id="countdown" data-left="{{.LeftSec}}" data-trade="{{.Order.TradeNo}}" data-poll="{{pollSec .Settings}}"></div>
       <div class="pay-notice">{{index .Settings "pay_notice"}}</div>
       {{if index .Settings "announcement"}}<div class="notice">⚠ {{index .Settings "announcement"}}</div>{{end}}
+      {{end}}
     {{end}}
   </div>
   <div class="cashier-foot">

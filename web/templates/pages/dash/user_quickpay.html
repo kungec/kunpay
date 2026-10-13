@@ -1,0 +1,104 @@
+{{define "content"}}
+{{template "flash" .}}
+<div class="panel-row">
+  <div class="card">
+    <div class="card-title">生成收款链接</div>
+    <form id="qpForm">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <div class="form-item">
+        <label>商品名称</label>
+        <input class="input" type="text" name="name" maxlength="100" placeholder="如: 会员开通、咨询费、打赏" value="快捷收款">
+      </div>
+      <div class="form-item">
+        <label>收款方式</label>
+        <select class="input" name="type">
+          <option value="alipay">支付宝</option>
+          <option value="wxpay">微信支付</option>
+          <option value="qqpay">QQ钱包</option>
+        </select>
+      </div>
+      <div class="form-item">
+        <label>金额(元)</label>
+        <input class="input" type="text" name="money" placeholder="留空并勾选下方 = 让买家自行输入">
+      </div>
+      <div class="form-item">
+        <label class="row" style="gap:8px;margin:0;font-size:13px;color:var(--text-2)">
+          <input type="checkbox" name="custom" value="1">
+          <span><b>任意金额模式</b>:买家在收银台自行输入付款金额(适合打赏/捐赠/无固定价格商品)</span>
+        </label>
+      </div>
+      <button class="btn btn-primary" type="submit">生成收款链接</button>
+    </form>
+    <div id="qpResult" style="display:none" class="mt">
+      <div class="alert ok" id="qpMoney"></div>
+      <div class="form-item">
+        <label>收款链接(发给买家,打开即见收银台)</label>
+        <div class="row" style="gap:8px">
+          <input class="input mono" id="qpUrl" readonly style="flex:1">
+          <button class="btn btn-primary btn-sm" type="button" onclick="copyText(document.getElementById('qpUrl').value,'链接已复制')">复制</button>
+          <a class="btn btn-outline btn-sm" id="qpOpen" target="_blank">预览</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">使用说明</div>
+    <p class="muted" style="font-size:13px;line-height:2.1">
+      · 固定金额:填写金额生成链接,买家扫码按金额付款,到账自动确认;<br>
+      · 任意金额:勾选后金额留空,买家在收银台输入想要支付的金额(含系统尾数防撞),<br>&nbsp;&nbsp;适合打赏、捐赠、按需计费等场景;<br>
+      · 链接长期有效,订单超时未支付可回到本页重新生成;<br>
+      · 下方为最近生成的收款订单,点击可查看支付状态。
+    </p>
+  </div>
+</div>
+<div class="card">
+  <div class="card-title">最近的快捷收款</div>
+  {{if .Recent}}
+  <div class="table-wrap">
+    <table class="tbl">
+      <tr><th>商品</th><th>商户单号</th><th>方式</th><th class="money">金额</th><th>状态</th><th>时间</th></tr>
+      {{range .Recent}}
+      <tr>
+        <td>{{.Name}}</td>
+        <td class="mono muted">{{.OutTradeNo}}</td>
+        <td>{{typename .Type}}</td>
+        <td class="money">¥{{yuan .Money}}</td>
+        <td>{{template "badge" .Status}}</td>
+        <td class="muted">{{fdate .Addtime}}</td>
+      </tr>
+      {{end}}
+    </table>
+  </div>
+  {{else}}
+  <div class="empty">还没有快捷收款记录</div>
+  {{end}}
+</div>
+<script>
+(function () {
+  var f = document.getElementById('qpForm');
+  f.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var money = f.money.value.trim();
+    var custom = f.custom.checked;
+    if (!custom && (!money || parseFloat(money) <= 0)) { window.toast('请输入金额,或勾选任意金额模式'); return; }
+    var fd = new FormData(f);
+    fd.set('custom', custom ? '1' : '');
+    if (custom) fd.set('money', '');
+    var btn = f.querySelector('button[type=submit]');
+    btn.disabled = true; btn.textContent = '生成中...';
+    fetch('/user/paylink', { method: 'POST', body: fd })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        btn.disabled = false; btn.textContent = '生成收款链接';
+        if (j.code !== 1) { window.toast(j.msg || '生成失败', 'err'); return; }
+        document.getElementById('qpResult').style.display = 'block';
+        document.getElementById('qpMoney').textContent = (j.custom ? '任意金额模式:买家将自行输入付款金额' : '应收金额: ¥' + j.money);
+        document.getElementById('qpUrl').value = j.full_url;
+        document.getElementById('qpOpen').href = j.full_url;
+        window.toast('收款链接已生成');
+      })
+      .catch(function () { btn.disabled = false; btn.textContent = '生成收款链接'; window.toast('网络错误', 'err'); });
+  });
+})();
+</script>
+{{end}}

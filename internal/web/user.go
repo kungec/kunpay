@@ -1001,6 +1001,9 @@ func (s *Server) handleUserOrderDetail(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUserPayLink(w http.ResponseWriter, r *http.Request) {
 	u := s.currentUser(r)
 	_ = r.ParseForm()
+	if strings.Contains(r.Header.Get("Content-Type"), "multipart/form-data") {
+		_ = r.ParseMultipartForm(32 << 20)
+	}
 	typ := r.FormValue("type")
 	if !allowTypes[typ] {
 		typ = "alipay"
@@ -1011,10 +1014,15 @@ func (s *Server) handleUserPayLink(w http.ResponseWriter, r *http.Request) {
 		name = "商品" + timeFormat(model.Now(), "01021504")
 	}
 	out := map[string]any{}
+	// 任意金额模式: 金额留空,买家在收银台自填
+	custom := strings.TrimSpace(money) == "" && r.FormValue("custom") == "1"
+	if custom {
+		money = "1.00" // 占位金额,买家提交后重新定价
+	}
 	// 使用 API 调试同逻辑创建订单
 	testReq := &service.OrderReq{
 		Type: typ, OutTradeNo: "LINK" + timeFormat(model.Now(), "0102150405") + db.RandDigits(4),
-		NotifyURL: "", Name: name, Money: money, Sitename: u.Username, Device: "mobile",
+		NotifyURL: "", Name: name, Money: money, Sitename: u.Username, Device: "mobile", Custom: custom,
 	}
 	o, err := s.Store.CreateOrder(u, testReq, clientIP(r))
 	if err != nil {
@@ -1028,6 +1036,61 @@ func (s *Server) handleUserPayLink(w http.ResponseWriter, r *http.Request) {
 	out["trade_no"] = o.TradeNo
 	out["full_url"] = s.absoluteURL(r) + "/pay/" + o.TradeNo
 	out["name"] = name
+	out["custom"] = custom
+	if custom {
+		out["money"] = "买家自填"
+	} else {
+		out["money"] = service.MoneyStr(o.PayMoney)
+	}
+	writeJSON(w, out)
+}
+
+// handleUserQuickPay 快捷收款页(生成收款链接,支持任意金额)
+func (s *Server) handleUserQuickPay(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	var recent []map[string]any
+	rows, err := s.DB.Query(`SELECT id,out_trade_no,name,type,money,status,addtime FROM orders
+		WHERE pid=? AND notify_url='' ORDER BY id DESC LIMIT 10`, u.Pid)
+	if err == nil {
+		for rows.Next() {
+			var id, money, addtime int64
+			var outNo, name, typ string
+			var status int
+			if rows.Scan(&id, &outNo, &name, &typ, &money, &status, &addtime) == nil {
+				recent = append(recent, map[string]any{"ID": id, "OutTradeNo": outNo, "Name": name,
+					"Type": typ, "Money": money, "Status": status, "Addtime": addtime})
+			}
+		}
+		rows.Close()
+	}
+	d := s.pageData(r)
+	d["Page"] = "user_quickpay"
+	d["Title"] = "快捷收款"
+	d["BaseURL"] = s.baseURL(r)
+	d["Recent"] = recent
+	d["Flash"] = r.URL.Query().Get("msg")
+	s.render(w, "dash_user_quickpay", http.StatusOK, d)
+}
+
+// handlePaySetAmount 买家在收银台提交任意金额(公开,凭订单号随机性防护)
+func (s *Server) handlePaySetAmount(w http.ResponseWriter, r *http.Request) {
+	out := map[string]any{}
+	tradeNo := r.PathValue("tradeNo")
+	moneyCents, err := service.ParseMoney(r.FormValue("money"))
+	if err != nil {
+		out["code"] = -1
+		out["msg"] = "金额格式错误"
+		writeJSON(w, out)
+		return
+	}
+	o, err := s.Store.SetCustomAmount(tradeNo, moneyCents)
+	if err != nil {
+		out["code"] = -1
+		out["msg"] = err.Error()
+		writeJSON(w, out)
+		return
+	}
+	out["code"] = 1
 	out["money"] = service.MoneyStr(o.PayMoney)
 	writeJSON(w, out)
 }

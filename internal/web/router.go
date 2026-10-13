@@ -158,6 +158,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /user/orders/export.csv", s.requireLogin(s.handleUserOrdersExport))
 	mux.HandleFunc("GET /user/orders/{id}", s.requireLogin(s.handleUserOrderDetail))
 	mux.HandleFunc("POST /user/paylink", s.requireLogin(s.handleUserPayLink))
+	mux.HandleFunc("GET /user/quickpay", s.requireLogin(s.handleUserQuickPay))
+	mux.HandleFunc("POST /pay/{tradeNo}/amount", s.handlePaySetAmount)
 	mux.HandleFunc("GET /user/invite", s.requireLogin(s.handleUserInvite))
 	mux.HandleFunc("POST /user/orders/refund", s.requireLogin(s.requireCSRF(s.handleUserOrderRefund)))
 	mux.HandleFunc("POST /user/orders/notify", s.requireLogin(s.requireCSRF(s.handleUserOrderNotify)))

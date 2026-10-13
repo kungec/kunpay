@@ -418,6 +418,7 @@ func (s *Server) handlePayCashier(w http.ResponseWriter, r *http.Request) {
 		"QqScheme":     template.URL(qqScheme),
 		"SiteName":     st["site_name"],
 		"IsPaid":       o.Status == 1 || o.Status == 3,
+		"IsCustom":     o.Custom == 1,
 		"Expired":      o.Status == 2 || (o.Status == 0 && o.ExpireAt < model.Now()),
 		"LeftSec":      o.ExpireAt - model.Now(),
 		"PayURL":       s.absoluteURL(r) + "/pay/" + o.TradeNo,

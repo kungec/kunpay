@@ -65,6 +65,7 @@ type Order struct {
 	MerchantItemID int64  // 使用的商户自有码
 	PlatformItemID int64  // 使用的平台码
 	Remark         string // 运营/客服备注
+	Custom         int64  // 任意金额收款(1=买家待输入金额)
 }
 
 type Channel struct {

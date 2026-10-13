@@ -103,6 +103,45 @@ func (s *Store) AllChannels() ([]model.Channel, error) {
 	return out, rows.Err()
 }
 
+// SetCustomAmount 任意金额订单: 买家提交金额后重新定价(含尾数偏移)并重新计时
+func (s *Store) SetCustomAmount(tradeNo string, money int64) (*model.Order, error) {
+	o := s.OrderByTradeNo(tradeNo)
+	if o == nil || o.Custom != 1 || o.Status != 0 {
+		return nil, errors.New("订单不存在或不支持自定金额")
+	}
+	if o.ExpireAt < model.Now() {
+		return nil, errors.New("订单已过期,请重新发起")
+	}
+	if money < 1 {
+		return nil, errors.New("金额格式错误")
+	}
+	ch, _ := s.ChannelByType(o.Type)
+	if ch != nil {
+		if money < ch.MinMoney {
+			return nil, errors.New(fmt.Sprintf("最低支付 %s", MoneyStr(ch.MinMoney)))
+		}
+		if money > ch.MaxMoney {
+			return nil, errors.New(fmt.Sprintf("最高支付 %s", MoneyStr(ch.MaxMoney)))
+		}
+	}
+	now := model.Now()
+	timeoutMin := atoiDefault(s.DB.MustSetting("order_timeout"), 5)
+	payMoney := money
+	if s.DB.MustSetting("money_offset") == "1" {
+		payMoney = s.uniquePayMoney(o.Type, money, now, int64(timeoutMin)*60)
+	}
+	_, err := s.DB.Exec("UPDATE orders SET money=?, pay_money=?, expire_at=? WHERE id=? AND status=0 AND custom=1",
+		money, payMoney, now+int64(timeoutMin)*60, o.ID)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.DB.Exec("UPDATE orders SET custom=0 WHERE id=? AND status=0", o.ID)
+	if err != nil {
+		return nil, err
+	}
+	return s.OrderByTradeNo(tradeNo), nil
+}
+
 // OrderReq 汇总外部下单请求参数
 type OrderReq struct {
 	Type       string
@@ -114,6 +153,7 @@ type OrderReq struct {
 	Sitename   string
 	Param      string
 	Device     string
+	Custom     bool // 任意金额收款(买家在收银台自填金额)
 }
 
 // CreateOrder 创建或复用支付订单,返回订单。
@@ -211,10 +251,10 @@ func (s *Store) CreateOrder(u *model.User, req *OrderReq, clientIP string) (*mod
 		o.PayMoney = s.uniquePayMoney(req.Type, money, now, int64(timeoutMin)*60)
 	}
 	res, err := s.DB.Exec(`INSERT INTO orders(trade_no,out_trade_no,pid,type,name,money,pay_money,param,
-		notify_url,return_url,sitename,device,channel_id,status,addtime,expire_at,client_ip)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?)`,
+		notify_url,return_url,sitename,device,channel_id,status,addtime,expire_at,client_ip,custom)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)`,
 		o.TradeNo, o.OutTradeNo, o.Pid, o.Type, o.Name, o.Money, o.PayMoney, o.Param,
-		o.NotifyURL, o.ReturnURL, o.Sitename, o.Device, o.ChannelID, o.Addtime, o.ExpireAt, o.ClientIP)
+		o.NotifyURL, o.ReturnURL, o.Sitename, o.Device, o.ChannelID, o.Addtime, o.ExpireAt, o.ClientIP, boolToInt(req.Custom))
 	if err != nil {
 		// 并发竞态: UNIQUE(pid,out_trade_no) 冲突时回落到复用已有订单
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
@@ -276,12 +316,12 @@ func genTradeNo() string {
 func (s *Store) OrderByID(id int64) *model.Order {
 	o := &model.Order{}
 	err := s.DB.QueryRow(`SELECT id,trade_no,out_trade_no,pid,type,name,money,pay_money,param,notify_url,
-		return_url,sitename,device,channel_id,status,fee,buyer,addtime,endtime,expire_at,notify_count,notify_ok,next_notify_at,client_ip,m_item_id,p_item_id,COALESCE(remark,'')
+		return_url,sitename,device,channel_id,status,fee,buyer,addtime,endtime,expire_at,notify_count,notify_ok,next_notify_at,client_ip,m_item_id,p_item_id,COALESCE(remark,''),COALESCE(custom,0)
 		FROM orders WHERE id=?`, id).
 		Scan(&o.ID, &o.TradeNo, &o.OutTradeNo, &o.Pid, &o.Type, &o.Name, &o.Money, &o.PayMoney, &o.Param,
 			&o.NotifyURL, &o.ReturnURL, &o.Sitename, &o.Device, &o.ChannelID, &o.Status, &o.Fee, &o.Buyer,
 			&o.Addtime, &o.Endtime, &o.ExpireAt, &o.NotifyCount, &o.NotifyOK, &o.NextNotifyAt, &o.ClientIP,
-			&o.MerchantItemID, &o.PlatformItemID, &o.Remark)
+			&o.MerchantItemID, &o.PlatformItemID, &o.Remark, &o.Custom)
 	if err != nil {
 		return nil
 	}
@@ -291,12 +331,12 @@ func (s *Store) OrderByID(id int64) *model.Order {
 func (s *Store) OrderByTradeNo(tradeNo string) *model.Order {
 	o := &model.Order{}
 	err := s.DB.QueryRow(`SELECT id,trade_no,out_trade_no,pid,type,name,money,pay_money,param,notify_url,
-		return_url,sitename,device,channel_id,status,fee,buyer,addtime,endtime,expire_at,notify_count,notify_ok,next_notify_at,client_ip,m_item_id,p_item_id,COALESCE(remark,'')
+		return_url,sitename,device,channel_id,status,fee,buyer,addtime,endtime,expire_at,notify_count,notify_ok,next_notify_at,client_ip,m_item_id,p_item_id,COALESCE(remark,''),COALESCE(custom,0)
 		FROM orders WHERE trade_no=?`, tradeNo).
 		Scan(&o.ID, &o.TradeNo, &o.OutTradeNo, &o.Pid, &o.Type, &o.Name, &o.Money, &o.PayMoney, &o.Param,
 			&o.NotifyURL, &o.ReturnURL, &o.Sitename, &o.Device, &o.ChannelID, &o.Status, &o.Fee, &o.Buyer,
 			&o.Addtime, &o.Endtime, &o.ExpireAt, &o.NotifyCount, &o.NotifyOK, &o.NextNotifyAt, &o.ClientIP,
-			&o.MerchantItemID, &o.PlatformItemID, &o.Remark)
+			&o.MerchantItemID, &o.PlatformItemID, &o.Remark, &o.Custom)
 	if err != nil {
 		return nil
 	}
@@ -306,12 +346,12 @@ func (s *Store) OrderByTradeNo(tradeNo string) *model.Order {
 func (s *Store) OrderByOutTradeNo(pid int64, outTradeNo string) *model.Order {
 	o := &model.Order{}
 	err := s.DB.QueryRow(`SELECT id,trade_no,out_trade_no,pid,type,name,money,pay_money,param,notify_url,
-		return_url,sitename,device,channel_id,status,fee,buyer,addtime,endtime,expire_at,notify_count,notify_ok,next_notify_at,client_ip,m_item_id,p_item_id,COALESCE(remark,'')
+		return_url,sitename,device,channel_id,status,fee,buyer,addtime,endtime,expire_at,notify_count,notify_ok,next_notify_at,client_ip,m_item_id,p_item_id,COALESCE(remark,''),COALESCE(custom,0)
 		FROM orders WHERE pid=? AND out_trade_no=?`, pid, outTradeNo).
 		Scan(&o.ID, &o.TradeNo, &o.OutTradeNo, &o.Pid, &o.Type, &o.Name, &o.Money, &o.PayMoney, &o.Param,
 			&o.NotifyURL, &o.ReturnURL, &o.Sitename, &o.Device, &o.ChannelID, &o.Status, &o.Fee, &o.Buyer,
 			&o.Addtime, &o.Endtime, &o.ExpireAt, &o.NotifyCount, &o.NotifyOK, &o.NextNotifyAt, &o.ClientIP,
-			&o.MerchantItemID, &o.PlatformItemID, &o.Remark)
+			&o.MerchantItemID, &o.PlatformItemID, &o.Remark, &o.Custom)
 	if err != nil {
 		return nil
 	}
@@ -352,7 +392,7 @@ func (s *Store) ReportPayment(deviceID int64, typ string, money int64, content s
 	if matched == nil {
 		var candidates []*model.Order
 		rows, err := s.DB.Query(`SELECT id,trade_no,out_trade_no,pid,type,name,money,pay_money,param,notify_url,
-			return_url,sitename,device,channel_id,status,fee,buyer,addtime,endtime,expire_at,notify_count,notify_ok,next_notify_at,client_ip,m_item_id,p_item_id,COALESCE(remark,'')
+			return_url,sitename,device,channel_id,status,fee,buyer,addtime,endtime,expire_at,notify_count,notify_ok,next_notify_at,client_ip,m_item_id,p_item_id,COALESCE(remark,''),COALESCE(custom,0)
 			FROM orders WHERE status=0 AND type=? AND pay_money=? AND expire_at>? ORDER BY id ASC LIMIT 5`,
 			typ, money, now-300)
 		if err == nil {
@@ -361,7 +401,7 @@ func (s *Store) ReportPayment(deviceID int64, typ string, money int64, content s
 				if err := rows.Scan(&o.ID, &o.TradeNo, &o.OutTradeNo, &o.Pid, &o.Type, &o.Name, &o.Money, &o.PayMoney,
 					&o.Param, &o.NotifyURL, &o.ReturnURL, &o.Sitename, &o.Device, &o.ChannelID, &o.Status, &o.Fee,
 					&o.Buyer, &o.Addtime, &o.Endtime, &o.ExpireAt, &o.NotifyCount, &o.NotifyOK, &o.NextNotifyAt, &o.ClientIP,
-					&o.MerchantItemID, &o.PlatformItemID, &o.Remark); err == nil {
+					&o.MerchantItemID, &o.PlatformItemID, &o.Remark, &o.Custom); err == nil {
 					candidates = append(candidates, o)
 				}
 			}
