@@ -20,7 +20,7 @@ type DB struct {
 }
 
 func Open(path string) (*DB, error) {
-	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)", path)
+	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=synchronous(NORMAL)", path)
 	d, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
@@ -322,6 +322,9 @@ func (d *DB) Migrate() error {
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN event_webhook TEXT DEFAULT ''")
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN cashier_notice TEXT DEFAULT ''")
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN last_totp_step INTEGER DEFAULT 0")
+	// 会话/结算热查询索引(按 user_id 检索)
+	_, _ = d.Exec("CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)")
+	_, _ = d.Exec("CREATE INDEX IF NOT EXISTS idx_settle_user ON settle_logs(user_id, status)")
 	// 热查询复合索引(依赖上方 ALTER 出的列,须在其后创建)
 	_, _ = d.Exec("CREATE INDEX IF NOT EXISTS idx_orders_pitem ON orders(p_item_id)")
 	_, _ = d.Exec("CREATE INDEX IF NOT EXISTS idx_orders_mitem ON orders(m_item_id)")

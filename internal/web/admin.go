@@ -35,13 +35,26 @@ func (s *Server) handleAdminHome(w http.ResponseWriter, r *http.Request) {
 	_ = s.DB.QueryRow("SELECT COUNT(*) FROM users WHERE created_at>=?", dayStart).Scan(&todayNewUsers)
 	_ = s.DB.QueryRow("SELECT COUNT(*) FROM orders").Scan(&totalOrders)
 
+	// 近7日趋势: 单次聚合(按本地日界分组)
+	_, tzOffInt := time.Now().Zone()
+	tzOff := int64(tzOffInt)
+	dayAgg := map[int64][2]int64{}
+	rows7, err := s.DB.Query(`SELECT (addtime+?)/86400 AS d, COUNT(*), COALESCE(SUM(money),0)
+		FROM orders WHERE status IN(1,3) AND addtime>=? GROUP BY d`, tzOff, dayStart-6*86400)
+	if err == nil {
+		for rows7.Next() {
+			var dkey, c, m int64
+			if rows7.Scan(&dkey, &c, &m) == nil {
+				dayAgg[dkey] = [2]int64{c, m}
+			}
+		}
+		rows7.Close()
+	}
 	var days []StatDay
 	for i := 6; i >= 0; i-- {
 		start := dayStart - int64(i)*86400
-		var c, m int64
-		_ = s.DB.QueryRow("SELECT COUNT(*),COALESCE(SUM(money),0) FROM orders WHERE status IN(1,3) AND addtime>=? AND addtime<?",
-			start, start+86400).Scan(&c, &m)
-		days = append(days, StatDay{Date: timeFormat(start, "01-02"), Count: c, Money: m})
+		agg := dayAgg[(start+tzOff)/86400]
+		days = append(days, StatDay{Date: timeFormat(start, "01-02"), Count: agg[0], Money: agg[1]})
 	}
 	// 商户交易排行 Top5(近7日)
 	type TopM struct {
@@ -462,6 +475,23 @@ func (s *Server) handleAdminChannels(w http.ResponseWriter, r *http.Request) {
 		Rotate    bool
 		CanRotate bool
 	}
+	// 一次聚合取回全部平台码统计(免去 每码×每项 的逐行查询)
+	itemAgg := map[int64][2]int64{}
+	rowsAgg, err := s.DB.Query(`SELECT p_item_id, COUNT(*), COALESCE(SUM(money-fee),0)
+		FROM orders WHERE p_item_id>0 AND status IN(1,3) GROUP BY p_item_id`)
+	if err == nil {
+		for rowsAgg.Next() {
+			var iid, c, a int64
+			if rowsAgg.Scan(&iid, &c, &a) == nil {
+				itemAgg[iid] = [2]int64{c, a}
+			}
+		}
+		rowsAgg.Close()
+	}
+	rotateMap := map[string]bool{}
+	for _, c := range chs {
+		rotateMap[c.Type] = s.Store.PlatformRotate(c.Type)
+	}
 	var views []chanView
 	for _, c := range chs {
 		v := chanView{Channel: c}
@@ -470,12 +500,10 @@ func (s *Server) handleAdminChannels(w http.ResponseWriter, r *http.Request) {
 			if it.Enabled == 1 {
 				v.EnabledN++
 			}
-			var cnt, amt int64
-			_ = s.DB.QueryRow("SELECT COUNT(*),COALESCE(SUM(money-fee),0) FROM orders WHERE p_item_id=? AND status IN(1,3)", it.ID).
-				Scan(&cnt, &amt)
-			v.Items = append(v.Items, platItemView{ID: it.ID, Name: it.Name, Qrcode: it.Qrcode, Enabled: it.Enabled == 1, Weight: it.Weight, Count: cnt, Amount: amt})
+			agg := itemAgg[it.ID]
+			v.Items = append(v.Items, platItemView{ID: it.ID, Name: it.Name, Qrcode: it.Qrcode, Enabled: it.Enabled == 1, Weight: it.Weight, Count: agg[0], Amount: agg[1]})
 		}
-		v.Rotate = s.Store.PlatformRotate(c.Type)
+		v.Rotate = rotateMap[c.Type]
 		v.CanRotate = v.EnabledN >= 2
 		views = append(views, v)
 	}
@@ -1665,7 +1693,21 @@ func (s *Server) handleAdminRevenue(w http.ResponseWriter, r *http.Request) {
 	s.DB.QueryRow("SELECT COUNT(*) FROM orders WHERE status IN(1,3) AND addtime>=?", dayStart).Scan(&todayOrders)
 	s.DB.QueryRow("SELECT COUNT(*) FROM orders WHERE status IN(1,3) AND addtime>=?", monthStart).Scan(&monthOrders)
 
-	// 近30日收入趋势
+	// 近30日收入趋势: 单次聚合(按本地日界分组)
+	_, tzOffInt := time.Now().Zone()
+	tzOff := int64(tzOffInt)
+	feeAgg := map[int64]int64{}
+	rows30, err := s.DB.Query(`SELECT (addtime+?)/86400 AS d, COALESCE(SUM(fee),0)
+		FROM orders WHERE status IN(1,3) AND addtime>=? GROUP BY d`, tzOff, dayStart-29*86400)
+	if err == nil {
+		for rows30.Next() {
+			var dkey, f int64
+			if rows30.Scan(&dkey, &f) == nil {
+				feeAgg[dkey] = f
+			}
+		}
+		rows30.Close()
+	}
 	type revDay struct {
 		Date string
 		Fee  int64
@@ -1673,9 +1715,7 @@ func (s *Server) handleAdminRevenue(w http.ResponseWriter, r *http.Request) {
 	var rev []revDay
 	for i := 29; i >= 0; i-- {
 		start := dayStart - int64(i)*86400
-		var f int64
-		s.DB.QueryRow("SELECT COALESCE(SUM(fee),0) FROM orders WHERE status IN(1,3) AND addtime>=? AND addtime<?", start, start+86400).Scan(&f)
-		rev = append(rev, revDay{Date: timeFormat(start, "01-02"), Fee: f})
+		rev = append(rev, revDay{Date: timeFormat(start, "01-02"), Fee: feeAgg[(start+tzOff)/86400]})
 	}
 
 	d := s.pageData(r)

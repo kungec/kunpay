@@ -37,14 +37,27 @@ func (s *Server) handleUserDashboard(w http.ResponseWriter, r *http.Request) {
 	_ = s.DB.QueryRow("SELECT COUNT(*) FROM orders WHERE pid=? AND status IN(1,3) AND addtime<? AND addtime>=?", u.Pid, dayStart, dayStart-86400).Scan(&yesterdayOk)
 	_ = s.DB.QueryRow("SELECT COALESCE(SUM(money),0) FROM orders WHERE pid=? AND status IN(1,3) AND addtime<? AND addtime>=?", u.Pid, dayStart, dayStart-86400).Scan(&yesterdayMoney)
 
-	// 近7日趋势
+	// 近7日趋势: 单次聚合(按本地日界分组,免去 7 次往返)
+	_, tzOffInt := time.Now().Zone()
+	tzOff := int64(tzOffInt)
+	dayAgg := map[int64][2]int64{}
+	rows7, err := s.DB.Query(`SELECT (addtime+?)/86400 AS d, COUNT(*), COALESCE(SUM(money),0)
+		FROM orders WHERE pid=? AND status IN(1,3) AND addtime>=? GROUP BY d`,
+		tzOff, u.Pid, dayStart-6*86400)
+	if err == nil {
+		for rows7.Next() {
+			var dkey, c, m int64
+			if rows7.Scan(&dkey, &c, &m) == nil {
+				dayAgg[dkey] = [2]int64{c, m}
+			}
+		}
+		rows7.Close()
+	}
 	var days []StatDay
 	for i := 6; i >= 0; i-- {
 		start := dayStart - int64(i)*86400
-		var c, m int64
-		_ = s.DB.QueryRow("SELECT COUNT(*),COALESCE(SUM(money),0) FROM orders WHERE pid=? AND status IN(1,3) AND addtime>=? AND addtime<?",
-			u.Pid, start, start+86400).Scan(&c, &m)
-		days = append(days, StatDay{Date: timeFormat(start, "01-02"), Count: c, Money: m})
+		agg := dayAgg[(start+tzOff)/86400]
+		days = append(days, StatDay{Date: timeFormat(start, "01-02"), Count: agg[0], Money: agg[1]})
 	}
 	// 最近订单
 	rows, err := s.DB.Query(`SELECT id,trade_no,out_trade_no,type,name,money,pay_money,status,addtime,endtime
@@ -177,6 +190,36 @@ type chanView struct {
 func (s *Server) handleUserChannels(w http.ResponseWriter, r *http.Request) {
 	u := s.currentUser(r)
 	chs, _ := s.Store.AllChannels()
+	// 一次聚合取回全部统计(免去 每码×每项 的逐行查询)
+	itemAgg := map[int64][2]int64{}
+	rows, err := s.DB.Query(`SELECT m_item_id, COUNT(*), COALESCE(SUM(money-fee),0)
+		FROM orders WHERE pid=? AND m_item_id>0 AND status IN(1,3) GROUP BY m_item_id`, u.Pid)
+	if err == nil {
+		for rows.Next() {
+			var iid, c, a int64
+			if rows.Scan(&iid, &c, &a) == nil {
+				itemAgg[iid] = [2]int64{c, a}
+			}
+		}
+		rows.Close()
+	}
+	chanAgg := map[string][2]int64{}
+	rows, err = s.DB.Query(`SELECT type, COUNT(*), SUM(CASE WHEN status IN(1,3) THEN 1 ELSE 0 END)
+		FROM orders WHERE pid=? AND addtime>? - 7*86400 GROUP BY type`, u.Pid, model.Now())
+	if err == nil {
+		for rows.Next() {
+			var t string
+			var c, o int64
+			if rows.Scan(&t, &c, &o) == nil {
+				chanAgg[t] = [2]int64{c, o}
+			}
+		}
+		rows.Close()
+	}
+	rotateMap := map[string]bool{}
+	for _, c := range chs {
+		rotateMap[c.Type] = s.Store.MerchantRotate(u.ID, c.Type)
+	}
 	var views []chanView
 	for _, c := range chs {
 		v := chanView{Type: c.Type, Name: c.Name, Platform: c.Qrcode, PlatformOn: c.Enabled == 1}
@@ -185,20 +228,15 @@ func (s *Server) handleUserChannels(w http.ResponseWriter, r *http.Request) {
 			if it.Enabled == 1 {
 				v.EnabledN++
 			}
-			var cnt int64
-			var amt int64
-			_ = s.DB.QueryRow("SELECT COUNT(*),COALESCE(SUM(money-fee),0) FROM orders WHERE m_item_id=? AND status IN(1,3)", it.ID).
-				Scan(&cnt, &amt)
+			agg := itemAgg[it.ID]
 			v.Items = append(v.Items, chanItemView{
 				ID: it.ID, Name: it.Name, Qrcode: it.Qrcode, Enabled: it.Enabled == 1,
-				Weight: it.Weight, Count: cnt, Amount: amt,
+				Weight: it.Weight, Count: agg[0], Amount: agg[1],
 			})
 		}
-		v.Rotate = s.Store.MerchantRotate(u.ID, c.Type)
+		v.Rotate = rotateMap[c.Type]
 		v.CanRotate = v.EnabledN >= 2
-		_ = s.DB.QueryRow(`SELECT COUNT(*), SUM(CASE WHEN status IN(1,3) THEN 1 ELSE 0 END)
-			FROM orders WHERE pid=? AND type=? AND addtime>? - 7*86400`,
-			u.Pid, c.Type, model.Now()).Scan(&v.Count7, &v.Ok7)
+		v.Count7, v.Ok7 = chanAgg[c.Type][0], chanAgg[c.Type][1]
 		if v.Count7 > 0 {
 			v.Rate7 = float64(v.Ok7) / float64(v.Count7) * 100
 		} else {
