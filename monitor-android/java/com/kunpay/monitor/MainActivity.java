@@ -1,5 +1,6 @@
 package com.kunpay.monitor;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -149,6 +150,12 @@ public class MainActivity extends Activity {
         btnListener.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                boolean granted = checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                        == android.content.pm.PackageManager.PERMISSION_GRANTED;
+                if (listenerEnabled() && !granted && android.os.Build.VERSION.SDK_INT >= 33) {
+                    ensureNotificationPermission();
+                    return;
+                }
                 try {
                     startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
                 } catch (Exception e) {
@@ -192,6 +199,16 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 100) {
+            refreshListenerState();
+            ensureService(); // 授权后重连,让系统恢复监听事件投递
+            toast("通知权限已更新");
+        }
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
         IntentFilter f = new IntentFilter("com.kunpay.LOG");
@@ -204,6 +221,11 @@ public class MainActivity extends Activity {
         refreshStatus();
         refreshListenerState();
         ensureService();
+        if (android.os.Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            ensureNotificationPermission();
+        }
     }
 
     @Override
@@ -244,14 +266,30 @@ public class MainActivity extends Activity {
 
     private void refreshListenerState() {
         Button b = findViewById(R.id.btnListener);
-        if (listenerEnabled()) {
+        boolean granted = checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                == android.content.pm.PackageManager.PERMISSION_GRANTED;
+        if (listenerEnabled() && granted) {
             b.setText("✓ 已授权通知使用权");
             b.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#E8F7F0")));
             b.setTextColor(getColor(R.color.success));
+        } else if (listenerEnabled()) {
+            // Android 13+: 监听权限已授但缺通知弹窗权限时,监听事件会被系统停发
+            b.setText("② 允许通知(否则收不到)");
+            b.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#FFF3E0")));
+            b.setTextColor(Color.parseColor("#B26A00"));
         } else {
             b.setText("① 通知使用权");
             b.setBackgroundTintList(null);
             b.setTextColor(Color.WHITE);
+        }
+    }
+
+    /** Android 13+ 必需: 未授予通知权限时系统会停发监听事件 */
+    private void ensureNotificationPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 100);
         }
     }
 
