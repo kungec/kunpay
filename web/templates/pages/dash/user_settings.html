@@ -68,6 +68,27 @@
         <input class="input" type="text" name="settle_name" value="{{.Merchant.SettleName}}" placeholder="收款人真实姓名">
       </div>
       <div class="form-item">
+        <label>收银台自定义 Logo(选填,显示在您的收银台页面)</label>
+        <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
+          {{if .Merchant.Logo}}<img src="{{.Merchant.Logo}}" alt="logo" style="height:40px;border-radius:8px">{{end}}
+          <form method="post" action="/user/logo/upload" enctype="multipart/form-data" style="display:inline-flex;gap:6px;align-items:center">
+            <input type="hidden" name="_csrf" value="{{.CSRF}}">
+            <label class="file-upload" style="width:auto">
+              <span>{{if .Merchant.Logo}}更换 Logo{{else}}上传 Logo{{end}}</span>
+              <input type="file" name="logo" accept="image/png,image/jpeg,image/webp" required onchange="this.closest('form').querySelector('button[type=submit]').click()">
+            </label>
+            <button class="btn btn-primary btn-sm" type="submit">上传</button>
+          </form>
+          {{if .Merchant.Logo}}
+          <form method="post" action="/user/logo/delete" style="display:inline">
+            <input type="hidden" name="_csrf" value="{{.CSRF}}">
+            <button class="btn btn-ghost btn-sm" type="submit">删除</button>
+          </form>
+          {{end}}
+        </div>
+        <div class="tip">显示在您的收银台页面,增强品牌辨识度</div>
+      </div>
+      <div class="form-item">
         <label>收款成功 IM 推送(选填)</label>
         <div class="row" style="gap:8px">
           <input class="input mono" type="url" name="notify_webhook" value="{{.Merchant.NotifyWebhook}}" placeholder="飞书/钉钉/企业微信机器人 Webhook 地址" style="flex:1;min-width:200px">

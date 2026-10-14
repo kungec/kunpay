@@ -26,7 +26,7 @@
 <div class="cashier-wrap">
   <div class="cashier-card">
     <div class="site">
-      {{if index .Settings "site_logo"}}<img src="{{index .Settings "site_logo"}}" alt="logo" style="height:44px;width:auto;border-radius:10px">{{else}}<img src="/static/img/logo-icon@256.png" alt="logo" class="logo-ic lg-ic">{{end}}
+      {{if .MerchantLogo}}<img src="{{.MerchantLogo}}" alt="logo" style="height:44px;width:auto;border-radius:10px">{{else if index .Settings "site_logo"}}<img src="{{index .Settings "site_logo"}}" alt="logo" style="height:44px;width:auto;border-radius:10px">{{else}}<img src="/static/img/logo-icon@256.png" alt="logo" class="logo-ic lg-ic">{{end}}
       <b style="font-size:18px">{{.SiteName}}</b>
     </div>
     <div class="item-name">商品名称: {{.Order.Name}}</div>

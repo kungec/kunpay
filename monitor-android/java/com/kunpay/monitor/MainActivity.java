@@ -46,6 +46,7 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         wireStrictSwitch();
+        wireVoiceSwitch();
 
         etServer = findViewById(R.id.etServer);
         etToken = findViewById(R.id.etToken);
@@ -267,6 +268,18 @@ public class MainActivity extends Activity {
     }
 
     private android.widget.Switch swStrict;
+    private android.widget.Switch swVoice;
+
+    private void wireVoiceSwitch() {
+        swVoice = findViewById(R.id.swVoice);
+        swVoice.setChecked(prefs.getBoolean("voice_announce", true));
+        swVoice.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(android.widget.CompoundButton b, boolean checked) {
+                prefs.edit().putBoolean("voice_announce", checked).apply();
+            }
+        });
+    }
 
     private void wireStrictSwitch() {
         swStrict = findViewById(R.id.swStrict);

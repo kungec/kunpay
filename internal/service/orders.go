@@ -43,7 +43,7 @@ func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 		&u.Rate, &u.Balance, &u.Pid, &u.Skey, &u.SettleType, &u.SettleAccount, &u.SettleName,
 		&u.InviteCode, &u.InvitedBy, &u.CreatedAt, &u.LastLoginAt, &u.LastLoginIP, &u.Avatar, &u.ApiIPs,
 		&u.TotpSecret, &u.NotifyWebhook, &u.LimitSingle, &u.LimitDaily,
-		&u.RsaPublic, &u.PayTypes, &u.NotifyEmailOn, &u.RecoveryCodes, &u.NotifyPost, &u.ApiRate)
+		&u.RsaPublic, &u.PayTypes, &u.NotifyEmailOn, &u.RecoveryCodes, &u.NotifyPost, &u.ApiRate, &u.Logo)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 }
 
 const userCols = `id,username,email,password_hash,qq,role,status,rate,balance,pid,skey,
-	settle_type,settle_account,settle_name,invite_code,invited_by,created_at,last_login_at,last_login_ip,avatar,COALESCE(api_ips,''),COALESCE(totp_secret,''),COALESCE(notify_webhook,''),COALESCE(limit_single,0),COALESCE(limit_daily,0),COALESCE(rsa_public,''),COALESCE(pay_types,''),COALESCE(notify_email_on,0),COALESCE(recovery_codes,''),COALESCE(notify_post,0),COALESCE(api_rate,0)`
+	settle_type,settle_account,settle_name,invite_code,invited_by,created_at,last_login_at,last_login_ip,avatar,COALESCE(api_ips,''),COALESCE(totp_secret,''),COALESCE(notify_webhook,''),COALESCE(limit_single,0),COALESCE(limit_daily,0),COALESCE(rsa_public,''),COALESCE(pay_types,''),COALESCE(notify_email_on,0),COALESCE(recovery_codes,''),COALESCE(notify_post,0),COALESCE(api_rate,0),COALESCE(logo,'')`
 
 func (s *Store) UserByID(id int64) (*model.User, error) {
 	u, err := scanUser(s.DB.QueryRow("SELECT "+userCols+" FROM users WHERE id=?", id))

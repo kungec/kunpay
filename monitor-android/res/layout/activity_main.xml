@@ -310,6 +310,28 @@
                         android:checked="true" />
                 </LinearLayout>
 
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="收款语音播报(到账自动朗读金额)"
+                        android:textColor="@color/text3"
+                        android:textSize="12sp" />
+
+                    <Switch
+                        android:id="@+id/swVoice"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true" />
+                </LinearLayout>
+
                 <Button
                     android:id="@+id/btnListener"
                     android:layout_width="0dp"

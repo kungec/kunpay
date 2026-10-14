@@ -1536,6 +1536,43 @@ func boolToInt(b bool) int {
 	return 0
 }
 
+// handleUserLogoUpload 商户自定义 Logo 上传(收银台展示)
+func (s *Server) handleUserLogoUpload(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	file, header, err := r.FormFile("logo")
+	if err != nil {
+		http.Redirect(w, r, "/user/settings?err="+urlEscape("请选择图片文件"), http.StatusFound)
+		return
+	}
+	defer file.Close()
+	if header.Size > 2*1024*1024 {
+		http.Redirect(w, r, "/user/settings?err="+urlEscape("Logo 不能超过 2MB"), http.StatusFound)
+		return
+	}
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	if ext != ".png" && ext != ".jpg" && ext != ".jpeg" && ext != ".webp" {
+		http.Redirect(w, r, "/user/settings?err="+urlEscape("仅支持 png/jpg/webp 格式"), http.StatusFound)
+		return
+	}
+	fn := fmt.Sprintf("ulogo_%d_%s%s", u.ID, db.RandKey(6), ext)
+	dst, err := os.Create(filepath.Join(s.DataDir, fn))
+	if err != nil {
+		http.Redirect(w, r, "/user/settings?err="+urlEscape("保存失败"), http.StatusFound)
+		return
+	}
+	defer dst.Close()
+	io.Copy(dst, file)
+	_, _ = s.DB.Exec("UPDATE users SET logo=? WHERE id=?", "/uploads/"+fn, u.ID)
+	http.Redirect(w, r, "/user/settings?msg="+urlEscape("Logo 已上传,收银台将显示您的品牌 Logo"), http.StatusFound)
+}
+
+// handleUserLogoDelete 删除商户 Logo
+func (s *Server) handleUserLogoDelete(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	_, _ = s.DB.Exec("UPDATE users SET logo='' WHERE id=?", u.ID)
+	http.Redirect(w, r, "/user/settings?msg="+urlEscape("Logo 已删除"), http.StatusFound)
+}
+
 // handleUserMessages 商户消息中心
 func (s *Server) handleUserMessages(w http.ResponseWriter, r *http.Request) {
 	u := s.currentUser(r)

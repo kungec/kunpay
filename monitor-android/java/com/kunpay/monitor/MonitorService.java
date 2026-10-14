@@ -44,6 +44,8 @@ public class MonitorService extends NotificationListenerService {
 
     private final HandlerThread worker = new HandlerThread("kunpay-worker");
     private Handler handler;
+    private android.speech.tts.TextToSpeech tts;
+    private volatile boolean ttsReady;
     private Runnable heartbeat;
     private SharedPreferences prefs;
     private int hbOkCount = 0;
@@ -56,6 +58,15 @@ public class MonitorService extends NotificationListenerService {
     @Override
     public void onCreate() {
         super.onCreate();
+        tts = new android.speech.tts.TextToSpeech(this, new android.speech.tts.TextToSpeech.OnInitListener() {
+            @Override
+            public void onInit(int status) {
+                if (status == android.speech.tts.TextToSpeech.SUCCESS) {
+                    tts.setLanguage(java.util.Locale.CHINA);
+                    ttsReady = true;
+                }
+            }
+        });
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         worker.start();
         handler = new Handler(worker.getLooper());
@@ -71,6 +82,8 @@ public class MonitorService extends NotificationListenerService {
 
     @Override
     public void onDestroy() {
+        if (tts != null) { tts.stop(); tts.shutdown(); }
+        super.onDestroy();
         if (handler != null) handler.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
@@ -180,6 +193,12 @@ public class MonitorService extends NotificationListenerService {
                         public void onResult(boolean ok, String msg) {
                             if (ok) {
                                 log("✓ 上报成功: " + msg);
+                                if (prefs.getBoolean("voice_announce", true) && ttsReady) {
+                                    String amt = fMoney.replace(",", "");
+                                    try { tts.speak("收款" + Float.parseFloat(amt) + "元",
+                                        android.speech.tts.TextToSpeech.QUEUE_ADD, null,
+                                        "pay_" + System.currentTimeMillis()); } catch (Exception ignore) {}
+                                }
                             } else {
                                 log("✗ 上报失败: " + msg + " (已加入重试队列)");
                                 enqueuePending(fMoney, fType, fContent);

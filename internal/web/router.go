@@ -168,6 +168,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /user/orders/close", s.requireLogin(s.requireCSRF(s.handleUserOrderClose)))
 	mux.HandleFunc("POST /user/tickets/create", s.requireLogin(s.requireCSRF(s.handleUserTicketCreate)))
 	mux.HandleFunc("GET /user/messages", s.requireLogin(s.handleUserMessages))
+	mux.HandleFunc("POST /user/logo/upload", s.requireLogin(s.requireCSRF(s.handleUserLogoUpload)))
+	mux.HandleFunc("POST /user/logo/delete", s.requireLogin(s.requireCSRF(s.handleUserLogoDelete)))
 	mux.HandleFunc("POST /user/messages/mark_read", s.requireLogin(s.handleUserMessages))
 	mux.HandleFunc("GET /user/tickets/{id}", s.requireLogin(s.handleUserTicketView))
 	mux.HandleFunc("POST /user/tickets/reply", s.requireLogin(s.requireCSRF(s.handleUserTicketReply)))

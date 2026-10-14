@@ -489,6 +489,9 @@ func (s *Server) handlePayCashier(w http.ResponseWriter, r *http.Request) {
 		"PayURL":       s.absoluteURL(r) + "/pay/" + o.TradeNo,
 	}
 	d["Page"] = "cashier"
+	if merchant, _ := s.Store.UserByPid(o.Pid); merchant != nil && merchant.Logo != "" {
+		d["MerchantLogo"] = merchant.Logo
+	}
 	s.render(w, "sa_cashier", http.StatusOK, d)
 }
 
