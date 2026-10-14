@@ -11,6 +11,7 @@ import (
 	"html/template"
 	"log"
 	"math/rand"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -81,18 +82,31 @@ func main() {
 	mux.HandleFunc("POST /api/simulate", app.handleSimulate)
 	mux.HandleFunc("POST /api/heartbeat", app.handleHeartbeatNow)
 
-	addr := fmt.Sprintf("127.0.0.1:%d", app.cfg.Port)
-	url := fmt.Sprintf("http://127.0.0.1:%d/", app.cfg.Port)
+	// 端口被占用(可能已有实例在跑)时自动顺延,保证双击启动总能打开控制台
+	addr := ""
+	url := ""
+	for p := app.cfg.Port; p < app.cfg.Port+10; p++ {
+		addr = fmt.Sprintf("127.0.0.1:%d", p)
+		url = fmt.Sprintf("http://127.0.0.1:%d/", p)
+		ln, err := net.Listen("tcp", addr)
+		if err == nil {
+			ln.Close()
+			app.cfg.Port = p
+			break
+		}
+		log.Printf("端口 %d 被占用,尝试下一个", p)
+		addr = ""
+	}
+	if addr == "" {
+		log.Printf("端口 %d-%d 均被占用,退出", app.cfg.Port, app.cfg.Port+9)
+		return
+	}
 	log.Printf("KunPay 监控助手已启动: %s", url)
 	if !*noOpen {
 		go openBrowser(url)
 	}
 	if err := http.ListenAndServe(addr, mux); err != nil {
-		// 端口被占用(可能已有一个实例在跑),直接打开已有控制台
-		log.Printf("端口 %d 被占用: %v", app.cfg.Port, err)
-		if !*noOpen {
-			openBrowser(url)
-		}
+		log.Printf("监听失败: %v", err)
 	}
 }
 
