@@ -130,9 +130,12 @@ def main():
 
     # ========== C. 快捷收款(任意金额) ==========
     print("== C. 快捷收款(任意金额) ==")
+    _, pg, _ = req("/user/quickpay")
+    _csrf = re.search(r'name="_csrf" value="([0-9a-f]+)"', pg.decode()).group(1)
     def paylink(fields):
         boundary = "----v2"
         parts = []
+        fields["_csrf"] = _csrf
         for k, v in fields.items():
             parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n')
         bodyb = "".join(parts).encode() + f"--{boundary}--\r\n".encode()
