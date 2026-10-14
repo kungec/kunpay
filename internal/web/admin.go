@@ -908,7 +908,7 @@ func (s *Server) handleAdminSettlesDo(w http.ResponseWriter, r *http.Request) {
 		}
 		s.audit(r, "settle.pay", fmt.Sprintf("#%d ¥%s", id, service.MoneyStr(amount)))
 		if m, _ := s.Store.UserByID(uid); m != nil {
-			s.notifyMerchantSettle(m.Email, m.Username, true, amount, "")
+			go s.notifyMerchantSettle(m.Email, m.Username, true, amount, "") // 异步: SMTP 握手不阻塞管理员操作
 		}
 		http.Redirect(w, r, "/admin/settles?msg="+urlEscape("已标记打款"), http.StatusFound)
 		return
@@ -950,7 +950,7 @@ func (s *Server) handleAdminSettlesDo(w http.ResponseWriter, r *http.Request) {
 		}
 		s.audit(r, "settle.reject", fmt.Sprintf("#%d ¥%s", id, service.MoneyStr(amount)))
 		if m, _ := s.Store.UserByID(uid); m != nil {
-			s.notifyMerchantSettle(m.Email, m.Username, false, amount, note)
+			go s.notifyMerchantSettle(m.Email, m.Username, false, amount, note) // 异步
 		}
 		http.Redirect(w, r, "/admin/settles?msg="+urlEscape("已拒绝并退款"), http.StatusFound)
 		return
