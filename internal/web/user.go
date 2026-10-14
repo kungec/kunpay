@@ -431,19 +431,40 @@ func (s *Server) handleUserSettleApply(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/user/settle?err="+urlEscape("请先在个人信息中设置结算账号与姓名"), http.StatusFound)
 		return
 	}
-	// 原子扣减余额
-	res, err := s.DB.Exec("UPDATE users SET balance=balance-? WHERE id=? AND balance>=?", amount, u.ID, amount)
-	if err != nil || rowsAffected(res) == 0 {
-		http.Redirect(w, r, "/user/settle?err="+urlEscape("余额不足"), http.StatusFound)
+	// 事务: 扣余额 + 写流水 + 建结算单同生共死
+	tx, err := s.DB.Begin()
+	if err != nil {
+		http.Redirect(w, r, "/user/settle?err="+urlEscape("提现失败: "+err.Error()), http.StatusFound)
 		return
 	}
 	var balance int64
-	_ = s.DB.QueryRow("SELECT balance FROM users WHERE id=?", u.ID).Scan(&balance)
-	_, _ = s.DB.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
+	if err := tx.QueryRow("SELECT balance FROM users WHERE id=? AND balance>=?", u.ID, amount).Scan(&balance); err != nil {
+		tx.Rollback()
+		http.Redirect(w, r, "/user/settle?err="+urlEscape("余额不足"), http.StatusFound)
+		return
+	}
+	if _, err := tx.Exec("UPDATE users SET balance=balance-? WHERE id=?", amount, u.ID); err != nil {
+		tx.Rollback()
+		http.Redirect(w, r, "/user/settle?err="+urlEscape("提现失败"), http.StatusFound)
+		return
+	}
+	if _, err := tx.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
 		VALUES(?,?,?,?,?,?,?)`,
-		u.ID, "settle", -amount, balance+amount, balance, "申请提现", model.Now())
-	_, _ = s.DB.Exec(`INSERT INTO settle_logs(user_id,amount,settle_type,account,name,status,created_at)
-		VALUES(?,?,?,?,?,0,?)`, u.ID, amount, u.SettleType, u.SettleAccount, u.SettleName, model.Now())
+		u.ID, "settle", -amount, balance, balance-amount, "申请提现", model.Now()); err != nil {
+		tx.Rollback()
+		http.Redirect(w, r, "/user/settle?err="+urlEscape("提现失败"), http.StatusFound)
+		return
+	}
+	if _, err := tx.Exec(`INSERT INTO settle_logs(user_id,amount,settle_type,account,name,status,created_at)
+		VALUES(?,?,?,?,?,0,?)`, u.ID, amount, u.SettleType, u.SettleAccount, u.SettleName, model.Now()); err != nil {
+		tx.Rollback()
+		http.Redirect(w, r, "/user/settle?err="+urlEscape("提现失败"), http.StatusFound)
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		http.Redirect(w, r, "/user/settle?err="+urlEscape("提现失败"), http.StatusFound)
+		return
+	}
 	http.Redirect(w, r, "/user/settle?msg="+urlEscape("提现申请已提交,请等待管理员处理"), http.StatusFound)
 }
 
