@@ -211,7 +211,7 @@ func (s *Server) handleOrderCheckPage(w http.ResponseWriter, r *http.Request) {
 
 // isValidTradeNo 校验订单号格式(纯数字,14-23位)
 func isValidTradeNo(s string) bool {
-	if len(s) < 14 || len(s) > 23 {
+	if len(s) < 14 || len(s) > 30 {
 		return false
 	}
 	for _, ch := range s {
