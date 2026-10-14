@@ -242,6 +242,11 @@ func (s *Server) handleUserChannelsUpload(w http.ResponseWriter, r *http.Request
 		http.Redirect(w, r, "/user/channels?err="+urlEscape("仅支持 png/jpg/gif/webp 图片"), http.StatusFound)
 		return
 	}
+	if !validImageMagic(file, ext) {
+		http.Redirect(w, r, "/user/channels?err="+urlEscape("图片内容与格式不符"), http.StatusFound)
+		return
+	}
+	_, _ = file.Seek(0, 0)
 	name := strings.TrimSpace(r.FormValue("name"))
 	if name == "" {
 		name = "收款码" + strconv.Itoa(int(model.Now())%1000)
@@ -1705,6 +1710,11 @@ func (s *Server) handleUserLogoUpload(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/user/settings?err="+urlEscape("仅支持 png/jpg/webp 格式"), http.StatusFound)
 		return
 	}
+	if !validImageMagic(file, ext) {
+		http.Redirect(w, r, "/user/settings?err="+urlEscape("图片内容与格式不符"), http.StatusFound)
+		return
+	}
+	_, _ = file.Seek(0, 0)
 	fn := fmt.Sprintf("ulogo_%d_%s%s", u.ID, db.RandKey(6), ext)
 	dst, err := os.Create(filepath.Join(s.DataDir, fn))
 	if err != nil {

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -226,7 +227,8 @@ func (s *Server) handleEpayApi(w http.ResponseWriter, r *http.Request) {
 	pid := atoint64(r.FormValue("pid"))
 	key := r.FormValue("key")
 	merchant, err := s.Store.UserByPid(pid)
-	if err != nil || merchant == nil || key == "" || key != merchant.Skey {
+	if err != nil || merchant == nil || key == "" ||
+		subtle.ConstantTimeCompare([]byte(key), []byte(merchant.Skey)) != 1 {
 		out["code"] = -1
 		out["msg"] = "商户ID或密钥错误"
 		writeJSON(w, out)
