@@ -10,6 +10,7 @@ var _mchLastId = 0;
   });
 })();
 setInterval(function() {
+  if (document.hidden) return; // 后台标签页暂停轮询
   fetch('/api/poll?after=' + _mchLastId)
     .then(r=>r.json())
     .then(function(j) {

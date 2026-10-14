@@ -89,6 +89,7 @@
 
     if (!paid) {
       poller = setInterval(function () {
+        if (document.hidden) return; // 后台标签页暂停轮询
         fetch('/pay/' + tradeNo + '/check', { cache: 'no-store' })
           .then(function (r) { return r.json(); })
           .then(function (j) {

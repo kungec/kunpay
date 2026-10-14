@@ -2,9 +2,12 @@ package config
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+
+	"kunzhifu/internal/version"
 )
 
 type Config struct {
@@ -40,7 +43,12 @@ func Load() *Config {
 	flag.BoolVar(&cfg.Captcha, "captcha", true, "注册/登录/找回密码启用图形验证码(回归测试可关闭)")
 	flag.BoolVar(&cfg.AllowLocalNotify, "allow-local-notify", envBool("KUNPAY_ALLOW_LOCAL_NOTIFY"), "允许异步通知/回调地址指向内网回环地址(仅本机联调,生产必须关闭)")
 	flag.BoolVar(&cfg.AllowDefaultAdmin, "allow-default-admin", envBool("KUNPAY_ALLOW_DEFAULT_ADMIN"), "关闭管理员默认密码强制修改(仅回归测试/演示用)")
+	showVer := flag.Bool("version", false, "打印版本号后退出")
 	flag.Parse()
+	if *showVer {
+		fmt.Printf("KunPay %s\n", version.Version)
+		os.Exit(0)
+	}
 
 	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
 		log.Fatalf("创建数据目录失败: %v", err)

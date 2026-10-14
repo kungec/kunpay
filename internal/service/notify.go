@@ -183,6 +183,7 @@ func (s *Store) RunBackground() {
 		t := time.NewTicker(15 * time.Second)
 		defer t.Stop()
 		for range t.C {
+			tickStart := time.Now()
 			s.expireOrders()
 			s.retryNotifies()
 			s.cleanSessions()
@@ -198,6 +199,10 @@ func (s *Store) RunBackground() {
 			s.autoStatement()
 			s.autoDigest()
 			s.UpdateCheckTask()
+			// 慢 tick 观测: 单轮超过 10s 说明有任务在拖累后台(备份过大/通知超时堆积等)
+			if d := time.Since(tickStart); d > 10*time.Second {
+				log.Printf("[cron] 本轮后台任务耗时 %s,请检查备份大小/通知超时配置", d.Round(time.Second))
+			}
 		}
 	}()
 }
@@ -430,8 +435,20 @@ func (s *Store) retryNotifies() {
 		}
 	}
 	rows.Close()
-	for _, id := range ids {
-		s.sendNotify(id)
+	// 并发发送(上限 4): 单笔最长 10s 超时,串行 20 笔最坏阻塞后台任务 200s
+	if len(ids) > 0 {
+		sem := make(chan struct{}, 4)
+		var wg sync.WaitGroup
+		for _, id := range ids {
+			wg.Add(1)
+			sem <- struct{}{}
+			go func(orderID int64) {
+				defer wg.Done()
+				defer func() { <-sem }()
+				s.sendNotify(orderID)
+			}(id)
+		}
+		wg.Wait()
 	}
 }
 
