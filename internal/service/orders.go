@@ -948,6 +948,109 @@ func atofDefault(s string, def float64) float64 {
 // isInternalURL 检查URL是否指向内网/回环/链路本地地址(SSRF防护)
 // 允许 127.0.0.1 和 10.0.2.2(Android模拟器宿主)用于本地开发/测试
 // IsInternalURLStrict 严格判定(无本地开发豁免): 用于商户可控的 Webhook 地址
+// ambiguousIPCandidates 枚举非标数字主机名(0177.0.0.1 / 127.1 / 0x7f.1 / 2130706433 等)
+// 的全部合理解释 —— 这类写法在不同系统解析器下可能指向回环或公网,必须按最坏情况处理。
+// 第二个返回值表示主机名是否为「纯数字写法」: 是则绝不再交给 DNS 解析(非法即拒)。
+func ambiguousIPCandidates(host string) ([]net.IP, bool) {
+	if host == "" || strings.Contains(host, ":") { // IPv6 由 ParseIP 处理
+		return nil, false
+	}
+	var out []net.IP
+	add4 := func(a, b, c, d int64) {
+		out = append(out, net.IPv4(byte(a), byte(b), byte(c), byte(d)))
+	}
+	numeric := true
+	// 整数形式(十进制/十六进制/八进制 → 32 位 IPv4)
+	if !strings.Contains(host, ".") {
+		if v, err := strconv.ParseUint(host, 0, 64); err == nil && v <= 0xffffffff {
+			add4(int64(v>>24)&0xff, int64(v>>16)&0xff, int64(v>>8)&0xff, int64(v)&0xff)
+		}
+		return out, true
+	}
+	parts := strings.Split(host, ".")
+	if len(parts) < 2 || len(parts) > 4 {
+		return nil, false
+	}
+	// 每段的前导零存在八进制/十进制两种解释,组合枚举(段数 ≤4,组合有界)。
+	// numeric 只按「纯数字字符」判定: 值超 255 的段不产生候选,但主机名仍走数字路径(非法即拒)。
+	allDigits := func(s string) bool {
+		if s == "" {
+			return false
+		}
+		for _, c := range s {
+			if c < '0' || c > '9' {
+				return false
+			}
+		}
+		return true
+	}
+	perPart := make([][]int64, len(parts))
+	for i, p := range parts {
+		if !allDigits(p) {
+			return nil, false // 含字母(如 0x7f)→ 交 DNS 路径
+		}
+		var opts []int64
+		if v, err := strconv.ParseInt(p, 10, 64); err == nil && v >= 0 && v <= 255 {
+			opts = append(opts, v)
+		}
+		if len(p) > 1 && p[0] == '0' {
+			if v, err := strconv.ParseInt(p, 0, 64); err == nil && v >= 0 && v <= 255 {
+				dup := false
+				for _, o := range opts {
+					if o == v {
+						dup = true
+						break
+					}
+				}
+				if !dup {
+					opts = append(opts, v)
+				}
+			}
+		}
+		perPart[i] = opts // 可能为空(段值 >255)→ 上层按无合法候选拒绝
+	}
+	combo := make([]int64, len(parts))
+	var walk func(i int)
+	walk = func(i int) {
+		if i == len(parts) {
+			add4(combo[0], combo[1], combo[2], combo[3])
+			return
+		}
+		for _, v := range perPart[i] {
+			combo[i] = v
+			walk(i + 1)
+		}
+	}
+	if len(parts) == 4 {
+		walk(0)
+		return out, numeric
+	}
+	// 短点分形式(127.1 / 192.168.9): 头段为高位字节,末段为剩余位宽整数
+	tail := perPart[len(parts)-1]
+	for _, v := range tail {
+		if v > (1<<uint(8*(4-len(parts)+1)))-1 {
+			continue
+		}
+		switch len(parts) {
+		case 2:
+			for _, a := range perPart[0] {
+				add4(a, int64(v>>16)&0xff, int64(v>>8)&0xff, int64(v)&0xff)
+			}
+		case 3:
+			for _, a := range perPart[0] {
+				for _, b := range perPart[1] {
+					add4(a, b, int64(v>>8)&0xff, int64(v)&0xff)
+				}
+			}
+		}
+	}
+	return out, numeric
+}
+
+func isInternalIP(ip net.IP) bool {
+	return ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()
+}
+
 func IsInternalURLStrict(rawURL string) bool {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -957,16 +1060,27 @@ func IsInternalURLStrict(rawURL string) bool {
 	if host == "" {
 		return true
 	}
-	ip := net.ParseIP(host)
-	if ip != nil {
-		return ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()
+	if ip := net.ParseIP(host); ip != nil {
+		return isInternalIP(ip)
+	}
+	// 非标数字写法: 任一解释指向内网即拒绝;纯数字但无法构成合法 IP(如 127.0.0.256、>2^32)同样拒绝
+	if cands, numeric := ambiguousIPCandidates(host); numeric {
+		for _, cand := range cands {
+			if isInternalIP(cand) {
+				return true
+			}
+		}
+		if len(cands) == 0 {
+			return true
+		}
+		return false // 合法数字 IP 的非内网解释(如 177.0.0.1 的十进制读法)按字面放行
 	}
 	ips, err := net.LookupIP(host)
 	if err != nil {
 		return true // 无法解析的域名一律拒绝,不给探测机会
 	}
 	for _, resolved := range ips {
-		if resolved.IsPrivate() || resolved.IsLoopback() || resolved.IsLinkLocalUnicast() || resolved.IsUnspecified() {
+		if isInternalIP(resolved) {
 			return true
 		}
 	}
