@@ -221,7 +221,10 @@ sign=$(base64 -w 0 sig.bin)</pre>
 
     <h2>五、云端挂机(7×24)</h2>
     <p>购买安卓云手机(红手指/河马/多多云等)→ 按第三节部署 → 云手机 7×24 在线。<br>
-    详细方案与主备双保险见 deploy/云端挂机部署指南.md。</p>
+    有 Linux 服务器也可以 <b>自建云手机</b>: 开源 redroid 方案(Android in Docker),
+    一台服务器跑 N 台安卓容器,每台装 KunPay Monitor 监控一个收款账号;
+    完整教程见 GitHub 仓库 deploy/redroid自建云手机教程.md(含 docker-compose 多实例编排
+    与一键初始化脚本)。</p>
 
     <h2>六、常见问题排查</h2>
     <table>
