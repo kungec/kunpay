@@ -4,7 +4,8 @@
 前提: 与 e2e_test.py 同一全新数据库启动服务(先跑 v1 再跑本文件)
   ./kunpay -port 8787 -db /tmp/kunpay-e2e.db -data /tmp/kunpay-data -captcha=false -allow-local-notify -allow-default-admin
   python3 scripts/e2e_test.py
-  KP_DB=/tmp/kunpay-e2e.db python3 scripts/e2e_test_v2.py
+  KP_DB=/tmp/kunpay-e2e.db python3 scripts/e2e_test_v2.py   (本文件)
+  KP_DB=/tmp/kunpay-e2e.db python3 scripts/e2e_test_v3.py
 覆盖: TOTP 两步验证/工单/快捷收款(任意金额)/RSA 签名/商户限流/IP 白名单与黑名单/
       Webhook SSRF 防护/月度对账单/代登/下载中心/系统自检/通知 POST 模式
 """
