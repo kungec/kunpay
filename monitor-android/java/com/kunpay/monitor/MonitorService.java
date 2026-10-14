@@ -40,7 +40,7 @@ public class MonitorService extends NotificationListenerService {
     ));
     /** 金额提取: 关键词(收款/到账/入账/入帐)后最近的数字 */
     private static final Pattern AMOUNT = Pattern.compile(
-            "(?:收款|到账|入账|入帐|转账)[^0-9]{0,12}([0-9]+(?:\\.[0-9]{1,2})?)");
+            "(?:收款|到账|入账|入帐|转账)[^0-9]{0,12}(([0-9]{1,3}(,[0-9]{3})+|[0-9]+)(?:\\.[0-9]{1,2})?)");
 
     private final HandlerThread worker = new HandlerThread("kunpay-worker");
     private Handler handler;
@@ -141,6 +141,11 @@ public class MonitorService extends NotificationListenerService {
             if (own) return; // 忽略自己的常驻通知
 
             boolean known = KNOWN_PACKAGES.contains(pkg);
+            boolean strict = prefs.getBoolean("strict_source", true); // 严格来源模式: 防聊天文本伪造到账
+            if (strict && !known) {
+                log("[" + shortPkg(pkg) + "] 非官方应用通知已忽略(严格来源模式)");
+                return;
+            }
             boolean keywordHit = content.contains("收款") || content.contains("到账")
                     || content.contains("入账") || content.contains("入帐");
             if (!known && !keywordHit) return;
@@ -150,7 +155,7 @@ public class MonitorService extends NotificationListenerService {
                 if (known) log("[" + shortPkg(pkg) + "] 检测到通知但未识别到金额: " + clip(content));
                 return;
             }
-            String money = m.group(1);
+            String money = m.group(1).replace(",", ""); // 千分位(1,234.50 → 1234.50)
             String type = mapType(pkg, content);
 
             boolean enabled = prefs.getBoolean("ch_" + type, true);
@@ -159,12 +164,21 @@ public class MonitorService extends NotificationListenerService {
                 return;
             }
             final String fContent = clip(content);
+            final String fMoney = money, fType = type;
             log("[" + shortPkg(pkg) + "] " + content + " → 上报 " + type + " ¥" + money);
             Api.push(prefs.getString("server", ""), prefs.getString("token", ""),
-                    type, money, fContent, new Api.Callback() {
+                    fType, fMoney, fContent, new Api.Callback() {
                         @Override
                         public void onResult(boolean ok, String msg) {
-                            log(ok ? "✓ 上报成功: " + msg : "✗ 上报失败: " + msg);
+                            if (ok) {
+                                log("✓ 上报成功: " + msg);
+                            } else {
+                                log("✗ 上报失败: " + msg + " (已加入重试队列)");
+                                enqueuePending(fMoney, fType, fContent);
+                                handler.postDelayed(new Runnable() { @Override public void run() {
+                                    flushPending();
+                                }}, 30_000L);
+                            }
                         }
                     });
         } catch (Exception e) {
@@ -191,6 +205,54 @@ public class MonitorService extends NotificationListenerService {
     }
 
     /** 追加一条日志并通过广播刷新界面 */
+    // ---- 上报失败重试队列(持久化到 prefs,心跳/定时触发冲刷) ----
+    private static final int PENDING_MAX = 50;
+
+    private void enqueuePending(String money, String type, String content) {
+        try {
+            org.json.JSONArray arr = new org.json.JSONArray(prefs.getString("pending_pushes", "[]"));
+            if (arr.length() >= PENDING_MAX) return; // 防无限堆积
+            org.json.JSONObject o = new org.json.JSONObject();
+            o.put("money", money);
+            o.put("type", type);
+            o.put("content", content);
+            o.put("ts", System.currentTimeMillis());
+            arr.put(o);
+            prefs.edit().putString("pending_pushes", arr.toString()).apply();
+        } catch (Exception ignore) {}
+    }
+
+    private void flushPending() {
+        try {
+            org.json.JSONArray arr = new org.json.JSONArray(prefs.getString("pending_pushes", "[]"));
+            if (arr.length() == 0) return;
+            org.json.JSONArray remain = new org.json.JSONArray();
+            String server = prefs.getString("server", "");
+            String token = prefs.getString("token", "");
+            if (server.isEmpty() || token.isEmpty()) return;
+            for (int i = 0; i < arr.length(); i++) {
+                final org.json.JSONObject o = arr.getJSONObject(i);
+                final java.util.concurrent.CountDownLatch latch =
+                        new java.util.concurrent.CountDownLatch(1);
+                final boolean[] done = {false};
+                Api.push(server, token, o.optString("type"), o.optString("money"),
+                        o.optString("content"), new Api.Callback() {
+                            @Override public void onResult(boolean ok, String msg) {
+                                done[0] = ok;
+                                latch.countDown();
+                            }
+                        });
+                latch.await(10, java.util.concurrent.TimeUnit.SECONDS);
+                if (!done[0]) remain.put(o);
+            }
+            prefs.edit().putString("pending_pushes", remain.toString()).apply();
+            if (remain.length() > 0) log("重试队列仍有 " + remain.length() + " 笔待上报");
+            else log("重试队列已全部上报完成");
+        } catch (Exception e) {
+            log("重试队列异常: " + e.getMessage());
+        }
+    }
+
     private void log(String line) {
         String ts = new SimpleDateFormat("HH:mm:ss", Locale.CHINA).format(new Date());
         String entry = ts + "  " + line;

@@ -1109,16 +1109,41 @@ func (s *Server) handleUserOrderRefund(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/user/orders?err="+urlEscape("仅已支付订单可退款"), http.StatusFound)
 		return
 	}
-	_, _ = s.DB.Exec("UPDATE orders SET status=4, buyer=buyer||' [退款]' WHERE id=? AND status IN(1,3)", o.ID)
-	// 扣回商户余额
+	// 扣回商户余额(事务: 扣款+流水+订单状态同生共死)
 	refund := o.Money - o.Fee
+	tx, err := s.DB.Begin()
+	if err != nil {
+		http.Redirect(w, r, "/user/orders?err="+urlEscape("退款失败"), http.StatusFound)
+		return
+	}
+	var bal int64
 	if refund > 0 {
-		_, _ = s.DB.Exec("UPDATE users SET balance=balance-? WHERE id=?", refund, u.ID)
-		var bal int64
-		s.DB.QueryRow("SELECT balance FROM users WHERE id=?", u.ID).Scan(&bal)
-		s.DB.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
-			VALUES(?,?,?,?,?,?,?)`, u.ID, "refund", -refund, bal+refund, bal,
-			"订单退款 "+o.TradeNo, model.Now())
+		if err := tx.QueryRow("SELECT balance FROM users WHERE id=? AND balance>=?", u.ID, refund).Scan(&bal); err != nil {
+			tx.Rollback()
+			http.Redirect(w, r, "/user/orders?err="+urlEscape("余额不足,无法退款,请联系平台"), http.StatusFound)
+			return
+		}
+		if _, err := tx.Exec("UPDATE users SET balance=balance-? WHERE id=?", refund, u.ID); err != nil {
+			tx.Rollback()
+			http.Redirect(w, r, "/user/orders?err="+urlEscape("退款失败"), http.StatusFound)
+			return
+		}
+		if _, err := tx.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
+			VALUES(?,?,?,?,?,?,?)`, u.ID, "refund", -refund, bal, bal-refund,
+			"订单退款 "+o.TradeNo, model.Now()); err != nil {
+			tx.Rollback()
+			http.Redirect(w, r, "/user/orders?err="+urlEscape("退款失败"), http.StatusFound)
+			return
+		}
+	}
+	if _, err := tx.Exec("UPDATE orders SET status=4, buyer=buyer||' [退款]' WHERE id=? AND status IN(1,3)", o.ID); err != nil {
+		tx.Rollback()
+		http.Redirect(w, r, "/user/orders?err="+urlEscape("退款失败"), http.StatusFound)
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		http.Redirect(w, r, "/user/orders?err="+urlEscape("退款失败"), http.StatusFound)
+		return
 	}
 	http.Redirect(w, r, "/user/orders?msg="+urlEscape("订单已退款,余额已扣减"), http.StatusFound)
 }

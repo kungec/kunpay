@@ -231,6 +231,7 @@ func noCacheHeader(next http.Handler) http.Handler {
 // Init 初始化: 加载模板等
 func (s *Server) Init() error {
 	s.injectPayEmail()
+	TrustProxyHeaders = s.TrustProxy
 	if err := s.loadTemplates(); err != nil {
 		return err
 	}

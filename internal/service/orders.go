@@ -24,6 +24,7 @@ var (
 	ErrLimitSingle      = errors.New("支付金额超出商户单笔限额")
 	ErrLimitDaily       = errors.New("超出商户当日收款限额")
 	ErrTypeNotOpen      = errors.New("该支付方式未开放,请联系商户")
+	ErrAmountBusy       = errors.New("当前支付金额存在进行中的订单,请稍后重试或修改金额")
 	ErrOrderPaid        = errors.New("订单号已存在且已支付,请勿重复提交")
 	ErrBadMoney         = errors.New("金额格式错误,最多两位小数")
 )
@@ -250,6 +251,15 @@ func (s *Store) CreateOrder(u *model.User, req *OrderReq, clientIP string) (*mod
 	if offsetOn {
 		o.PayMoney = s.uniquePayMoney(req.Type, money, now, int64(timeoutMin)*60)
 	}
+	if o.PayMoney == money && offsetOn {
+		// 整数金额: 尾数偏移 60 次仍冲突(在途极端拥挤) → 明确拒绝,避免错配
+		var n int
+		_ = s.DB.QueryRow("SELECT COUNT(*) FROM orders WHERE status=0 AND COALESCE(custom,0)=0 AND type=? AND pay_money=? AND expire_at>?",
+			req.Type, money, now+int64(timeoutMin)*60).Scan(&n)
+		if n > 0 {
+			return nil, ErrAmountBusy
+		}
+	}
 	res, err := s.DB.Exec(`INSERT INTO orders(trade_no,out_trade_no,pid,type,name,money,pay_money,param,
 		notify_url,return_url,sitename,device,channel_id,status,addtime,expire_at,client_ip,custom)
 		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)`,
@@ -292,17 +302,33 @@ func (s *Store) backfillUnmatched(o *model.Order) {
 
 // uniquePayMoney 生成带随机尾数的应付金额,尽量避免与在途订单撞额。
 func (s *Store) uniquePayMoney(typ string, money, now, ttl int64) int64 {
+	inFlight := func(cand int64) bool {
+		var n int
+		_ = s.DB.QueryRow("SELECT COUNT(*) FROM orders WHERE status=0 AND COALESCE(custom,0)=0 AND type=? AND pay_money=? AND expire_at>?",
+			typ, cand, now+ttl-3600).Scan(&n)
+		return n > 0
+	}
 	if money%100 != 0 {
-		// 金额本身已带小数,保持原值
+		// 金额自带小数: 同一元内微调分位避开在途同额(9.90 冲突 → 9.91/9.89…),
+		// 全部被占则返回原值,由创建方按「同额在途」明确拒绝
+		cents, yuan := money%100, money-money%100
+		if !inFlight(money) {
+			return money
+		}
+		for d := int64(1); d <= 99; d++ {
+			if up := cents + d; up <= 99 && !inFlight(yuan+up) {
+				return yuan + up
+			}
+			if dn := cents - d; dn >= 1 && !inFlight(yuan+dn) {
+				return yuan + dn
+			}
+		}
 		return money
 	}
 	for i := 0; i < 60; i++ {
 		c := int64(1 + fastrandN(99)) // 1~99 分
 		cand := money + c
-		var n int
-		_ = s.DB.QueryRow("SELECT COUNT(*) FROM orders WHERE status=0 AND COALESCE(custom,0)=0 AND type=? AND pay_money=? AND expire_at>?",
-			typ, cand, now+ttl-3600).Scan(&n)
-		if n == 0 {
+		if !inFlight(cand) {
 			return cand
 		}
 	}
@@ -458,63 +484,96 @@ func (s *Store) orderAllowsDevice(o *model.Order, deviceID int64) bool {
 // CompleteOrder 标记订单成功并入账(幂等),随后触发异步通知。
 func (s *Store) CompleteOrder(o *model.Order, buyer string) error {
 	now := model.Now()
-	res, err := s.DB.Exec("UPDATE orders SET status=1, endtime=?, buyer=? WHERE id=? AND status=0", now, buyer, o.ID)
+
+	// 事务前置读取(事务内不得再碰 s.DB: 连接池仅 1,会自锁)
+	merchant, _ := s.UserByPid(o.Pid)
+	rate := 0.0
+	if merchant != nil {
+		rate = merchant.Rate
+	}
+	if rate <= 0 {
+		rate = atofDefault(s.DB.MustSetting("fee_rate"), 0)
+	}
+	inviteOn := s.DB.MustSetting("invite_open") == "1"
+	inviteRate := atofDefault(s.DB.MustSetting("invite_rate"), 0)
+
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	res, err := tx.Exec("UPDATE orders SET status=1, endtime=?, buyer=? WHERE id=? AND status=0", now, buyer, o.ID)
 	if err != nil {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return nil // 已处理过
+		return nil // 已处理过(幂等)
 	}
 	o.Status = 1
 	o.Endtime = now
 
-	// 入账: 余额 += money - fee
-	merchant, _ := s.UserByPid(o.Pid)
 	if merchant != nil {
-		rate := merchant.Rate
-		if rate <= 0 {
-			rate = atofDefault(s.DB.MustSetting("fee_rate"), 0)
-		}
 		fee := int64(float64(o.Money)*rate/100 + 0.5)
 		income := o.Money - fee
 		if income < 0 {
 			income = 0
 		}
-		_, _ = s.DB.Exec("UPDATE orders SET fee=? WHERE id=?", fee, o.ID)
-		_, _ = s.DB.Exec("UPDATE users SET balance=balance+? WHERE id=?", income, merchant.ID)
+		if _, err := tx.Exec("UPDATE orders SET fee=? WHERE id=?", fee, o.ID); err != nil {
+			return err
+		}
 		var before int64
-		_ = s.DB.QueryRow("SELECT balance FROM users WHERE id=?", merchant.ID).Scan(&before)
-		_, _ = s.DB.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
+		if err := tx.QueryRow("SELECT balance FROM users WHERE id=?", merchant.ID).Scan(&before); err != nil {
+			return err
+		}
+		if _, err := tx.Exec("UPDATE users SET balance=balance+? WHERE id=?", income, merchant.ID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
 			VALUES(?,?,?,?,?,?,?)`,
-			merchant.ID, "order", income, before-income, before,
-			fmt.Sprintf("订单入账 %s (手续费%s)", MoneyStr(income), MoneyStr(fee)), now)
+			merchant.ID, "order", income, before, before+income,
+			fmt.Sprintf("订单入账 %s (手续费%s)", MoneyStr(income), MoneyStr(fee)), now); err != nil {
+			return err
+		}
+		o.Fee = fee
 
 		// 邀请返佣: 平台从手续费中按比例返给邀请人
-		if fee > 0 && merchant.InvitedBy > 0 && s.DB.MustSetting("invite_open") == "1" {
-			irate := atofDefault(s.DB.MustSetting("invite_rate"), 0)
-			if rebate := int64(float64(fee)*irate/100 + 0.5); rebate > 0 {
-				if _, err := s.DB.Exec("UPDATE users SET balance=balance+? WHERE id=?", rebate, merchant.InvitedBy); err == nil {
-					var invBefore int64
-					_ = s.DB.QueryRow("SELECT balance FROM users WHERE id=?", merchant.InvitedBy).Scan(&invBefore)
-					_, _ = s.DB.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
-						VALUES(?,?,?,?,?,?,?)`,
-						merchant.InvitedBy, "invite", rebate, invBefore-rebate, invBefore,
-						fmt.Sprintf("邀请返佣: 商户 %s 订单手续费 %s 的 %s%%", merchant.Username, MoneyStr(fee), trimRate(irate)), now)
+		if fee > 0 && merchant.InvitedBy > 0 && inviteOn && inviteRate > 0 {
+			if rebate := int64(float64(fee)*inviteRate/100 + 0.5); rebate > 0 {
+				var invBefore int64
+				if err := tx.QueryRow("SELECT balance FROM users WHERE id=?", merchant.InvitedBy).Scan(&invBefore); err == nil {
+					if _, err := tx.Exec("UPDATE users SET balance=balance+? WHERE id=?", rebate, merchant.InvitedBy); err == nil {
+						if _, err := tx.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
+							VALUES(?,?,?,?,?,?,?)`,
+							merchant.InvitedBy, "invite", rebate, invBefore, invBefore+rebate,
+							fmt.Sprintf("邀请返佣: 商户 %s 订单手续费 %s 的 %s%%", merchant.Username, MoneyStr(fee), trimRate(inviteRate)), now); err != nil {
+							return err
+						}
+					}
 				}
 			}
 		}
 	}
-	// 商户自配 IM 机器人推送(异步,不阻塞)
-	if hook := merchant.NotifyWebhook; strings.TrimSpace(hook) != "" {
-		msg := fmt.Sprintf("✅ 收款到账 %s\n订单: %s\n商品: %s", MoneyStr(o.Money), o.TradeNo, o.Name)
-		go SendWebhookAlert(hook, s.DB.MustSetting("site_name"), msg)
-	}
-	// 商户收款邮件通知(异步,由 web 层注入发送实现)
-	if merchant.NotifyEmailOn == 1 && merchant.Email != "" && PayEmailHook != nil {
-		go PayEmailHook(merchant, o)
-	}
 	// 立即异步通知 + 安排重试
-	_, _ = s.DB.Exec("UPDATE orders SET next_notify_at=? WHERE id=?", now, o.ID)
+	if _, err := tx.Exec("UPDATE orders SET next_notify_at=? WHERE id=?", now, o.ID); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	// ---- 事务提交后的旁路动作(网络/异步,失败不影响入账) ----
+	if merchant != nil {
+		// 商户自配 IM 机器人推送(异步,不阻塞)
+		if hook := strings.TrimSpace(merchant.NotifyWebhook); hook != "" {
+			msg := fmt.Sprintf("✅ 收款到账 %s\n订单: %s\n商品: %s", MoneyStr(o.Money), o.TradeNo, o.Name)
+			go SendWebhookAlert(hook, s.DB.MustSetting("site_name"), msg)
+		}
+		// 商户收款邮件通知(异步,由 web 层注入发送实现)
+		if merchant.NotifyEmailOn == 1 && merchant.Email != "" && PayEmailHook != nil {
+			go PayEmailHook(merchant, o)
+		}
+	}
 	s.TriggerNotify(o.ID)
 	return nil
 }

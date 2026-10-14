@@ -45,6 +45,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        wireStrictSwitch();
 
         etServer = findViewById(R.id.etServer);
         etToken = findViewById(R.id.etToken);
@@ -263,6 +264,21 @@ public class MainActivity extends Activity {
     private boolean listenerEnabled() {
         String listeners = Settings.Secure.getString(getContentResolver(), "enabled_notification_listeners");
         return listeners != null && listeners.contains(getPackageName());
+    }
+
+    private android.widget.Switch swStrict;
+
+    private void wireStrictSwitch() {
+        swStrict = findViewById(R.id.swStrict);
+        swStrict.setChecked(prefs.getBoolean("strict_source", true));
+        swStrict.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(android.widget.CompoundButton b, boolean checked) {
+                prefs.edit().putBoolean("strict_source", checked).apply();
+                toast(checked ? "严格来源模式已开启,仅监听微信/支付宝/QQ官方应用通知"
+                              : "严格来源模式已关闭(宽松模式,按关键词识别)");
+            }
+        });
     }
 
     private void refreshListenerState() {

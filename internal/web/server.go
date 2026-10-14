@@ -27,6 +27,7 @@ type Server struct {
 	Port           string
 	StartedAt      time.Time
 	CaptchaEnabled bool // 图形验证码开关(注册/登录/找回)
+	TrustProxy     bool // 是否信任反代头(由启动参数注入)
 	Tpl            map[string]*template.Template
 }
 

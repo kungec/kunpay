@@ -4,9 +4,12 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"sync"
 
 	"kunzhifu/internal/model"
 	"kunzhifu/internal/service"
@@ -78,6 +81,39 @@ func vmqSign(t, token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// vmqFresh 校验 V免签推送时间戳新鲜度(±120s)并缓存防重放
+func (s *Server) vmqFresh(q url.Values) bool {
+	t := q.Get("t")
+	ts, err := strconv.ParseInt(t, 10, 64)
+	if err != nil {
+		return false
+	}
+	now := model.Now()
+	if ts > now+120 || ts < now-120 {
+		return false
+	}
+	sig := q.Get("sign")
+	key := fmt.Sprintf("%d|%s|%s", ts, sig, q.Get("id"))
+	vmqReplayMu.Lock()
+	defer vmqReplayMu.Unlock()
+	if vmqSeen == nil {
+		vmqSeen = map[string]bool{}
+	}
+	if vmqSeen[key] {
+		return false
+	}
+	vmqSeen[key] = true
+	if len(vmqSeen) > 8192 {
+		for k := range vmqSeen {
+			delete(vmqSeen, k)
+		}
+	}
+	return true
+}
+
+var vmqReplayMu sync.Mutex
+var vmqSeen = map[string]bool{}
+
 func (s *Server) vmqAuth(q url.Values) (int64, bool) {
 	t := q.Get("t")
 	sign := q.Get("sign")
@@ -118,6 +154,11 @@ func (s *Server) handleVmqPush(w http.ResponseWriter, r *http.Request) {
 	id, ok := s.vmqAuth(q)
 	if !ok {
 		monitorJSON(w, -1, "验签失败")
+		return
+	}
+	// 时间戳新鲜度 + 重放缓存: 截获的旧签名无法改金额重放
+	if !s.vmqFresh(q) {
+		monitorJSON(w, -1, "签名已过期,请校准设备时间")
 		return
 	}
 	typ := q.Get("type")

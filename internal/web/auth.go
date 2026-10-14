@@ -186,12 +186,17 @@ func (s *Server) requireCSRF(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// TrustProxyHeaders 是否信任反代头(默认 true;直连暴露端口时应关闭)
+var TrustProxyHeaders = true
+
 func clientIP(r *http.Request) string {
-	if xf := r.Header.Get("X-Real-IP"); xf != "" {
-		return strings.TrimSpace(strings.Split(xf, ",")[0])
-	}
-	if xf := r.Header.Get("X-Forwarded-For"); xf != "" {
-		return strings.TrimSpace(strings.Split(xf, ",")[0])
+	if TrustProxyHeaders {
+		if xf := r.Header.Get("X-Real-IP"); xf != "" {
+			return strings.TrimSpace(strings.Split(xf, ",")[0])
+		}
+		if xf := r.Header.Get("X-Forwarded-For"); xf != "" {
+			return strings.TrimSpace(strings.Split(xf, ",")[0])
+		}
 	}
 	host := r.RemoteAddr
 	if i := strings.LastIndexByte(host, ':'); i > 0 {

@@ -8,11 +8,12 @@ import (
 )
 
 type Config struct {
-	Port     string
-	DBPath   string
-	DataDir  string
-	SiteName string
-	Captcha  bool
+	Port       string
+	DBPath     string
+	DataDir    string
+	SiteName   string
+	Captcha    bool
+	TrustProxy bool
 }
 
 func Load() *Config {
@@ -33,6 +34,7 @@ func Load() *Config {
 	flag.StringVar(&cfg.Port, "port", envOr("KUNPAY_PORT", "8080"), "HTTP 监听端口")
 	flag.StringVar(&cfg.DBPath, "db", envOr("KUNPAY_DB", defDB), "SQLite 数据库文件路径")
 	flag.StringVar(&cfg.DataDir, "data", envOr("KUNPAY_DATA", defData), "上传文件(收款码等)存储目录")
+	flag.BoolVar(&cfg.TrustProxy, "trust-proxy", true, "信任反向代理的 X-Real-IP/X-Forwarded-For 头(直连暴露端口时应关闭)")
 	flag.BoolVar(&cfg.Captcha, "captcha", true, "注册/登录/找回密码启用图形验证码(回归测试可关闭)")
 	flag.Parse()
 

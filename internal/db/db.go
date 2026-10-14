@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"os"
 
 	_ "modernc.org/sqlite"
 
@@ -380,7 +381,11 @@ func (d *DB) Migrate() error {
 		}
 		log.Println("[init] 已创建管理员账号 admin / admin123 (请尽快修改密码)")
 	}
-	// 演示商户 demo / demo123
+	// 演示商户 demo / demo123(KUNPAY_SKIP_DEMO=1 或 -skip-demo 时跳过)
+	if os.Getenv("KUNPAY_SKIP_DEMO") == "1" || os.Getenv("KUNPAY_SKIP_DEMO") == "true" {
+		log.Println("[init] KUNPAY_SKIP_DEMO 已设置,跳过演示商户创建")
+		return nil
+	}
 	if err := d.QueryRow("SELECT COUNT(*) FROM users WHERE username='demo'").Scan(&n); err != nil {
 		return err
 	}

@@ -1561,15 +1561,40 @@ func (s *Server) handleAdminOrderRefund(w http.ResponseWriter, r *http.Request) 
 	if refund < 0 {
 		refund = 0
 	}
-	_, _ = s.DB.Exec("UPDATE orders SET status=4 WHERE id=? AND status IN(1,3)", o.ID)
+	tx, err := s.DB.Begin()
+	if err != nil {
+		http.Redirect(w, r, "/admin/orders?err="+urlEscape("退款失败: "+err.Error()), http.StatusFound)
+		return
+	}
+	var bal int64
 	merchant, _ := s.Store.UserByPid(o.Pid)
 	if merchant != nil && refund > 0 {
-		_, _ = s.DB.Exec("UPDATE users SET balance=balance-? WHERE id=? AND balance>=?", refund, merchant.ID, refund)
-		var bal int64
-		s.DB.QueryRow("SELECT balance FROM users WHERE id=?", merchant.ID).Scan(&bal)
-		s.DB.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
-			VALUES(?,?,?,?,?,?,?)`, merchant.ID, "refund", -refund, bal+refund, bal,
-			"订单退款 "+o.TradeNo, model.Now())
+		if err := tx.QueryRow("SELECT balance FROM users WHERE id=? AND balance>=?", merchant.ID, refund).Scan(&bal); err != nil {
+			tx.Rollback()
+			http.Redirect(w, r, "/admin/orders?err="+urlEscape("商户余额不足,无法扣回退款金额"), http.StatusFound)
+			return
+		}
+		if _, err := tx.Exec("UPDATE users SET balance=balance-? WHERE id=?", refund, merchant.ID); err != nil {
+			tx.Rollback()
+			http.Redirect(w, r, "/admin/orders?err="+urlEscape("退款失败"), http.StatusFound)
+			return
+		}
+		if _, err := tx.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
+			VALUES(?,?,?,?,?,?,?)`, merchant.ID, "refund", -refund, bal, bal-refund,
+			"订单退款 "+o.TradeNo, model.Now()); err != nil {
+			tx.Rollback()
+			http.Redirect(w, r, "/admin/orders?err="+urlEscape("退款失败"), http.StatusFound)
+			return
+		}
+	}
+	if _, err := tx.Exec("UPDATE orders SET status=4 WHERE id=? AND status IN(1,3)", o.ID); err != nil {
+		tx.Rollback()
+		http.Redirect(w, r, "/admin/orders?err="+urlEscape("退款失败"), http.StatusFound)
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		http.Redirect(w, r, "/admin/orders?err="+urlEscape("退款失败"), http.StatusFound)
+		return
 	}
 	s.audit(r, "order.refund", o.TradeNo+" ¥"+service.MoneyStr(refund))
 	http.Redirect(w, r, "/admin/orders?msg="+urlEscape("退款成功,已扣回商户余额 ¥"+service.MoneyStr(refund)), http.StatusFound)

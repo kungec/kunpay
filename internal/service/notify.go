@@ -310,23 +310,41 @@ func (s *Store) autoSettle() {
 	now := model.Now()
 	for _, c := range cands {
 		amount := c.balance // 全额结算
-		res, err := s.DB.Exec("UPDATE users SET balance=balance-? WHERE id=? AND balance>=?", amount, c.id, amount)
+		tx, err := s.DB.Begin()
 		if err != nil {
 			continue
 		}
+		var before int64
+		if err := tx.QueryRow("SELECT balance FROM users WHERE id=? AND balance>=?", c.id, amount).Scan(&before); err != nil {
+			tx.Rollback()
+			continue
+		}
+		res, err := tx.Exec("UPDATE users SET balance=balance-? WHERE id=? AND balance>=?", amount, c.id, amount)
+		if err != nil {
+			tx.Rollback()
+			continue
+		}
 		if n, _ := res.RowsAffected(); n == 0 {
+			tx.Rollback()
 			continue
 		}
 		if c.typ <= 0 {
 			c.typ = 1
 		}
-		_, _ = s.DB.Exec(`INSERT INTO settle_logs(user_id,amount,settle_type,account,name,status,note,created_at)
-			VALUES(?,?,?,?,?,0,?,?)`, c.id, amount, c.typ, c.account, c.name, "自动结算", now)
-		var before int64
-		_ = s.DB.QueryRow("SELECT balance FROM users WHERE id=?", c.id).Scan(&before)
-		_, _ = s.DB.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
-			VALUES(?,?,?,?,?,?,?)`, c.id, "settle", -amount, before+amount, before,
-			"自动结算申请 "+MoneyStr(amount), now)
+		if _, err := tx.Exec(`INSERT INTO settle_logs(user_id,amount,settle_type,account,name,status,note,created_at)
+			VALUES(?,?,?,?,?,0,?,?)`, c.id, amount, c.typ, c.account, c.name, "自动结算", now); err != nil {
+			tx.Rollback()
+			continue
+		}
+		if _, err := tx.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
+			VALUES(?,?,?,?,?,?,?)`, c.id, "settle", -amount, before, before-amount,
+			"自动结算申请 "+MoneyStr(amount), now); err != nil {
+			tx.Rollback()
+			continue
+		}
+		if err := tx.Commit(); err != nil {
+			continue
+		}
 		log.Printf("[settle] 自动结算: 用户#%d %s", c.id, MoneyStr(amount))
 	}
 }
