@@ -297,7 +297,9 @@ func (s *Store) backfillUnmatched(o *model.Order) {
 	if err := s.CompleteOrder(o, "回溯匹配"); err != nil {
 		return
 	}
-	_, _ = s.DB.Exec("UPDATE pay_logs SET order_id=? WHERE id=?", o.ID, logID)
+	if _, err := s.DB.Exec("UPDATE pay_logs SET order_id=? WHERE id=?", o.ID, logID); err != nil {
+		log.Printf("[match] 回溯匹配更新流水失败: %v", err)
+	}
 }
 
 // uniquePayMoney 生成带随机尾数的应付金额,尽量避免与在途订单撞额。
@@ -444,8 +446,10 @@ func (s *Store) ReportPayment(deviceID int64, typ string, money int64, content s
 	if matched != nil {
 		orderID = matched.ID
 	}
-	_, _ = s.DB.Exec("INSERT INTO pay_logs(device_id,type,money,content,order_id,created_at) VALUES(?,?,?,?,?,?)",
-		deviceID, typ, money, truncate(content, 500), orderID, ts)
+	if _, err := s.DB.Exec("INSERT INTO pay_logs(device_id,type,money,content,order_id,created_at) VALUES(?,?,?,?,?,?)",
+		deviceID, typ, money, truncate(content, 500), orderID, ts); err != nil {
+		log.Printf("[match] 写入到账流水失败: %v", err)
+	}
 	if matched != nil {
 		if err := s.CompleteOrder(matched, "监控到账"); err != nil {
 			log.Printf("[match] 完成订单失败 trade_no=%s: %v", matched.TradeNo, err)

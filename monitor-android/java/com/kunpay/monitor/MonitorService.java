@@ -142,13 +142,21 @@ public class MonitorService extends NotificationListenerService {
 
             boolean known = KNOWN_PACKAGES.contains(pkg);
             boolean strict = prefs.getBoolean("strict_source", true); // 严格来源模式: 防聊天文本伪造到账
-            if (strict && !known) {
-                log("[" + shortPkg(pkg) + "] 非官方应用通知已忽略(严格来源模式)");
+            if (!known) {
+                if (strict) {
+                    log("[" + shortPkg(pkg) + "] 非官方应用通知已忽略(严格来源模式)");
+                }
                 return;
             }
-            boolean keywordHit = content.contains("收款") || content.contains("到账")
-                    || content.contains("入账") || content.contains("入帐");
-            if (!known && !keywordHit) return;
+            // 严格模式下,微信通知要求标题含"微信支付"(服务通知),排除普通聊天消息
+            if (strict && "com.tencent.mm".equals(pkg)) {
+                boolean isPayNotice = title.contains("微信支付") || text.contains("微信支付");
+                boolean isTransfer = content.contains("转账") || content.contains("红包");
+                if (!isPayNotice && !isTransfer) {
+                    log("[wxpay] 非微信支付服务通知,已忽略: " + clip(content));
+                    return;
+                }
+            }
 
             Matcher m = AMOUNT.matcher(content);
             if (!m.find()) {
