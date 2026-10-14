@@ -1,0 +1,29 @@
+{{define "content"}}
+<div class="card">
+  <div class="row between mb">
+    <div class="card-title" style="margin:0">消息中心</div>
+    {{if .Messages}}
+    <form method="post" action="/user/messages?mark_read=1">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <input type="hidden" name="mark_read" value="1">
+      <button class="btn btn-ghost btn-sm" type="submit">✓ 全部标为已读</button>
+    </form>
+    {{end}}
+  </div>
+  {{if .Messages}}
+  <div style="display:flex;flex-direction:column;gap:8px">
+    {{range .Messages}}
+    <div style="border:1px solid var(--border-2);border-radius:12px;padding:14px 16px;{{if not .Read}}border-left:3px solid var(--primary);background:var(--primary-light){{else}}background:#fafbfe{{end}}">
+      <div class="row between">
+        <b style="font-size:13.5px">{{.Title}}</b>
+        <span class="muted" style="font-size:11.5px;white-space:nowrap">{{fdate .CreatedAt}}</span>
+      </div>
+      <div class="muted" style="font-size:12.5px;margin-top:4px">{{.Content}}</div>
+    </div>
+    {{end}}
+  </div>
+  {{else}}
+  <div class="empty">暂无消息</div>
+  {{end}}
+</div>
+{{end}}

@@ -327,6 +327,71 @@ func (s *Server) handleEpayApi(w http.ResponseWriter, r *http.Request) {
 		out["code"] = 1
 		out["msg"] = "查询订单列表成功！"
 		out["data"] = list
+	case "refund": // 商户退款: 原子扣余额+标订单+写流水
+		refNo := strings.TrimSpace(r.FormValue("out_trade_no"))
+		if refNo == "" {
+			out["code"] = -1
+			out["msg"] = "缺少 out_trade_no"
+			break
+		}
+		o := s.Store.OrderByOutTradeNo(pid, refNo)
+		if o == nil || o.Pid != pid {
+			out["code"] = -1
+			out["msg"] = "订单不存在"
+			break
+		}
+		if o.Status != 1 && o.Status != 3 {
+			out["code"] = -1
+			out["msg"] = "仅已支付订单可退款"
+			break
+		}
+		refund := o.Money - o.Fee
+		if refund < 0 {
+			refund = 0
+		}
+		tx, txErr := s.Store.DB.Begin()
+		if txErr != nil {
+			out["code"] = -1
+			out["msg"] = "系统错误"
+			break
+		}
+		var bal int64
+		if err := tx.QueryRow("SELECT balance FROM users WHERE id=? AND balance>=?", merchant.ID, refund).Scan(&bal); err != nil {
+			tx.Rollback()
+			out["code"] = -1
+			out["msg"] = "商户余额不足,无法退款"
+			break
+		}
+		if _, err := tx.Exec("UPDATE users SET balance=balance-? WHERE id=?", refund, merchant.ID); err != nil {
+			tx.Rollback()
+			out["code"] = -1
+			out["msg"] = "退款失败"
+			break
+		}
+		if _, err := tx.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
+			VALUES(?,?,?,?,?,?,?)`, merchant.ID, "refund", -refund, bal, bal-refund,
+			"API退款 "+o.TradeNo, model.Now()); err != nil {
+			tx.Rollback()
+			out["code"] = -1
+			out["msg"] = "退款失败"
+			break
+		}
+		if _, err := tx.Exec("UPDATE orders SET status=4 WHERE id=? AND status IN(1,3)", o.ID); err != nil {
+			tx.Rollback()
+			out["code"] = -1
+			out["msg"] = "退款失败"
+			break
+		}
+		if err := tx.Commit(); err != nil {
+			out["code"] = -1
+			out["msg"] = "退款失败"
+			break
+		}
+		out["code"] = 1
+		out["refund_amount"] = service.MoneyStr(refund)
+		out["trade_no"] = o.TradeNo
+		out["msg"] = "退款成功"
+
 	case "channels": // 查询可用渠道状态
 		chs, _ := s.Store.AllChannels()
 		chList := []map[string]any{}

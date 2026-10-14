@@ -315,6 +315,7 @@ func (s *Server) pageData(r *http.Request) map[string]any {
 		d["CSRF"] = s.csrfToken(u)
 		if u.Role == "user" {
 			d["TicketRepliedN"] = s.repliedTicketCount(u.ID)
+			d["UnreadMessageN"] = s.Store.UnreadMessageCount(u.ID)
 		} else {
 			d["AdminTicketOpenN"] = s.Store.OpenTicketCount()
 		}

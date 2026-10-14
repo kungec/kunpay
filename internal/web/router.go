@@ -167,6 +167,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /user/tickets", s.requireLogin(s.handleUserTickets))
 	mux.HandleFunc("POST /user/orders/close", s.requireLogin(s.requireCSRF(s.handleUserOrderClose)))
 	mux.HandleFunc("POST /user/tickets/create", s.requireLogin(s.requireCSRF(s.handleUserTicketCreate)))
+	mux.HandleFunc("GET /user/messages", s.requireLogin(s.handleUserMessages))
+	mux.HandleFunc("POST /user/messages/mark_read", s.requireLogin(s.handleUserMessages))
 	mux.HandleFunc("GET /user/tickets/{id}", s.requireLogin(s.handleUserTicketView))
 	mux.HandleFunc("POST /user/tickets/reply", s.requireLogin(s.requireCSRF(s.handleUserTicketReply)))
 	mux.HandleFunc("POST /user/tickets/close", s.requireLogin(s.requireCSRF(s.handleUserTicketClose)))

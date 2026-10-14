@@ -465,6 +465,7 @@ func (s *Server) handleUserSettleApply(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/user/settle?err="+urlEscape("提现失败"), http.StatusFound)
 		return
 	}
+	s.Store.PushMessage(u.ID, "settle", "提现申请已提交", "提现金额 ¥"+service.MoneyStr(amount)+",请等待管理员处理")
 	http.Redirect(w, r, "/user/settle?msg="+urlEscape("提现申请已提交,请等待管理员处理"), http.StatusFound)
 }
 
@@ -1179,6 +1180,7 @@ func (s *Server) handleUserOrderRefund(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/user/orders?err="+urlEscape("退款失败"), http.StatusFound)
 		return
 	}
+	s.Store.PushMessage(u.ID, "refund", "订单退款", "订单 "+o.TradeNo+" 已退款,余额扣减 ¥"+service.MoneyStr(o.Money-o.Fee))
 	http.Redirect(w, r, "/user/orders?msg="+urlEscape("订单已退款,余额已扣减"), http.StatusFound)
 }
 
@@ -1534,7 +1536,25 @@ func boolToInt(b bool) int {
 	return 0
 }
 
-// handleUserTickets 商户工单列表 + 新建
+// handleUserMessages 商户消息中心
+func (s *Server) handleUserMessages(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	_ = r.ParseForm()
+	if r.FormValue("mark_read") == "1" {
+		s.Store.MarkMessagesRead(u.ID)
+		http.Redirect(w, r, "/user/messages", http.StatusFound)
+		return
+	}
+	msgs := s.Store.UserMessages(u.ID)
+	d := s.pageData(r)
+	d["Page"] = "user_messages"
+	d["Title"] = "消息中心"
+	d["Messages"] = msgs
+	d["UnreadN"] = s.Store.UnreadMessageCount(u.ID)
+	s.render(w, "dash_user_messages", http.StatusOK, d)
+}
+
+// handleUserTicketView 商户工单详情
 func (s *Server) handleUserTickets(w http.ResponseWriter, r *http.Request) {
 	u := s.currentUser(r)
 	tickets, _ := s.Store.MerchantTickets(u.ID, 50)

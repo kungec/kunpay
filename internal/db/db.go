@@ -221,6 +221,16 @@ CREATE INDEX IF NOT EXISTS idx_balance_user ON balance_logs(user_id, type, creat
 CREATE INDEX IF NOT EXISTS idx_nlogs_order ON notify_logs(order_id);
 CREATE INDEX IF NOT EXISTS idx_plogs_time ON pay_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_audits_time ON audit_logs(created_at);
+CREATE TABLE IF NOT EXISTS messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  type TEXT DEFAULT 'system',
+  title TEXT NOT NULL,
+  content TEXT DEFAULT '',
+  read INTEGER DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_messages ON messages(user_id, read);
 `
 
 // 默认配置项
