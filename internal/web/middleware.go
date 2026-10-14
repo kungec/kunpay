@@ -47,11 +47,12 @@ func limitBody(next http.Handler) http.Handler {
 }
 
 // isHTTPS 判断当前请求是否走 HTTPS
+// X-Forwarded-Proto 仅在直连对端为内网/回环(即真实反代)时采信,与 clientIP 同策略
 func isHTTPSRequest(r *http.Request) bool {
 	if r.TLS != nil {
 		return true
 	}
-	return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	return TrustProxyHeaders && isTrustedProxyPeer(r) && strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
 // sessionIdleTimeoutSec 会话空闲超时(秒)

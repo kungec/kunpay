@@ -318,6 +318,11 @@ func (s *Store) CreateOrder(u *model.User, req *OrderReq, clientIP string) (*mod
 			return nil, errors.New("通知地址不允许指向内网地址")
 		}
 	}
+	// return_url 会在买家浏览器展示/跳转(收银台轮询与支付完成跳转),
+	// 必须是不含 HTML 特殊字符的 http(s) 绝对地址 —— 否则恶意商户可借平台域对买家实施 XSS
+	if req.ReturnURL != "" && !validReturnURL(req.ReturnURL) {
+		return nil, errors.New("支付完成跳转地址(return_url)格式不合法")
+	}
 
 	now := model.Now()
 	o := &model.Order{
@@ -393,6 +398,23 @@ func (s *Store) CreateOrder(u *model.User, req *OrderReq, clientIP string) (*mod
 		s.backfillUnmatched(o)
 	}
 	return o, nil
+}
+
+// validReturnURL 收银台展示/跳转地址校验: http(s) 绝对地址 + 主机名 + 无 HTML/控制字符
+func validReturnURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return false
+	}
+	if strings.ContainsAny(raw, "<>\"'`") {
+		return false
+	}
+	for _, r := range raw {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 // checkLimitDailyTx 在事务内检查商户单日收款限额(0=不限)

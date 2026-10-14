@@ -190,6 +190,23 @@ def main():
     check("api.php 错误密钥拒绝", json.loads(body).get("code") == -1, body[:60])
     tno, j = create_order("V3BAD", "1.999")
     check("三位小数金额拒绝", j.get("code") == -1, str(j))
+    # return_url XSS 防护: 含 HTML 字符串的跳转地址必须被拒
+    qs = {"pid": pid, "type": "alipay", "out_trade_no": "V3XSS1", "name": "x", "money": "1.00",
+          "return_url": 'http://m.example/r?next="><img src=x onerror=alert(1)>'}
+    qs["sign"] = sign(qs, skey)
+    qs["sign_type"] = "MD5"
+    st, body = mform("/mapi.php", qs)
+    check("return_url 含 HTML 被拒", json.loads(body).get("code") == -1, body[:80])
+    qs["out_trade_no"] = "V3XSS2"
+    qs["return_url"] = "javascript:alert(1)"
+    qs["sign"] = sign(qs, skey)
+    st, body = mform("/mapi.php", qs)
+    check("javascript: 协议 return_url 被拒", json.loads(body).get("code") == -1, body[:80])
+    qs["out_trade_no"] = "V3XSS3"
+    qs["return_url"] = "http://m.example/return?a=1&b=中文"
+    qs["sign"] = sign(qs, skey)
+    st, body = mform("/mapi.php", qs)
+    check("正常 return_url(含查询串/中文)通过", json.loads(body).get("code") == 1, body[:80])
     # 伪造图片上传
     c3 = csrf(mget("/user/channels")[1])
     boundary = "----v3bound"

@@ -103,20 +103,37 @@
 
     var showPaid = function (returnUrl) {
       var card = $('.cashier-card');
-      if (card) {
-        card.innerHTML =
-          '<div class="cashier-ok"><div class="big"><svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>' +
-          '<h2 style="font-size:22px;margin-bottom:8px">支付成功</h2>' +
-          '<p class="muted">订单已完成支付' + (returnUrl ? ',<span id="cdNum">3</span> 秒后跳转...' : '') + '</p>' +
-          (returnUrl ? '<div class="mt"><a class="btn btn-primary" href="' + returnUrl + '">立即跳转</a></div>' : '') +
-          '</div>';
+      if (!card) return;
+      // returnUrl 来自商户,必须用 DOM API 构建(禁止 innerHTML 拼接),且仅接受 http(s)
+      if (returnUrl && !/^https?:\/\//i.test(returnUrl)) returnUrl = '';
+      var box = document.createElement('div');
+      box.className = 'cashier-ok';
+      box.innerHTML = '<div class="big"><svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>';
+      var h2 = document.createElement('h2');
+      h2.style.cssText = 'font-size:22px;margin-bottom:8px';
+      h2.textContent = '支付成功';
+      var p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = returnUrl ? '订单已完成支付,即将跳转...' : '订单已完成支付';
+      box.appendChild(h2);
+      box.appendChild(p);
+      if (returnUrl) {
+        var row = document.createElement('div');
+        row.className = 'mt';
+        var a = document.createElement('a');
+        a.className = 'btn btn-primary';
+        a.href = returnUrl;
+        a.textContent = '立即跳转';
+        row.appendChild(a);
+        box.appendChild(row);
       }
+      card.innerHTML = '';
+      card.appendChild(box);
       if (returnUrl) {
         var n = 3;
         var t = setInterval(function () {
           n--;
-          var el = $('#cdNum');
-          if (el) el.textContent = n;
+          if (n > 0) p.textContent = '订单已完成支付,' + n + ' 秒后跳转...';
           if (n <= 0) { clearInterval(t); location.href = returnUrl; }
         }, 1000);
       }
