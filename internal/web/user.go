@@ -763,6 +763,12 @@ func (s *Server) handleUserDebug(w http.ResponseWriter, r *http.Request) {
 		outTradeNo = "DEBUG" + timeFormat(model.Now(), "0102150405") + db.RandDigits(4)
 	}
 	notifyURL := strings.TrimSpace(r.FormValue("notify_url"))
+	if notifyURL != "" && service.IsInternalURLStrict(notifyURL) {
+		out["code"] = -1
+		out["msg"] = "回调地址不允许指向内网/回环地址"
+		writeJSON(w, out)
+		return
+	}
 
 	testReq := &service.OrderReq{
 		Type: typ, OutTradeNo: outTradeNo,
@@ -906,6 +912,13 @@ func (s *Server) handleUserDebugNotify(w http.ResponseWriter, r *http.Request) {
 	if !strings.HasPrefix(lu, "http://") && !strings.HasPrefix(lu, "https://") {
 		out["code"] = -1
 		out["msg"] = "仅支持 http/https 协议"
+		writeJSON(w, out)
+		return
+	}
+	// 防 SSRF: 商户可控地址禁止指向内网/回环
+	if service.IsInternalURLStrict(notifyURL) {
+		out["code"] = -1
+		out["msg"] = "回调地址不允许指向内网/回环地址"
 		writeJSON(w, out)
 		return
 	}
