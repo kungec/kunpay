@@ -1,11 +1,14 @@
 package service
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -43,7 +46,7 @@ func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 		&u.Rate, &u.Balance, &u.Pid, &u.Skey, &u.SettleType, &u.SettleAccount, &u.SettleName,
 		&u.InviteCode, &u.InvitedBy, &u.CreatedAt, &u.LastLoginAt, &u.LastLoginIP, &u.Avatar, &u.ApiIPs,
 		&u.TotpSecret, &u.NotifyWebhook, &u.LimitSingle, &u.LimitDaily,
-		&u.RsaPublic, &u.PayTypes, &u.NotifyEmailOn, &u.RecoveryCodes, &u.NotifyPost, &u.ApiRate, &u.Logo)
+		&u.RsaPublic, &u.PayTypes, &u.NotifyEmailOn, &u.RecoveryCodes, &u.NotifyPost, &u.ApiRate, &u.Logo, &u.EventWebhook)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +54,7 @@ func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 }
 
 const userCols = `id,username,email,password_hash,qq,role,status,rate,balance,pid,skey,
-	settle_type,settle_account,settle_name,invite_code,invited_by,created_at,last_login_at,last_login_ip,avatar,COALESCE(api_ips,''),COALESCE(totp_secret,''),COALESCE(notify_webhook,''),COALESCE(limit_single,0),COALESCE(limit_daily,0),COALESCE(rsa_public,''),COALESCE(pay_types,''),COALESCE(notify_email_on,0),COALESCE(recovery_codes,''),COALESCE(notify_post,0),COALESCE(api_rate,0),COALESCE(logo,'')`
+	settle_type,settle_account,settle_name,invite_code,invited_by,created_at,last_login_at,last_login_ip,avatar,COALESCE(api_ips,''),COALESCE(totp_secret,''),COALESCE(notify_webhook,''),COALESCE(limit_single,0),COALESCE(limit_daily,0),COALESCE(rsa_public,''),COALESCE(pay_types,''),COALESCE(notify_email_on,0),COALESCE(recovery_codes,''),COALESCE(notify_post,0),COALESCE(api_rate,0),COALESCE(logo,''),COALESCE(event_webhook,'')`
 
 func (s *Store) UserByID(id int64) (*model.User, error) {
 	u, err := scanUser(s.DB.QueryRow("SELECT "+userCols+" FROM users WHERE id=?", id))
@@ -102,6 +105,35 @@ func (s *Store) AllChannels() ([]model.Channel, error) {
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+// PushEvent 推送订单生命周期事件到商户 Event Webhook(JSON + MD5 签名)
+func (s *Store) PushEvent(merchant *model.User, event, tradeNo string, data map[string]any) {
+	hook := strings.TrimSpace(merchant.EventWebhook)
+	if hook == "" {
+		return
+	}
+	payload := map[string]any{
+		"event":     event,
+		"trade_no":  tradeNo,
+		"timestamp": model.Now(),
+	}
+	for k, v := range data {
+		payload[k] = v
+	}
+	sign := Sign(map[string]string{
+		"event":    event,
+		"trade_no": tradeNo,
+	}, merchant.Skey)
+	payload["sign"] = sign
+	payload["sign_type"] = "MD5"
+	body, _ := json.Marshal(payload)
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Post(hook, "application/json", bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	resp.Body.Close()
 }
 
 // SetCustomAmount 任意金额订单: 买家提交金额后重新定价(含尾数偏移)并重新计时

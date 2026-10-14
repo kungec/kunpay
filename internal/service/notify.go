@@ -1,7 +1,9 @@
 package service
 
 import (
+	"bytes"
 	crand "crypto/rand"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/big"
@@ -371,6 +373,33 @@ func (s *Store) expireOrders() {
 	now := model.Now()
 	if _, err := s.DB.Exec("UPDATE orders SET status=2 WHERE status=0 AND expire_at<=?", now); err != nil {
 		log.Printf("[cron] 过期订单处理失败: %v", err)
+		return
+	}
+	// 推送过期事件到商户 Event Webhook
+	if rows, err := s.DB.Query(`SELECT o.trade_no, o.out_trade_no, o.type, COALESCE(u.event_webhook,'')
+		FROM orders o JOIN users u ON u.pid=o.pid
+		WHERE o.status=2 AND o.endtime>=?-60 AND COALESCE(u.event_webhook,'')<>''`, now-60); err == nil {
+		type ev struct{ tradeNo, outNo, typ, hook string }
+		var evs []ev
+		for rows.Next() {
+			var e ev
+			if rows.Scan(&e.tradeNo, &e.outNo, &e.typ, &e.hook) == nil && e.hook != "" {
+				evs = append(evs, e)
+			}
+		}
+		rows.Close()
+		for _, e := range evs {
+			go func(tradeNo, outNo, typ, hook string) {
+				payload, _ := json.Marshal(map[string]any{
+					"event": "order.expired", "trade_no": tradeNo, "out_trade_no": outNo,
+					"type": typ, "timestamp": model.Now(),
+				})
+				client := &http.Client{Timeout: 10 * time.Second}
+				if resp, err := client.Post(hook, "application/json", bytes.NewReader(payload)); err == nil {
+					resp.Body.Close()
+				}
+			}(e.tradeNo, e.outNo, e.typ, e.hook)
+		}
 	}
 }
 

@@ -89,7 +89,12 @@
         <div class="tip">显示在您的收银台页面,增强品牌辨识度</div>
       </div>
       <div class="form-item">
-        <label>收款成功 IM 推送(选填)</label>
+        <label>订单事件 Webhook(选填,JSON POST 推送订单状态变更)</label>
+        <input class="input mono" type="url" name="event_webhook" value="{{.Merchant.EventWebhook}}" placeholder="https://your-server.com/webhook">
+        <div class="tip">订单支付成功/过期/退款时,POST JSON 到此地址(含签名),用于自动对账和状态同步</div>
+      </div>
+      <div class="form-item">
+        <label>收银台自定义 Logo(选填,显示在您的收银台页面)</label>
         <div class="row" style="gap:8px">
           <input class="input mono" type="url" name="notify_webhook" value="{{.Merchant.NotifyWebhook}}" placeholder="飞书/钉钉/企业微信机器人 Webhook 地址" style="flex:1;min-width:200px">
           <button class="btn btn-primary btn-sm" type="submit">保存并测试</button>

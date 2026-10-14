@@ -38,10 +38,28 @@
 
     {{if .IsPaid}}
       <div class="cashier-ok">
-        <div class="big"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div class="big" style="animation:kpPop .5s cubic-bezier(.34,1.56,.64,1) both"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
         <h2 style="font-size:22px;margin-bottom:8px">支付成功</h2>
         <p class="muted">感谢您的支付,本页面可安全关闭。</p>
       </div>
+      <script>
+      (function() {
+        try {
+          var ctx = new (window.AudioContext || window.webkitAudioContext)();
+          var notes = [523.25, 659.25, 783.99]; // C5-E5-G5 上行三音
+          notes.forEach(function(freq, i) {
+            var osc = ctx.createOscillator();
+            var gain = ctx.createGain();
+            osc.type = "sine"; osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.15, ctx.currentTime + i * 0.12);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.12 + 0.25);
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.start(ctx.currentTime + i * 0.12);
+            osc.stop(ctx.currentTime + i * 0.12 + 0.3);
+          });
+        } catch(e) {}
+      })();
+      </script>
     {{else if .Expired}}
       <div class="cashier-ok">
         <div class="big" style="background:#fdebec;color:var(--danger)"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>

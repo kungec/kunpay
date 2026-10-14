@@ -2,7 +2,9 @@ package web
 
 import (
 	"bufio"
+	"bytes"
 	"database/sql"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"github.com/skip2/go-qrcode"
@@ -544,7 +546,7 @@ func (s *Server) handleUserSettingsProfile(w http.ResponseWriter, r *http.Reques
 	if email == "" {
 		notifyEmail = false
 	}
-	_, err := s.DB.Exec(`UPDATE users SET email=?, qq=?, settle_type=?, settle_account=?, settle_name=?, notify_email_on=? WHERE id=?`,
+	_, err := s.DB.Exec(`UPDATE users SET email=?, qq=?, settle_type=?, settle_account=?, settle_name=?, notify_email_on=?, event_webhook=? WHERE id=?`,
 		email, qq, settleType, settleAccount, settleName, boolToInt(notifyEmail), u.ID)
 	if err != nil {
 		http.Redirect(w, r, "/user/settings?err="+urlEscape("保存失败"), http.StatusFound)
@@ -1181,6 +1183,15 @@ func (s *Server) handleUserOrderRefund(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.Store.PushMessage(u.ID, "refund", "订单退款", "订单 "+o.TradeNo+" 已退款,余额扣减 ¥"+service.MoneyStr(o.Money-o.Fee))
+	if strings.TrimSpace(u.EventWebhook) != "" {
+		go func(tno, outNo string) {
+			payload, _ := json.Marshal(map[string]any{"event": "order.refunded", "trade_no": tno, "out_trade_no": outNo, "timestamp": model.Now()})
+			client := &http.Client{Timeout: 10 * time.Second}
+			if resp, err := client.Post(u.EventWebhook, "application/json", bytes.NewReader(payload)); err == nil {
+				resp.Body.Close()
+			}
+		}(o.TradeNo, o.OutTradeNo)
+	}
 	http.Redirect(w, r, "/user/orders?msg="+urlEscape("订单已退款,余额已扣减"), http.StatusFound)
 }
 
