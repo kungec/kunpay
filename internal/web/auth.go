@@ -452,6 +452,12 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 	curIP := clientIP(r)
 	_, _ = s.DB.Exec("UPDATE users SET last_login_at=?, last_login_ip=? WHERE id=?",
 		model.Now(), curIP, u.ID)
+	ua := r.UserAgent()
+	if len(ua) > 200 {
+		ua = ua[:200]
+	}
+	_, _ = s.DB.Exec("INSERT INTO login_logs(user_id,ip,user_agent,created_at) VALUES(?,?,?,?)",
+		u.ID, curIP, ua, model.Now())
 	// 登录 IP 变化邮件提醒(异步,不影响登录)
 	if prevIP != "" && prevIP != curIP && u.Email != "" {
 		go func(mail, name, from, to string, site string) {

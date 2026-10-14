@@ -105,6 +105,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /user/avatar/upload", s.requireLogin(s.requireCSRF(s.handleUserAvatarUpload)))
 	mux.HandleFunc("POST /user/avatar/clear", s.requireLogin(s.requireCSRF(s.handleUserAvatarClear)))
 	mux.HandleFunc("GET /user/balance", s.requireLogin(s.handleUserBalance))
+	mux.HandleFunc("GET /user/logs", s.requireLogin(s.handleUserLoginLogs))
 
 	// 管理后台
 	mux.HandleFunc("GET /admin", s.requireAdmin(s.handleAdminHome))

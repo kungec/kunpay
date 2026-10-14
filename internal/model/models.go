@@ -34,6 +34,7 @@ type User struct {
 	NotifyPost    int    // 异步通知使用 POST 方式(0=GET)
 	ApiRate       int64  // 下单接口限流(次/分钟,0=跟随全局)
 	Logo          string // 商户自定义 Logo(收银台展示)
+	CashierNotice string // 收银台自定义公告(覆盖全局公告)
 	EventWebhook  string // 订单事件 Webhook URL(商户接收订单状态变更)
 	RecoveryCodes string // TOTP 恢复代码(SHA256 十六进制 CSV,空=未生成)
 }

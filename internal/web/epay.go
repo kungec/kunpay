@@ -488,6 +488,14 @@ func (s *Server) handlePayCashier(w http.ResponseWriter, r *http.Request) {
 		"LeftSec":      o.ExpireAt - model.Now(),
 		"PayURL":       s.absoluteURL(r) + "/pay/" + o.TradeNo,
 	}
+	if merchant, _ := s.Store.UserByPid(o.Pid); merchant != nil {
+		if merchant.CashierNotice != "" {
+			d["MerchantNotice"] = merchant.CashierNotice
+		}
+		if merchant.Logo != "" {
+			d["MerchantLogo"] = merchant.Logo
+		}
+	}
 	d["Page"] = "cashier"
 	if merchant, _ := s.Store.UserByPid(o.Pid); merchant != nil && merchant.Logo != "" {
 		d["MerchantLogo"] = merchant.Logo

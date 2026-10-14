@@ -1,0 +1,26 @@
+{{define "content"}}
+<div class="card">
+  <div class="row between mb">
+    <div class="card-title" style="margin:0">登录日志</div>
+    <span class="muted" style="font-size:12.5px">共 {{.Total}} 条;发现非本人登录请立即修改密码并开启两步验证</span>
+  </div>
+  <div class="table-wrap">
+    <table class="tbl">
+      <tr><th>#</th><th>登录 IP</th><th>设备 / 浏览器</th><th>时间</th></tr>
+      {{if .Logs}}
+      {{range .Logs}}
+      <tr>
+        <td>{{.ID}}</td>
+        <td class="mono">{{.IP}}</td>
+        <td class="muted" style="max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{if .UA}}{{.UA}}{{else}}<span class="muted">未知</span>{{end}}</td>
+        <td class="muted">{{fdate .CreatedAt}}</td>
+      </tr>
+      {{end}}
+      {{else}}
+      <tr><td colspan="4"><div class="empty">暂无登录记录</div></td></tr>
+      {{end}}
+    </table>
+  </div>
+  {{template "pager" dict "TotalPages" .TotalPages "PageNo" .PageNo "Query" "" "Prev" (addInt .PageNo -1) "Next" (addInt .PageNo 1)}}
+</div>
+{{end}}

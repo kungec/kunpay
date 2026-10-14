@@ -457,18 +457,30 @@ func (s *Server) handleUserSettleApply(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/user/settle?err="+urlEscape("提现失败"), http.StatusFound)
 		return
 	}
-	if _, err := tx.Exec(`INSERT INTO settle_logs(user_id,amount,settle_type,account,name,status,created_at)
-		VALUES(?,?,?,?,?,0,?)`, u.ID, amount, u.SettleType, u.SettleAccount, u.SettleName, model.Now()); err != nil {
+	res, err := tx.Exec(`INSERT INTO settle_logs(user_id,amount,settle_type,account,name,status,created_at)
+		VALUES(?,?,?,?,?,0,?)`, u.ID, amount, u.SettleType, u.SettleAccount, u.SettleName, model.Now())
+	if err != nil {
 		tx.Rollback()
 		http.Redirect(w, r, "/user/settle?err="+urlEscape("提现失败"), http.StatusFound)
 		return
 	}
+	settleID, _ := res.LastInsertId()
 	if err := tx.Commit(); err != nil {
 		http.Redirect(w, r, "/user/settle?err="+urlEscape("提现失败"), http.StatusFound)
 		return
 	}
-	s.Store.PushMessage(u.ID, "settle", "提现申请已提交", "提现金额 ¥"+service.MoneyStr(amount)+",请等待管理员处理")
-	http.Redirect(w, r, "/user/settle?msg="+urlEscape("提现申请已提交,请等待管理员处理"), http.StatusFound)
+	// 提现自动审核: 开启且金额不超过阈值时直接标记为已打款(0=不限)
+	msg := "提现申请已提交,请等待管理员处理"
+	if s.DB.MustSetting("auto_approve_settle") == "1" {
+		approveMax := atoint64(s.DB.MustSetting("auto_approve_max"))
+		if approveMax <= 0 || amount <= approveMax {
+			if _, err := s.DB.Exec("UPDATE settle_logs SET status=1, done_at=? WHERE id=? AND status=0", model.Now(), settleID); err == nil {
+				msg = "提现已自动审核通过"
+			}
+		}
+	}
+	s.Store.PushMessage(u.ID, "settle", "提现申请", "提现金额 ¥"+service.MoneyStr(amount)+","+msg)
+	http.Redirect(w, r, "/user/settle?msg="+urlEscape(msg), http.StatusFound)
 }
 
 // handleUserMerchantRSA 保存商户 RSA 公钥(空=回落 MD5)
@@ -546,8 +558,18 @@ func (s *Server) handleUserSettingsProfile(w http.ResponseWriter, r *http.Reques
 	if email == "" {
 		notifyEmail = false
 	}
-	_, err := s.DB.Exec(`UPDATE users SET email=?, qq=?, settle_type=?, settle_account=?, settle_name=?, notify_email_on=?, event_webhook=? WHERE id=?`,
-		email, qq, settleType, settleAccount, settleName, boolToInt(notifyEmail), u.ID)
+	eventWebhook := strings.TrimSpace(r.FormValue("event_webhook"))
+	if eventWebhook != "" && service.IsInternalURLStrict(eventWebhook) {
+		http.Redirect(w, r, "/user/settings?err="+urlEscape("事件推送地址不允许指向内网"), http.StatusFound)
+		return
+	}
+	cashierNotice := strings.TrimSpace(r.FormValue("cashier_notice"))
+	if len(cashierNotice) > 600 {
+		http.Redirect(w, r, "/user/settings?err="+urlEscape("收银台公告过长(最多 200 字)"), http.StatusFound)
+		return
+	}
+	_, err := s.DB.Exec(`UPDATE users SET email=?, qq=?, settle_type=?, settle_account=?, settle_name=?, notify_email_on=?, event_webhook=?, cashier_notice=? WHERE id=?`,
+		email, qq, settleType, settleAccount, settleName, boolToInt(notifyEmail), eventWebhook, cashierNotice, u.ID)
 	if err != nil {
 		http.Redirect(w, r, "/user/settings?err="+urlEscape("保存失败"), http.StatusFound)
 		return
@@ -612,6 +634,42 @@ func (s *Server) handleUserBalance(w http.ResponseWriter, r *http.Request) {
 	d["TotalPages"] = totalPages
 	d["Balance"] = u.Balance
 	s.render(w, "dash_user_balance", http.StatusOK, d)
+}
+
+// handleUserLoginLogs 商户登录日志(安全审计)
+func (s *Server) handleUserLoginLogs(w http.ResponseWriter, r *http.Request) {
+	u := s.currentUser(r)
+	page := atoint64Or(r.FormValue("p"), 1)
+	if page < 1 {
+		page = 1
+	}
+	const pageSize = 30
+	var total int64
+	_ = s.DB.QueryRow("SELECT COUNT(*) FROM login_logs WHERE user_id=?", u.ID).Scan(&total)
+	rows, err := s.DB.Query(`SELECT id,ip,user_agent,created_at FROM login_logs
+		WHERE user_id=? ORDER BY id DESC LIMIT ? OFFSET ?`, u.ID, pageSize, (page-1)*pageSize)
+	var logs []map[string]any
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var id, createdAt int64
+			var ip, ua string
+			if rows.Scan(&id, &ip, &ua, &createdAt) == nil {
+				logs = append(logs, map[string]any{
+					"ID": id, "IP": ip, "UA": ua, "CreatedAt": createdAt,
+				})
+			}
+		}
+	}
+	totalPages := (total + pageSize - 1) / pageSize
+	d := s.pageData(r)
+	d["Page"] = "user_loginlogs"
+	d["Title"] = "登录日志"
+	d["Logs"] = logs
+	d["Total"] = total
+	d["PageNo"] = page
+	d["TotalPages"] = totalPages
+	s.render(w, "dash_user_loginlogs", http.StatusOK, d)
 }
 
 func rowsAffected(res sql.Result) int64 {

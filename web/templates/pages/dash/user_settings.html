@@ -68,6 +68,10 @@
         <input class="input" type="text" name="settle_name" value="{{.Merchant.SettleName}}" placeholder="收款人真实姓名">
       </div>
       <div class="form-item">
+        <label>收银台自定义公告(选填,覆盖平台全局公告)</label>
+        <textarea class="input" name="cashier_notice" rows="2" maxlength="200" placeholder="显示在您的收银台页面">{{.Merchant.CashierNotice}}</textarea>
+      </div>
+      <div class="form-item">
         <label>收银台自定义 Logo(选填,显示在您的收银台页面)</label>
         <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
           {{if .Merchant.Logo}}<img src="{{.Merchant.Logo}}" alt="logo" style="height:40px;border-radius:8px">{{end}}

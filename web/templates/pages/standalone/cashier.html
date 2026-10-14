@@ -126,7 +126,7 @@
       <div class="qr-hint">{{if eq .Order.Device "pc"}}请使用{{if eq .Order.Type "alipay"}}支付宝{{else if eq .Order.Type "wxpay"}}微信{{else}}QQ{{end}}扫一扫,向商家付款{{else}}也可长按识别二维码付款{{end}}</div>
       <div class="countdown" id="countdown" data-left="{{.LeftSec}}" data-trade="{{.Order.TradeNo}}" data-poll="{{pollSec .Settings}}"></div>
       <div class="pay-notice">{{index .Settings "pay_notice"}}</div>
-      {{if index .Settings "announcement"}}<div class="notice">⚠ {{index .Settings "announcement"}}</div>{{end}}
+      {{if .MerchantNotice}}<div class="notice">⚠ {{.MerchantNotice}}</div>{{else if index .Settings "announcement"}}<div class="notice">⚠ {{index .Settings "announcement"}}</div>{{end}}
       {{end}}
     {{end}}
   </div>

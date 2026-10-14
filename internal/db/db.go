@@ -231,50 +231,60 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_messages ON messages(user_id, read);
+CREATE TABLE IF NOT EXISTS login_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  ip TEXT DEFAULT '',
+  user_agent TEXT DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_login_logs ON login_logs(user_id, created_at);
 `
 
 // 默认配置项
 var defaultSettings = map[string]string{
-	"site_name":          "KunPay 码支付",
-	"site_title":         "专业可靠的码支付解决方案",
-	"announcement":       "请务必按上方金额付款(包含小数尾数),否则系统无法自动确认到账。",
-	"kefu":               "",
-	"fee_rate":           "1.0",
-	"order_timeout":      "5",
-	"money_offset":       "1",
-	"register_open":      "1",
-	"min_settle":         "1000",
-	"auto_settle":        "0",
-	"pay_notice":         "扫码后请输入上方金额付款,付款完成后本页面会自动跳转。",
-	"poll_interval":      "3",
-	"site_url":           "",
-	"smtp_host":          "",
-	"smtp_port":          "465",
-	"smtp_user":          "",
-	"smtp_pass":          "",
-	"smtp_tls":           "ssl",
-	"smtp_from":          "",
-	"alert_email":        "",
-	"device_alert":       "0",
-	"merchant_notice":    "",
-	"admin_ip_whitelist": "",
-	"demo_pid":           "1001",
-	"invite_open":        "1",
-	"invite_rate":        "10",
-	"alert_webhook":      "",
-	"circuit_breaker":    "0",
-	"backup_auto":        "0",
-	"backup_keep":        "10",
-	"statement_auto":     "0",
-	"ip_blacklist":       "",
-	"statement_last":     "",
-	"digest_auto":        "0",
-	"digest_last":        "",
-	"update_check":       "1",
-	"update_repo":        "",
-	"update_latest":      "",
-	"update_check_at":    "0",
-	"footer_text":        "© 2026 KunPay. 保留所有权利.",
+	"site_name":           "KunPay 码支付",
+	"site_title":          "专业可靠的码支付解决方案",
+	"announcement":        "请务必按上方金额付款(包含小数尾数),否则系统无法自动确认到账。",
+	"kefu":                "",
+	"fee_rate":            "1.0",
+	"order_timeout":       "5",
+	"money_offset":        "1",
+	"register_open":       "1",
+	"min_settle":          "1000",
+	"auto_settle":         "0",
+	"pay_notice":          "扫码后请输入上方金额付款,付款完成后本页面会自动跳转。",
+	"poll_interval":       "3",
+	"site_url":            "",
+	"smtp_host":           "",
+	"smtp_port":           "465",
+	"smtp_user":           "",
+	"smtp_pass":           "",
+	"smtp_tls":            "ssl",
+	"smtp_from":           "",
+	"alert_email":         "",
+	"device_alert":        "0",
+	"merchant_notice":     "",
+	"admin_ip_whitelist":  "",
+	"demo_pid":            "1001",
+	"invite_open":         "1",
+	"invite_rate":         "10",
+	"alert_webhook":       "",
+	"circuit_breaker":     "0",
+	"backup_auto":         "0",
+	"backup_keep":         "10",
+	"statement_auto":      "0",
+	"ip_blacklist":        "",
+	"statement_last":      "",
+	"digest_auto":         "0",
+	"digest_last":         "",
+	"auto_approve_max":    "0",
+	"auto_approve_settle": "0",
+	"update_check":        "1",
+	"update_repo":         "",
+	"update_latest":       "",
+	"update_check_at":     "0",
+	"footer_text":         "© 2026 KunPay. 保留所有权利.",
 }
 
 func (d *DB) Migrate() error {
@@ -310,6 +320,7 @@ func (d *DB) Migrate() error {
 	_, _ = d.Exec("ALTER TABLE orders ADD COLUMN custom INTEGER DEFAULT 0")
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN logo TEXT DEFAULT ''")
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN event_webhook TEXT DEFAULT ''")
+	_, _ = d.Exec("ALTER TABLE users ADD COLUMN cashier_notice TEXT DEFAULT ''")
 	// 热查询复合索引(依赖上方 ALTER 出的列,须在其后创建)
 	_, _ = d.Exec("CREATE INDEX IF NOT EXISTS idx_orders_pitem ON orders(p_item_id)")
 	_, _ = d.Exec("CREATE INDEX IF NOT EXISTS idx_orders_mitem ON orders(m_item_id)")
