@@ -130,6 +130,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /admin/settings", s.requireAdmin(s.handleAdminSettings))
 	mux.HandleFunc("POST /admin/settings/save", s.requireAdmin(s.requireCSRF(s.handleAdminSettingsSave)))
 	mux.HandleFunc("POST /admin/settings/rsa", s.requireAdmin(s.requireCSRF(s.handleAdminRSA)))
+	mux.HandleFunc("POST /admin/update/check", s.requireAdmin(s.requireCSRF(s.handleAdminUpdateCheck)))
 	mux.HandleFunc("POST /admin/settings/smtp-test", s.requireAdmin(s.requireCSRF(s.handleAdminSMTPTest)))
 	mux.HandleFunc("POST /admin/downloads/upload", s.requireAdmin(s.requireCSRF(s.handleAdminDownloadsUpload)))
 	mux.HandleFunc("POST /admin/downloads/delete", s.requireAdmin(s.requireCSRF(s.handleAdminDownloadsDelete)))

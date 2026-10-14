@@ -185,6 +185,7 @@ func (s *Store) RunBackground() {
 			s.autoBackup()
 			s.autoStatement()
 			s.autoDigest()
+			s.UpdateCheckTask()
 		}
 	}()
 }

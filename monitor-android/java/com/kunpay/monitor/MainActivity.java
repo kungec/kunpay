@@ -221,6 +221,7 @@ public class MainActivity extends Activity {
         refreshStatus();
         refreshListenerState();
         ensureService();
+        checkAppUpdate();
         if (android.os.Build.VERSION.SDK_INT >= 33
                 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
                     != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -282,6 +283,89 @@ public class MainActivity extends Activity {
             b.setBackgroundTintList(null);
             b.setTextColor(Color.WHITE);
         }
+    }
+
+    /** 检查 APP 更新: 每 24h 拉取一次 GitHub Releases,发现新版弹窗引导下载 */
+    private void checkAppUpdate() {
+        long last = prefs.getLong("update_check_at", 0);
+        if (System.currentTimeMillis() - last < 24 * 3600_000L) return;
+        new Thread(new Runnable() { @Override public void run() {
+            String tag = "", notes = "", url = "";
+            try {
+                java.net.URL u = new java.net.URL(
+                    "https://api.github.com/repos/kungec/kunpay/releases/latest");
+                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) u.openConnection();
+                conn.setConnectTimeout(8000);
+                conn.setReadTimeout(8000);
+                conn.setRequestProperty("Accept", "application/vnd.github+json");
+                java.io.BufferedReader br = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(conn.getInputStream()));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = br.readLine()) != null) sb.append(line);
+                br.close();
+                org.json.JSONObject root = new org.json.JSONObject(sb.toString());
+                tag = root.optString("tag_name");
+                notes = root.optString("body");
+                url = root.optString("html_url");
+                if (tag.isEmpty()) throw new Exception("empty");
+            } catch (Exception e) {
+                return; // 网络不可达/限流,静默跳过
+            }
+            prefs.edit().putLong("update_check_at", System.currentTimeMillis()).apply();
+            if (!isNewerVersion(tag, versionName())) return;
+            final String fTag = tag, fNotes = notes, fUrl = url;
+            runOnUiThread(new Runnable() { @Override public void run() {
+                String shortNotes = fNotes.length() > 400 ? fNotes.substring(0, 400) + "…" : fNotes;
+                new android.app.AlertDialog.Builder(MainActivity.this)
+                        .setTitle("发现新版本 " + fTag)
+                        .setMessage(shortNotes + "\n\n是否前往下载更新?")
+                        .setPositiveButton("下载更新", new android.content.DialogInterface.OnClickListener() {
+                            @Override public void onClick(android.content.DialogInterface d, int w) {
+                                try {
+                                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(fUrl)));
+                                } catch (Exception e) {
+                                    toast("无法打开下载页");
+                                }
+                            }
+                        })
+                        .setNegativeButton("稍后", null)
+                        .show();
+            }});
+        }}).start();
+    }
+
+    private String versionName() {
+        try {
+            return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (Exception e) {
+            return "0.0.0";
+        }
+    }
+
+    private static int[] splitVer(String v) {
+        v = v == null ? "" : v.trim();
+        if (v.startsWith("v") || v.startsWith("V")) v = v.substring(1);
+        int[] out = {0, 0, 0};
+        String[] parts = v.split("\\.", 3);
+        if (parts.length < 2) return new int[]{-1, -1, -1};
+        for (int i = 0; i < Math.min(3, parts.length); i++) {
+            int n = 0;
+            for (char ch : parts[i].toCharArray()) {
+                if (ch < '0' || ch > '9') break;
+                n = n * 10 + (ch - '0');
+            }
+            out[i] = n;
+        }
+        return out;
+    }
+
+    private static boolean isNewerVersion(String latest, String current) {
+        int[] a = splitVer(latest), b = splitVer(current);
+        for (int i = 0; i < 3; i++) {
+            if (a[i] != b[i]) return a[i] > b[i];
+        }
+        return false;
     }
 
     /** Android 13+ 必需: 未授予通知权限时系统会停发监听事件 */

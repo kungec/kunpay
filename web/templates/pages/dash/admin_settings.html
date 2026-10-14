@@ -166,6 +166,36 @@
     </form>
   </div>
   <div class="card">
+    <div class="card-title">软件更新(拉取 GitHub Releases)</div>
+    <div class="row" style="gap:24px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <div><span class="muted">当前版本</span><br><b class="mono">v{{.Version}}</b></div>
+      {{if .Latest}}
+      <div><span class="muted">GitHub 最新版本</span><br>
+        <b class="mono">{{.Latest.Tag}}</b>
+        {{if .Latest.Newer}}<span class="badge badge-green">可更新</span>{{else}}<span class="badge badge-gray">已是最新</span>{{end}}
+      </div>
+      {{end}}
+      <div><span class="muted">上次检查</span><br><b>{{if .CheckAt}}{{.CheckAt}}{{else}}从未{{end}}</b></div>
+      <div><span class="muted">检查仓库</span><br><b class="mono">{{.UpdateRepo}}</b></div>
+    </div>
+    {{if and .Latest .Latest.Newer}}
+    <div class="alert ok">
+      <b>发现新版本 {{.Latest.Tag}}({{.Latest.Name}})</b>
+      {{if .Latest.PublishAt}}<span class="muted"> · 发布于 {{.Latest.PublishAt}}</span>{{end}}
+      <div style="margin-top:8px;white-space:pre-wrap;font-size:12.5px;line-height:1.8;max-height:180px;overflow:auto;background:rgba(0,0,0,.03);border-radius:8px;padding:10px">{{.Latest.Notes}}</div>
+      <div class="row mt" style="gap:8px;flex-wrap:wrap">
+        <a class="btn btn-primary btn-sm" href="{{.Latest.URL}}" target="_blank">查看 / 下载更新 →</a>
+        <span class="muted" style="font-size:12px">下载对应平台压缩包替换程序后重启即可完成升级</span>
+      </div>
+    </div>
+    {{end}}
+    <form method="post" action="/admin/update/check" class="row" style="gap:8px;align-items:center">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <button class="btn btn-outline btn-sm" type="submit">⟳ 立即检查更新</button>
+      <span class="muted" style="font-size:12px">后台每 6 小时自动检查一次;仓库可在下方 update_repo 设置中修改</span>
+    </form>
+  </div>
+  <div class="card">
     <div class="card-title">一键演示数据</div>
     <form method="post" action="/admin/settings/seed" data-confirm="将生成 30 笔近 7 日的演示订单与一台演示设备(trade_no 前缀 DEMO),可在数据清理页移除。继续?">
       <input type="hidden" name="_csrf" value="{{.CSRF}}">

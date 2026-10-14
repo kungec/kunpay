@@ -11,6 +11,12 @@
 <link rel="stylesheet" href="/static/css/style.css?v=20261012">
 </head>
 <body>
+{{if .UpdateInfo}}
+<div class="update-bar" title="{{.UpdateInfo.Tag}}">
+  <span>🎉 平台已升级至 <b>{{.UpdateInfo.Tag}}</b>{{if .UpdateInfo.Name}} · {{.UpdateInfo.Name}}{{end}},服务体验全面更新</span>
+  <a href="{{.UpdateInfo.URL}}" target="_blank" rel="noopener">查看更新内容 →</a>
+</div>
+{{end}}
 <div class="dash">
   <div class="side-mask" id="sideMask"></div>
   <aside class="side">

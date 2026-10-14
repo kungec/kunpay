@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
+	"kunzhifu/internal/version"
 	"log"
 	"net/http"
 	"strings"
@@ -316,6 +317,10 @@ func (s *Server) pageData(r *http.Request) map[string]any {
 		} else {
 			d["AdminTicketOpenN"] = s.Store.OpenTicketCount()
 		}
+		if info, newer := s.Store.CachedUpdate(); newer {
+			d["UpdateInfo"] = info
+		}
+		d["AppVersion"] = version.Version
 	}
 	return d
 }

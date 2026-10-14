@@ -22,6 +22,7 @@ import (
 	"kunzhifu/internal/db"
 	"kunzhifu/internal/model"
 	"kunzhifu/internal/service"
+	"kunzhifu/internal/version"
 )
 
 func (s *Server) handleAdminHome(w http.ResponseWriter, r *http.Request) {
@@ -890,6 +891,20 @@ func (s *Server) handleAdminSettlesDo(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/settles", http.StatusFound)
 }
 
+// handleAdminUpdateCheck 管理员手动检查更新
+func (s *Server) handleAdminUpdateCheck(w http.ResponseWriter, r *http.Request) {
+	info, newer, err := s.Store.CheckUpdate()
+	if err != nil {
+		http.Redirect(w, r, "/admin/settings?err="+urlEscape("检查更新失败: "+err.Error()), http.StatusFound)
+		return
+	}
+	if newer {
+		http.Redirect(w, r, "/admin/settings?msg="+urlEscape("发现新版本 "+info.Tag+"("+info.Name+"),更新内容见下方"), http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, "/admin/settings?msg="+urlEscape("当前已是最新版本 "+version.Version), http.StatusFound)
+}
+
 func (s *Server) handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 	st, _ := s.DB.AllSettings()
 	d := s.pageData(r)
@@ -910,6 +925,14 @@ func (s *Server) handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 		d["MinSettleYuan"] = strconv.FormatFloat(v/100, 'f', -1, 64)
 	} else {
 		d["MinSettleYuan"] = "10"
+	}
+	d["Version"] = version.Version
+	d["UpdateRepo"] = s.Store.RepoName()
+	if info, _ := s.Store.CachedUpdate(); info != nil {
+		d["Latest"] = info
+	}
+	if at, err := strconv.ParseInt(s.DB.MustSetting("update_check_at"), 10, 64); err == nil && at > 0 {
+		d["CheckAt"] = shortdate(at)
 	}
 	s.render(w, "dash_admin_settings", http.StatusOK, d)
 }
@@ -953,7 +976,7 @@ func (s *Server) handleAdminSettingsSave(w http.ResponseWriter, r *http.Request)
 		"money_offset", "register_open", "min_settle", "pay_notice", "invite_open", "footer_text", "poll_interval",
 		"site_url", "smtp_host", "smtp_port", "smtp_user", "smtp_pass", "smtp_tls", "smtp_from", "admin_ip_whitelist",
 		"alert_email", "device_alert", "merchant_notice", "alert_webhook", "invite_rate", "auto_settle", "circuit_breaker",
-		"backup_auto", "backup_keep", "statement_auto", "ip_blacklist", "digest_auto"}
+		"backup_auto", "backup_keep", "statement_auto", "ip_blacklist", "digest_auto", "update_repo"}
 	for _, k := range keys {
 		v := strings.TrimSpace(r.FormValue(k))
 		if r.Form[k] == nil {

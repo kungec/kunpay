@@ -259,6 +259,10 @@ var defaultSettings = map[string]string{
 	"statement_last":     "",
 	"digest_auto":        "0",
 	"digest_last":        "",
+	"update_check":       "1",
+	"update_repo":        "",
+	"update_latest":      "",
+	"update_check_at":    "0",
 	"footer_text":        "© 2026 KunPay. 保留所有权利.",
 }
 
