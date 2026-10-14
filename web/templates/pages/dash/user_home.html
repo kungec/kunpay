@@ -33,10 +33,17 @@ setInterval(function() {
 }, 5000);
 </script>
 {{if .Notice}}<div class="alert info">📢 {{.Notice}}</div>{{end}}
+{{if or .RetryN .PendingSettleN}}
+<div class="alert err" style="background:#fff7ec;border-color:#f3dfc0;color:#8a5a00">
+  ⚠ <b>账户健康提醒</b>:
+  {{if .RetryN}}<a href="/user/orders">{{.RetryN}} 笔订单的异步通知重试中</a>,请检查 notify_url 服务是否可访问;{{end}}
+  {{if .PendingSettleN}}<a href="/user/settle">{{.PendingSettleN}} 笔提现申请待平台处理</a>。{{end}}
+</div>
+{{end}}
 <div class="stat-cards s3">
   <div class="scard">
     <div class="ic b1"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
-    <div><div class="l">今日订单</div><div class="v">{{index .Stats "TodayOk"}} <small>/ {{index .Stats "TodayOrders"}} 笔</small></div><div class="d">今日成功 / 全部订单</div></div>
+    <div><div class="l">今日订单</div><div class="v">{{index .Stats "TodayOk"}} <small>/ {{index .Stats "TodayOrders"}} 笔</small></div><div class="d">成功率 {{printf "%.1f" (index .Stats "TodayRate")}}% · 昨日成功 {{index .Stats "YesterdayOk"}} 笔</div></div>
   </div>
   <div class="scard">
     <div class="ic b2"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>

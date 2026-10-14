@@ -30,7 +30,9 @@
   </div>
 </div>
 <div class="card">
-  <div class="card-title">返佣明细</div>
+  <div class="row between mb">
+    <div class="card-title" style="margin:0">返佣明细 <span class="muted" style="font-size:12.5px;font-weight:normal">共 {{.TotalLogs}} 笔</span></div>
+  </div>
   {{if .Logs}}
   <div class="table-wrap">
     <table class="tbl">
@@ -44,6 +46,7 @@
       {{end}}
     </table>
   </div>
+  {{template "pager" dict "TotalPages" .TotalPages "PageNo" .PageNo "Query" "" "Prev" (addInt .PageNo -1) "Next" (addInt .PageNo 1)}}
   {{else}}
   <div class="empty">还没有返佣记录,快去分享您的邀请链接吧</div>
   {{end}}

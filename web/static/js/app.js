@@ -235,6 +235,21 @@
     });
   });
 
+  // ---------- 防重复提交 ----------
+  // 表单提交后禁用全部 submit 按钮,防止网络慢时双击造成重复下单/重复提现。
+  // data-confirm 表单会在确认后以 f.submit() 重发(不触发 submit 事件),不受影响;
+  // 处理器内已 preventDefault 的表单(如 fetch 型)会跳过;8 秒兜底恢复。
+  document.addEventListener('submit', function (e) {
+    if (e.defaultPrevented) return;
+    var f = e.target;
+    if (!f || f.getAttribute('data-guard') === 'off') return;
+    var btns = f.querySelectorAll('button[type="submit"]');
+    for (var i = 0; i < btns.length; i++) btns[i].disabled = true;
+    setTimeout(function () {
+      for (var i = 0; i < btns.length; i++) btns[i].disabled = false;
+    }, 8000);
+  }, false);
+
   // ---------- 翻页加载特效 ----------
   var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (!reduceMotion) {

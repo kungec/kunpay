@@ -11,6 +11,7 @@ import (
 	"kunzhifu/internal/version"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -176,14 +177,21 @@ func dict(kv ...any) map[string]any {
 
 func addInt(a, b any) int64 { return toI64(a) + toI64(b) }
 
-func pagerQuery(parts ...string) string {
-	q := ""
+// pagerQuery 组装分页查询串;入参为已格式化的 key=value(值会被 URL 转义),
+// 返回 template.URL 避免链接里的 & 被 html/template 二次转义成 %26。
+func pagerQuery(parts ...string) template.URL {
+	v := make(url.Values, len(parts))
 	for _, p := range parts {
-		if p != "" {
-			q += p + "&"
+		if p == "" {
+			continue
+		}
+		if i := strings.Index(p, "="); i >= 0 {
+			v.Add(p[:i], p[i+1:])
+		} else {
+			v.Add(p, "")
 		}
 	}
-	return q
+	return template.URL(v.Encode())
 }
 
 // pollSec 收银台轮询间隔(秒),读取系统设置,限制 1~30

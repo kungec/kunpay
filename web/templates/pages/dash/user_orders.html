@@ -20,6 +20,12 @@
     <input class="input" type="date" name="date_to" value="{{.DateTo}}" title="结束日期">
     <button class="btn btn-primary" type="submit">查询</button>
     <a class="btn btn-ghost" href="/user/orders/export.csv?trade_no={{.QTradeNo}}&status={{.QStatus}}&type={{.QType}}&date_from={{.DateFrom}}&date_to={{.DateTo}}">⬇ 导出 CSV</a>
+    <span class="muted" style="font-size:12px;align-self:center">快捷:
+      <a href="/user/orders?date_from={{.Today}}&date_to={{.Today}}">今天</a> ·
+      <a href="/user/orders?date_from={{.Yesterday}}&date_to={{.Yesterday}}">昨天</a> ·
+      <a href="/user/orders?date_from={{.D7}}&date_to={{.Today}}">近7天</a> ·
+      <a href="/user/orders?date_from={{.MonthStart}}&date_to={{.Today}}">本月</a>
+    </span>
   </form>
   <div class="table-wrap">
     <table class="tbl">
@@ -46,6 +52,6 @@
       {{end}}
     </table>
   </div>
-  {{template "pager" dict "TotalPages" .TotalPages "PageNo" .PageNo "Query" (pagerQuery .QTradeNo .QStatus .QType) "Prev" (addInt .PageNo -1) "Next" (addInt .PageNo 1)}}
+  {{template "pager" dict "TotalPages" .TotalPages "PageNo" .PageNo "Query" (pagerQuery (print "trade_no=" .QTradeNo) (print "status=" .QStatus) (print "type=" .QType) (print "date_from=" .DateFrom) (print "date_to=" .DateTo)) "Prev" (addInt .PageNo -1) "Next" (addInt .PageNo 1)}}
 </div>
 {{end}}

@@ -31,12 +31,18 @@
     </form>
     <div id="qpResult" style="display:none" class="mt">
       <div class="alert ok" id="qpMoney"></div>
-      <div class="form-item">
-        <label>收款链接(发给买家,打开即见收银台)</label>
-        <div class="row" style="gap:8px">
-          <input class="input mono" id="qpUrl" readonly style="flex:1">
-          <button class="btn btn-primary btn-sm" type="button" onclick="copyText(document.getElementById('qpUrl').value,'链接已复制')">复制</button>
-          <a class="btn btn-outline btn-sm" id="qpOpen" target="_blank">预览</a>
+      <div class="row" style="gap:16px;align-items:flex-start">
+        <img id="qpQr" alt="收款链接二维码" width="132" height="132" style="border:1px solid var(--border-2);border-radius:10px;flex:none">
+        <div style="flex:1;min-width:0">
+          <div class="form-item">
+            <label>收款链接(发给买家,打开即见收银台;买家也可直接扫左侧二维码)</label>
+            <div class="row" style="gap:8px">
+              <input class="input mono" id="qpUrl" readonly style="flex:1">
+              <button class="btn btn-primary btn-sm" type="button" onclick="copyText(document.getElementById('qpUrl').value,'链接已复制')">复制</button>
+              <a class="btn btn-outline btn-sm" id="qpOpen" target="_blank">预览</a>
+            </div>
+          </div>
+          <div class="muted" style="font-size:12px">二维码指向本次收款链接,右键可保存图片,适合发给个人或张贴展示。</div>
         </div>
       </div>
     </div>
@@ -95,6 +101,7 @@
         document.getElementById('qpMoney').textContent = (j.custom ? '任意金额模式:买家将自行输入付款金额' : '应收金额: ¥' + j.money);
         document.getElementById('qpUrl').value = j.full_url;
         document.getElementById('qpOpen').href = j.full_url;
+        document.getElementById('qpQr').src = '/user/qr?text=' + encodeURIComponent(j.full_url);
         window.toast('收款链接已生成');
       })
       .catch(function () { btn.disabled = false; btn.textContent = '生成收款链接'; window.toast('网络错误', 'err'); });

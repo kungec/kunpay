@@ -66,6 +66,10 @@ func (s *Server) handleUserDashboard(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	// 账户健康: 通知重试中 / 待处理提现(仅非零时展示)
+	var retryN, pendingSettleN int64
+	_ = s.DB.QueryRow("SELECT COUNT(*) FROM orders WHERE pid=? AND status IN(1,3) AND notify_ok=0 AND notify_url<>''", u.Pid).Scan(&retryN)
+	_ = s.DB.QueryRow("SELECT COUNT(*) FROM settle_logs WHERE user_id=? AND status=0", u.ID).Scan(&pendingSettleN)
 	d := s.pageData(r)
 	d["Page"] = "user_home"
 	d["Title"] = "商户首页"
@@ -73,9 +77,17 @@ func (s *Server) handleUserDashboard(w http.ResponseWriter, r *http.Request) {
 	d["Stats"] = map[string]any{
 		"TodayOrders": todayOrders, "TodayOk": todayOk, "TodayMoney": todayMoney,
 		"YesterdayOk": yesterdayOk, "YesterdayMoney": yesterdayMoney,
+		"TodayRate": func() float64 {
+			if todayOrders == 0 {
+				return 0
+			}
+			return float64(todayOk) / float64(todayOrders) * 100
+		}(),
 		"Balance": u.Balance,
 		"Rate":    u.Rate,
 	}
+	d["RetryN"] = retryN
+	d["PendingSettleN"] = pendingSettleN
 	d["Days"] = days
 	d["Recent"] = recent
 	d["Notice"] = s.DB.MustSetting("merchant_notice")
@@ -376,6 +388,11 @@ func (s *Server) handleUserOrders(w http.ResponseWriter, r *http.Request) {
 	d["QType"] = typ
 	d["DateFrom"] = dateFrom
 	d["DateTo"] = dateTo
+	now := time.Now()
+	d["Today"] = now.Format("2006-01-02")
+	d["Yesterday"] = now.AddDate(0, 0, -1).Format("2006-01-02")
+	d["D7"] = now.AddDate(0, 0, -6).Format("2006-01-02")
+	d["MonthStart"] = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local).Format("2006-01-02")
 	s.render(w, "dash_user_orders", http.StatusOK, d)
 }
 
@@ -385,8 +402,17 @@ func (s *Server) handleUserSettle(w http.ResponseWriter, r *http.Request) {
 	if v := atoint64(s.DB.MustSetting("min_settle")); v > 0 {
 		minSettle = v
 	}
+	page := atoint64Or(r.FormValue("p"), 1)
+	if page < 1 {
+		page = 1
+	}
+	const pageSize = 20
+	var total, paidAmt, pendingAmt int64
+	_ = s.DB.QueryRow("SELECT COUNT(*) FROM settle_logs WHERE user_id=?", u.ID).Scan(&total)
+	_ = s.DB.QueryRow(`SELECT COALESCE(SUM(CASE WHEN status=1 THEN amount ELSE 0 END),0),
+		COALESCE(SUM(CASE WHEN status=0 THEN amount ELSE 0 END),0) FROM settle_logs WHERE user_id=?`, u.ID).Scan(&paidAmt, &pendingAmt)
 	rows, err := s.DB.Query(`SELECT id,amount,settle_type,account,name,status,note,created_at,done_at
-		FROM settle_logs WHERE user_id=? ORDER BY id DESC LIMIT 50`, u.ID)
+		FROM settle_logs WHERE user_id=? ORDER BY id DESC LIMIT ? OFFSET ?`, u.ID, pageSize, (page-1)*pageSize)
 	var logs []map[string]any
 	if err == nil {
 		defer rows.Close()
@@ -407,6 +433,11 @@ func (s *Server) handleUserSettle(w http.ResponseWriter, r *http.Request) {
 	d["Title"] = "结算提现"
 	d["MinSettle"] = minSettle
 	d["Logs"] = logs
+	d["Total"] = total
+	d["PageNo"] = page
+	d["TotalPages"] = (total + pageSize - 1) / pageSize
+	d["PaidAmt"] = paidAmt
+	d["PendingAmt"] = pendingAmt
 	d["Flash"] = r.URL.Query().Get("msg")
 	d["FlashErr"] = r.URL.Query().Get("err")
 	s.render(w, "dash_user_settle", http.StatusOK, d)
@@ -1256,12 +1287,18 @@ func (s *Server) handleUserOrderRefund(w http.ResponseWriter, r *http.Request) {
 // handleUserInvite 邀请返佣页: 邀请链接 + 统计 + 返佣明细
 func (s *Server) handleUserInvite(w http.ResponseWriter, r *http.Request) {
 	u := s.currentUser(r)
-	var invitedN, totalRebate int64
+	var invitedN, totalRebate, totalLogs int64
 	_ = s.DB.QueryRow("SELECT COUNT(*) FROM users WHERE invited_by=?", u.ID).Scan(&invitedN)
 	_ = s.DB.QueryRow("SELECT COALESCE(SUM(amount),0) FROM balance_logs WHERE user_id=? AND type='invite'", u.ID).Scan(&totalRebate)
+	page := atoint64Or(r.FormValue("p"), 1)
+	if page < 1 {
+		page = 1
+	}
+	const pageSize = 20
+	_ = s.DB.QueryRow("SELECT COUNT(*) FROM balance_logs WHERE user_id=? AND type='invite'", u.ID).Scan(&totalLogs)
 	var logs []map[string]any
 	rows, err := s.DB.Query(`SELECT amount,memo,created_at FROM balance_logs
-		WHERE user_id=? AND type='invite' ORDER BY id DESC LIMIT 50`, u.ID)
+		WHERE user_id=? AND type='invite' ORDER BY id DESC LIMIT ? OFFSET ?`, u.ID, pageSize, (page-1)*pageSize)
 	if err == nil {
 		for rows.Next() {
 			var amount, at int64
@@ -1279,9 +1316,29 @@ func (s *Server) handleUserInvite(w http.ResponseWriter, r *http.Request) {
 	d["InvitedN"] = invitedN
 	d["TotalRebate"] = totalRebate
 	d["Logs"] = logs
+	d["TotalLogs"] = totalLogs
+	d["PageNo"] = page
+	d["TotalPages"] = (totalLogs + pageSize - 1) / pageSize
 	d["Rate"] = s.DB.MustSetting("invite_rate")
 	d["Open"] = s.DB.MustSetting("invite_open") == "1"
 	s.render(w, "dash_user_invite", http.StatusOK, d)
+}
+
+// handleUserQR 登录用户生成任意短文本二维码(收款链接分享用;限长防滥用)
+func (s *Server) handleUserQR(w http.ResponseWriter, r *http.Request) {
+	text := strings.TrimSpace(r.URL.Query().Get("text"))
+	if text == "" || len(text) > 512 {
+		http.Error(w, "参数错误", 400)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	data, err := qrcode.Encode(text, qrcode.Medium, 280)
+	if err != nil {
+		http.Error(w, "生成失败", 500)
+		return
+	}
+	w.Write(data)
 }
 
 // handleUserTOTPQR 输出 otpauth:// 绑定二维码(login 后方可取)

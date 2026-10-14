@@ -41,7 +41,7 @@
 
 <div class="card">
   <div class="row between mb">
-    <div class="card-title" style="margin:0">提现记录</div>
+    <div class="card-title" style="margin:0">提现记录 <span class="muted" style="font-size:12.5px;font-weight:normal">共 {{.Total}} 笔 · 已打款 <b style="color:var(--success)">¥{{yuan .PaidAmt}}</b> · 待处理 <b style="color:#d9860b">¥{{yuan .PendingAmt}}</b></span></div>
     <a class="btn btn-ghost btn-sm" href="/user/settle/export.csv">⬇ 导出</a>
   </div>
   <div class="table-wrap">
@@ -66,5 +66,6 @@
       {{end}}
     </table>
   </div>
+  {{template "pager" dict "TotalPages" .TotalPages "PageNo" .PageNo "Query" "" "Prev" (addInt .PageNo -1) "Next" (addInt .PageNo 1)}}
 </div>
 {{end}}
