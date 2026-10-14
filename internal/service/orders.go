@@ -325,6 +325,14 @@ func (s *Store) CreateOrder(u *model.User, req *OrderReq, clientIP string) (*mod
 	if err := checkLimitDailyTx(tx, u, money); err != nil {
 		return nil, err
 	}
+	// 尾数唯一性在事务内复核: 检查+插入在事务中原子完成,防并发下单撞出同额在途订单错配。
+	// (尾数偏移关闭时保持原语义,允许同额在途)
+	if offsetOn {
+		o.PayMoney, err = resolvePayMoneyTx(tx, o.Type, o.PayMoney, now)
+		if err != nil {
+			return nil, err
+		}
+	}
 	res, err := tx.Exec(`INSERT INTO orders(trade_no,out_trade_no,pid,type,name,money,pay_money,param,
 		notify_url,return_url,sitename,device,channel_id,status,addtime,expire_at,client_ip,custom)
 		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)`,
@@ -369,6 +377,34 @@ func checkLimitDailyTx(tx *sql.Tx, u *model.User, money int64) error {
 		return ErrLimitDaily
 	}
 	return nil
+}
+
+// resolvePayMoneyTx 事务内复核应付金额唯一性: 已有在途同额订单(此刻仍未过期)时,
+// 在同元内微调分位避让(最多 ±99 分);整数金额无法微调,直接拒绝。全部占用返回 ErrAmountBusy。
+func resolvePayMoneyTx(tx *sql.Tx, typ string, cand, now int64) (int64, error) {
+	collision := func(v int64) bool {
+		var n int
+		_ = tx.QueryRow(`SELECT COUNT(*) FROM orders
+			WHERE status=0 AND COALESCE(custom,0)=0 AND type=? AND pay_money=? AND expire_at>?`,
+			typ, v, now).Scan(&n)
+		return n > 0
+	}
+	if !collision(cand) {
+		return cand, nil
+	}
+	if cand%100 == 0 {
+		return 0, ErrAmountBusy
+	}
+	cents, yuan := cand%100, cand-cand%100
+	for d := int64(1); d <= 99; d++ {
+		if up := cents + d; up <= 99 && !collision(yuan+up) {
+			return yuan + up, nil
+		}
+		if dn := cents - d; dn >= 1 && !collision(yuan+dn) {
+			return yuan + dn, nil
+		}
+	}
+	return 0, ErrAmountBusy
 }
 
 // checkUserLimits 商户风控限额(单笔+单日),CreateOrder 与 SetCustomAmount 共用

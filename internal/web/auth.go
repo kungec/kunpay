@@ -446,6 +446,7 @@ func loginLocked(ip, username string) (bool, time.Duration) {
 }
 
 func recordLoginFail(ip, username string) {
+	startCountPruner()
 	key := loginKey(ip, username)
 	v, _ := loginFails.LoadOrStore(key, &failState{})
 	fs := v.(*failState)
@@ -569,7 +570,35 @@ func hashPassword(pw string) string {
 
 var resetCounts sync.Map // ip -> *regCount (复用计数结构)
 
+// startCountPruner 启动一次后台协程,定期清理过期限流计数,
+// 防止海量 IP 暴力尝试把内存撑爆(sync.Map 无自动回收)
+var countPruneOnce sync.Once
+
+func startCountPruner() {
+	countPruneOnce.Do(func() {
+		go func() {
+			for {
+				time.Sleep(10 * time.Minute)
+				now := time.Now()
+				loginFails.Range(func(k, v any) bool {
+					if fs, ok := v.(*failState); ok && now.Sub(fs.lockedAt) > time.Hour {
+						loginFails.Delete(k)
+					}
+					return true
+				})
+				resetCounts.Range(func(k, v any) bool {
+					if rc, ok := v.(*regCount); ok && now.Sub(rc.window) > time.Hour {
+						resetCounts.Delete(k)
+					}
+					return true
+				})
+			}
+		}()
+	})
+}
+
 func resetAllowed(ip string) bool {
+	startCountPruner()
 	v, _ := resetCounts.LoadOrStore(ip, &regCount{window: time.Now()})
 	rc := v.(*regCount)
 	if time.Since(rc.window) > time.Hour {
