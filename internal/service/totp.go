@@ -48,6 +48,20 @@ func totpCode(secretB32 string, counter uint64) (string, error) {
 	return fmt.Sprintf("%06d", code), nil
 }
 
+// IsTOTPCode 判断输入是否为 6 位动态码格式(区别于恢复代码)
+func IsTOTPCode(code string) bool {
+	code = strings.TrimSpace(code)
+	if len(code) != 6 {
+		return false
+	}
+	for _, ch := range code {
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // VerifyTOTP 校验动态码,允许前后各一个周期(30s)的时钟偏差
 func VerifyTOTP(secret, code string) bool {
 	code = strings.TrimSpace(code)

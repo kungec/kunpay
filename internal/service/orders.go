@@ -46,7 +46,7 @@ func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 		&u.Rate, &u.Balance, &u.Pid, &u.Skey, &u.SettleType, &u.SettleAccount, &u.SettleName,
 		&u.InviteCode, &u.InvitedBy, &u.CreatedAt, &u.LastLoginAt, &u.LastLoginIP, &u.Avatar, &u.ApiIPs,
 		&u.TotpSecret, &u.NotifyWebhook, &u.LimitSingle, &u.LimitDaily,
-		&u.RsaPublic, &u.PayTypes, &u.NotifyEmailOn, &u.RecoveryCodes, &u.NotifyPost, &u.ApiRate, &u.Logo, &u.EventWebhook, &u.CashierNotice)
+		&u.RsaPublic, &u.PayTypes, &u.NotifyEmailOn, &u.RecoveryCodes, &u.NotifyPost, &u.ApiRate, &u.Logo, &u.EventWebhook, &u.CashierNotice, &u.LastTOTPStep)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 }
 
 const userCols = `id,username,email,password_hash,qq,role,status,rate,balance,pid,skey,
-	settle_type,settle_account,settle_name,invite_code,invited_by,created_at,last_login_at,last_login_ip,avatar,COALESCE(api_ips,''),COALESCE(totp_secret,''),COALESCE(notify_webhook,''),COALESCE(limit_single,0),COALESCE(limit_daily,0),COALESCE(rsa_public,''),COALESCE(pay_types,''),COALESCE(notify_email_on,0),COALESCE(recovery_codes,''),COALESCE(notify_post,0),COALESCE(api_rate,0),COALESCE(logo,''),COALESCE(event_webhook,''),COALESCE(cashier_notice,'')`
+	settle_type,settle_account,settle_name,invite_code,invited_by,created_at,last_login_at,last_login_ip,avatar,COALESCE(api_ips,''),COALESCE(totp_secret,''),COALESCE(notify_webhook,''),COALESCE(limit_single,0),COALESCE(limit_daily,0),COALESCE(rsa_public,''),COALESCE(pay_types,''),COALESCE(notify_email_on,0),COALESCE(recovery_codes,''),COALESCE(notify_post,0),COALESCE(api_rate,0),COALESCE(logo,''),COALESCE(event_webhook,''),COALESCE(cashier_notice,''),COALESCE(last_totp_step,0)`
 
 func (s *Store) UserByID(id int64) (*model.User, error) {
 	u, err := scanUser(s.DB.QueryRow("SELECT "+userCols+" FROM users WHERE id=?", id))
@@ -206,6 +206,40 @@ func (s *Store) SetCustomAmount(tradeNo string, money int64) (*model.Order, erro
 		return nil, errors.New("订单状态已变化,请刷新收银台")
 	}
 	return s.OrderByTradeNo(tradeNo), nil
+}
+
+// ClawbackInviteRebateTx 退款时在事务内追回该订单对应的邀请返佣。
+// 依据 balance_logs 流水 memo 中的 trade_no 关联;以邀请人可用余额为上限(不产生负余额)。
+func (s *Store) ClawbackInviteRebateTx(tx *sql.Tx, merchant *model.User, tradeNo string, now int64) {
+	if merchant == nil || merchant.InvitedBy <= 0 || tradeNo == "" {
+		return
+	}
+	var rebate int64
+	err := tx.QueryRow(`SELECT amount FROM balance_logs
+		WHERE user_id=? AND type='invite' AND amount>0 AND memo LIKE ?
+		ORDER BY id DESC LIMIT 1`,
+		merchant.InvitedBy, "%"+tradeNo+"%").Scan(&rebate)
+	if err != nil || rebate <= 0 {
+		return // 无返佣记录(下单时返佣未开启等)
+	}
+	var inviterBal int64
+	if err := tx.QueryRow("SELECT balance FROM users WHERE id=?", merchant.InvitedBy).Scan(&inviterBal); err != nil {
+		return
+	}
+	claw := rebate
+	if claw > inviterBal {
+		claw = inviterBal // 余额不足部分不再追讨,避免负余额
+	}
+	if claw <= 0 {
+		return
+	}
+	if _, err := tx.Exec("UPDATE users SET balance=balance-? WHERE id=?", claw, merchant.InvitedBy); err != nil {
+		return
+	}
+	_, _ = tx.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
+		VALUES(?,?,?,?,?,?,?)`,
+		merchant.InvitedBy, "rebate_claw", -claw, inviterBal, inviterBal-claw,
+		fmt.Sprintf("订单退款追回返佣 %s", tradeNo), now)
 }
 
 // OrderReq 汇总外部下单请求参数
@@ -702,9 +736,9 @@ func (s *Store) CompleteOrder(o *model.Order, buyer string) error {
 				if err := tx.QueryRow("SELECT balance FROM users WHERE id=?", merchant.InvitedBy).Scan(&invBefore); err == nil {
 					if _, err := tx.Exec("UPDATE users SET balance=balance+? WHERE id=?", rebate, merchant.InvitedBy); err == nil {
 						if _, err := tx.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
-							VALUES(?,?,?,?,?,?,?)`,
+						VALUES(?,?,?,?,?,?,?)`,
 							merchant.InvitedBy, "invite", rebate, invBefore, invBefore+rebate,
-							fmt.Sprintf("邀请返佣: 商户 %s 订单手续费 %s 的 %s%%", merchant.Username, MoneyStr(fee), trimRate(inviteRate)), now); err != nil {
+							fmt.Sprintf("邀请返佣: 商户 %s 订单 %s 手续费 %s 的 %s%%", merchant.Username, o.TradeNo, MoneyStr(fee), trimRate(inviteRate)), now); err != nil {
 							return err
 						}
 					}

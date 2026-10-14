@@ -392,6 +392,7 @@ func (s *Server) handleEpayApi(w http.ResponseWriter, r *http.Request) {
 			out["msg"] = "退款失败"
 			break
 		}
+		s.Store.ClawbackInviteRebateTx(tx, merchant, o.TradeNo, model.Now())
 		if err := tx.Commit(); err != nil {
 			out["code"] = -1
 			out["msg"] = "退款失败"

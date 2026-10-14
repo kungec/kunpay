@@ -37,6 +37,7 @@ type User struct {
 	CashierNotice string // 收银台自定义公告(覆盖全局公告)
 	EventWebhook  string // 订单事件 Webhook URL(商户接收订单状态变更)
 	RecoveryCodes string // TOTP 恢复代码(SHA256 十六进制 CSV,空=未生成)
+	LastTOTPStep  int64  // 最近一次使用的 TOTP 时间步(防同码窗口内重放)
 }
 
 type Order struct {

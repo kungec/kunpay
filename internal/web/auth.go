@@ -521,6 +521,19 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 			s.render(w, "pub_login", http.StatusOK, d)
 			return
 		}
+		// 防同码重放: 记录并校验时间步,同一 30 秒窗口的动态码只能用一次
+		if service.IsTOTPCode(code) {
+			step := model.Now() / 30
+			if u.LastTOTPStep >= step {
+				recordLoginFail(clientIP(r), username)
+				d["Error"] = "该动态码已被使用,请等待下一个验证码"
+				d["NeedTOTP"] = true
+				s.newCaptchaData(d)
+				s.render(w, "pub_login", http.StatusUnauthorized, d)
+				return
+			}
+			_, _ = s.DB.Exec("UPDATE users SET last_totp_step=? WHERE id=?", step, u.ID)
+		}
 	}
 	loginFails.Delete(loginKey(clientIP(r), username))
 	loginFails.Delete(loginKey("u", username)) // 成功登录同时清除用户名维度失败计数,避免被第三方恶意锁死

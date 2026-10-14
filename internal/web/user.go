@@ -1301,6 +1301,8 @@ func (s *Server) handleUserOrderRefund(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// 退款追回邀请返佣(与退款额无关,费率 100% 时退款为 0 但返佣可能存在)
+	s.Store.ClawbackInviteRebateTx(tx, u, o.TradeNo, model.Now())
 	if err := tx.Commit(); err != nil {
 		http.Redirect(w, r, "/user/orders?err="+urlEscape("退款失败"), http.StatusFound)
 		return

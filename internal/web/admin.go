@@ -1639,6 +1639,8 @@ func (s *Server) handleAdminOrderRefund(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	}
+	// 退款追回邀请返佣(与退款额无关)
+	s.Store.ClawbackInviteRebateTx(tx, merchant, o.TradeNo, model.Now())
 	if err := tx.Commit(); err != nil {
 		http.Redirect(w, r, "/admin/orders?err="+urlEscape("退款失败"), http.StatusFound)
 		return

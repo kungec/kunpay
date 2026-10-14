@@ -321,6 +321,7 @@ func (d *DB) Migrate() error {
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN logo TEXT DEFAULT ''")
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN event_webhook TEXT DEFAULT ''")
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN cashier_notice TEXT DEFAULT ''")
+	_, _ = d.Exec("ALTER TABLE users ADD COLUMN last_totp_step INTEGER DEFAULT 0")
 	// 热查询复合索引(依赖上方 ALTER 出的列,须在其后创建)
 	_, _ = d.Exec("CREATE INDEX IF NOT EXISTS idx_orders_pitem ON orders(p_item_id)")
 	_, _ = d.Exec("CREATE INDEX IF NOT EXISTS idx_orders_mitem ON orders(m_item_id)")
