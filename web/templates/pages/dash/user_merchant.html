@@ -96,6 +96,7 @@
     btn.addEventListener('click', function () {
       btn.disabled = true; btn.textContent = '请求中...';
       var fd = new FormData();
+      fd.append('_csrf', '{{.CSRF}}');
       fd.append('type', document.getElementById('dbgType').value);
       fd.append('money', document.getElementById('dbgMoney').value.trim() || '1.00');
       fd.append('out_trade_no', document.getElementById('dbgNo').value.trim());
@@ -140,6 +141,7 @@
     if (!url) { window.toast('请填写通知地址', 'err'); return; }
     btn.disabled = true; btn.textContent = '发送中...';
     var fd = new FormData();
+    fd.append('_csrf', '{{.CSRF}}');
     fd.append('notify_url', url);
     fetch('/user/debug/notify', { method: 'POST', body: fd })
       .then(function (r) { return r.json(); })
