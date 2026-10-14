@@ -2,6 +2,7 @@ package web
 
 import (
 	"crypto/md5"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -139,7 +140,8 @@ func (s *Server) vmqAuth(q url.Values) (int64, bool) {
 		var id int64
 		var token string
 		var status int
-		if rows.Scan(&id, &token, &status) == nil && status == 1 && vmqSign(t, token) == strings.ToLower(sign) {
+		if rows.Scan(&id, &token, &status) == nil && status == 1 &&
+			subtle.ConstantTimeCompare([]byte(vmqSign(t, token)), []byte(strings.ToLower(sign))) == 1 {
 			return id, true
 		}
 	}

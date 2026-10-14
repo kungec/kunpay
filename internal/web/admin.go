@@ -317,7 +317,9 @@ func (s *Server) handleAdminUsersSave(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		_, _ = s.DB.Exec("UPDATE users SET password_hash=? WHERE id=?", hashPassword(pw), id)
-		msg = "已重置密码"
+		// 重置密码后下线该用户全部会话(旧凭据立即失效)
+		_, _ = s.DB.Exec("DELETE FROM sessions WHERE user_id=?", id)
+		msg = "已重置密码并下线其全部会话"
 	}
 	s.audit(r, "user."+action, u.Username+": "+msg)
 	http.Redirect(w, r, "/admin/users?msg="+urlEscape(msg), http.StatusFound)

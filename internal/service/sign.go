@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/subtle"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
@@ -127,7 +128,7 @@ func VerifySign(params map[string]string, key string) bool {
 		return false
 	}
 	want := Sign(params, key)
-	return got == want
+	return subtle.ConstantTimeCompare([]byte(got), []byte(want)) == 1
 }
 
 // MoneyStr 分 -> 元字符串(两位小数,支持负数)

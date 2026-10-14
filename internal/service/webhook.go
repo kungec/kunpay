@@ -16,6 +16,10 @@ var ErrInvalidWebhook = errors.New("无效的 webhook 地址,仅支持 http(s)")
 // 飞书 / 钉钉 / 企业微信 / 通用格式({"text": msg})。
 func SendWebhookAlert(rawURL, siteName, msg string) error {
 	rawURL = strings.TrimSpace(rawURL)
+	// 发送前复核: 保存时的校验不能替代发送时的防线(策略可能已收紧)
+	if CallbackBlocked(rawURL) {
+		return ErrInvalidWebhook
+	}
 	u, err := url.Parse(rawURL)
 	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
 		return ErrInvalidWebhook

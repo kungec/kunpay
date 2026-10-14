@@ -149,11 +149,12 @@ func payRateLimitMiddleware(next http.Handler) http.Handler {
 // payRateLimitWrap 支付接口限频包装器
 func payRateLimitWrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 只限频支付相关路径
+		// 只限频支付相关路径(demo 下单公开且创建真实订单,一并纳入限频防刷)
 		if strings.Contains(r.URL.Path, "submit.php") ||
 			strings.Contains(r.URL.Path, "mapi.php") ||
 			strings.Contains(r.URL.Path, "api.php") ||
-			strings.HasSuffix(r.URL.Path, "/amount") {
+			strings.HasSuffix(r.URL.Path, "/amount") ||
+			strings.HasSuffix(r.URL.Path, "/demo/create") {
 			if payRateLimited(clientIP(r)) {
 				w.Header().Set("Content-Type", "application/json; charset=utf-8")
 				w.WriteHeader(http.StatusTooManyRequests)

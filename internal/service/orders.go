@@ -196,14 +196,14 @@ func (s *Store) SetCustomAmount(tradeNo string, money int64) (*model.Order, erro
 	if s.DB.MustSetting("money_offset") == "1" {
 		payMoney = s.uniquePayMoney(o.Type, money, now, int64(timeoutMin)*60)
 	}
-	_, err := s.DB.Exec("UPDATE orders SET money=?, pay_money=?, expire_at=? WHERE id=? AND status=0 AND custom=1",
+	// 单条原子 UPDATE 完成定价+去标记(custom 1→0): 并发提交只有一个生效,防双重定价
+	res, err := s.DB.Exec("UPDATE orders SET money=?, pay_money=?, expire_at=?, custom=0 WHERE id=? AND status=0 AND custom=1",
 		money, payMoney, now+int64(timeoutMin)*60, o.ID)
 	if err != nil {
 		return nil, err
 	}
-	_, err = s.DB.Exec("UPDATE orders SET custom=0 WHERE id=? AND status=0", o.ID)
-	if err != nil {
-		return nil, err
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil, errors.New("订单状态已变化,请刷新收银台")
 	}
 	return s.OrderByTradeNo(tradeNo), nil
 }
