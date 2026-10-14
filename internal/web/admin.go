@@ -406,12 +406,21 @@ func (s *Server) handleAdminOrdersRepair(w http.ResponseWriter, r *http.Request)
 		http.Redirect(w, r, "/admin/orders?msg="+urlEscape("订单不存在"), http.StatusFound)
 		return
 	}
-	if o.Status == 1 || o.Status == 3 {
-		http.Redirect(w, r, "/admin/orders?msg="+urlEscape("订单已是成功状态"), http.StatusFound)
+	// 仅待支付/已过期订单可补单;已成功/已退款订单禁止(CompleteOrder 对非待支付订单
+	// 不会入账,若再无条件改状态会出现"标记成功但没入账"的脏状态)
+	if o.Status != 0 && o.Status != 2 {
+		http.Redirect(w, r, "/admin/orders?msg="+urlEscape("仅待支付或已过期订单可补单"), http.StatusFound)
 		return
 	}
 	if err := s.Store.CompleteOrder(o, "管理员补单"); err != nil {
 		http.Redirect(w, r, "/admin/orders?msg="+urlEscape("补单失败: "+err.Error()), http.StatusFound)
+		return
+	}
+	// CompleteOrder 幂等: 只有订单确实入账(状态已变 1/3)才标记补单
+	var st int
+	_ = s.DB.QueryRow("SELECT status FROM orders WHERE id=?", o.ID).Scan(&st)
+	if st != 1 && st != 3 {
+		http.Redirect(w, r, "/admin/orders?msg="+urlEscape("补单失败: 订单状态已变化"), http.StatusFound)
 		return
 	}
 	_, _ = s.DB.Exec("UPDATE orders SET status=3 WHERE id=?", o.ID) // 标记为手动补单
@@ -861,7 +870,12 @@ func (s *Server) handleAdminSettlesDo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if action == "pay" {
-		_, _ = s.DB.Exec("UPDATE settle_logs SET status=1, done_at=? WHERE id=?", model.Now(), id)
+		// 条件更新原子认领(status 0→1): 并发操作只有一个生效
+		res, err := s.DB.Exec("UPDATE settle_logs SET status=1, done_at=? WHERE id=? AND status=0", model.Now(), id)
+		if err != nil || rowsAffected(res) == 0 {
+			http.Redirect(w, r, "/admin/settles?msg="+urlEscape("该申请已被处理,请刷新"), http.StatusFound)
+			return
+		}
 		s.audit(r, "settle.pay", fmt.Sprintf("#%d ¥%s", id, service.MoneyStr(amount)))
 		if m, _ := s.Store.UserByID(uid); m != nil {
 			s.notifyMerchantSettle(m.Email, m.Username, true, amount, "")
@@ -870,18 +884,41 @@ func (s *Server) handleAdminSettlesDo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if action == "reject" {
-		_, _ = s.DB.Exec("UPDATE settle_logs SET status=2, note=?, done_at=? WHERE id=?",
-			strings.TrimSpace(r.FormValue("note")), model.Now(), id)
-		res, _ := s.DB.Exec("UPDATE users SET balance=balance+? WHERE id=?", amount, uid)
-		if rowsAffected(res) > 0 {
+		note := strings.TrimSpace(r.FormValue("note"))
+		// 事务: 原子认领(status 0→2) + 退回余额 + 流水,防并发重复退款
+		tx, txErr := s.DB.Begin()
+		if txErr != nil {
+			http.Redirect(w, r, "/admin/settles?err="+urlEscape("操作失败"), http.StatusFound)
+			return
+		}
+		res, err := tx.Exec("UPDATE settle_logs SET status=2, note=?, done_at=? WHERE id=? AND status=0",
+			note, model.Now(), id)
+		if err != nil || rowsAffected(res) == 0 {
+			tx.Rollback()
+			http.Redirect(w, r, "/admin/settles?msg="+urlEscape("该申请已被处理,请刷新"), http.StatusFound)
+			return
+		}
+		if amount > 0 {
+			if _, err := tx.Exec("UPDATE users SET balance=balance+? WHERE id=?", amount, uid); err != nil {
+				tx.Rollback()
+				http.Redirect(w, r, "/admin/settles?err="+urlEscape("退回余额失败"), http.StatusFound)
+				return
+			}
 			var balance int64
-			_ = s.DB.QueryRow("SELECT balance FROM users WHERE id=?", uid).Scan(&balance)
-			_, _ = s.DB.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
+			_ = tx.QueryRow("SELECT balance FROM users WHERE id=?", uid).Scan(&balance)
+			if _, err := tx.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
 				VALUES(?,?,?,?,?,?,?)`,
-				uid, "reject", amount, balance-amount, balance, "提现被拒绝,退还余额", model.Now())
+				uid, "reject", amount, balance-amount, balance, "提现被拒绝,退还余额", model.Now()); err != nil {
+				tx.Rollback()
+				http.Redirect(w, r, "/admin/settles?err="+urlEscape("退回余额失败"), http.StatusFound)
+				return
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			http.Redirect(w, r, "/admin/settles?err="+urlEscape("操作失败"), http.StatusFound)
+			return
 		}
 		s.audit(r, "settle.reject", fmt.Sprintf("#%d ¥%s", id, service.MoneyStr(amount)))
-		note := strings.TrimSpace(r.FormValue("note"))
 		if m, _ := s.Store.UserByID(uid); m != nil {
 			s.notifyMerchantSettle(m.Email, m.Username, false, amount, note)
 		}
@@ -1561,13 +1598,26 @@ func (s *Server) handleAdminOrderRefund(w http.ResponseWriter, r *http.Request) 
 	if refund < 0 {
 		refund = 0
 	}
+	// 事务外读取商户(连接池仅 1: 事务内不得再查 s.DB,会自锁)
+	merchant, _ := s.Store.UserByPid(o.Pid)
 	tx, err := s.DB.Begin()
 	if err != nil {
 		http.Redirect(w, r, "/admin/orders?err="+urlEscape("退款失败: "+err.Error()), http.StatusFound)
 		return
 	}
+	// 原子认领订单(状态 1/3→4): 并发退款只有一个能成功,防止重复扣款
+	clRes, err := tx.Exec("UPDATE orders SET status=4 WHERE id=? AND status IN(1,3)", o.ID)
+	if err != nil {
+		tx.Rollback()
+		http.Redirect(w, r, "/admin/orders?err="+urlEscape("退款失败"), http.StatusFound)
+		return
+	}
+	if n, _ := clRes.RowsAffected(); n == 0 {
+		tx.Rollback()
+		http.Redirect(w, r, "/admin/orders?err="+urlEscape("订单已退款或状态已变化"), http.StatusFound)
+		return
+	}
 	var bal int64
-	merchant, _ := s.Store.UserByPid(o.Pid)
 	if merchant != nil && refund > 0 {
 		if err := tx.QueryRow("SELECT balance FROM users WHERE id=? AND balance>=?", merchant.ID, refund).Scan(&bal); err != nil {
 			tx.Rollback()
@@ -1587,16 +1637,16 @@ func (s *Server) handleAdminOrderRefund(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	}
-	if _, err := tx.Exec("UPDATE orders SET status=4 WHERE id=? AND status IN(1,3)", o.ID); err != nil {
-		tx.Rollback()
-		http.Redirect(w, r, "/admin/orders?err="+urlEscape("退款失败"), http.StatusFound)
-		return
-	}
 	if err := tx.Commit(); err != nil {
 		http.Redirect(w, r, "/admin/orders?err="+urlEscape("退款失败"), http.StatusFound)
 		return
 	}
 	s.audit(r, "order.refund", o.TradeNo+" ¥"+service.MoneyStr(refund))
+	if merchant != nil && merchant.EventWebhook != "" {
+		go s.Store.PushEvent(merchant, "order.refunded", o.TradeNo, map[string]any{
+			"out_trade_no": o.OutTradeNo, "refund_amount": service.MoneyStr(refund),
+		})
+	}
 	http.Redirect(w, r, "/admin/orders?msg="+urlEscape("退款成功,已扣回商户余额 ¥"+service.MoneyStr(refund)), http.StatusFound)
 }
 

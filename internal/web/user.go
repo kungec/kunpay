@@ -2,9 +2,7 @@ package web
 
 import (
 	"bufio"
-	"bytes"
 	"database/sql"
-	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"github.com/skip2/go-qrcode"
@@ -33,7 +31,7 @@ func (s *Server) handleUserDashboard(w http.ResponseWriter, r *http.Request) {
 	dayStart := todayStart()
 	var todayOrders, todayOk, yesterdayOk int64
 	var todayMoney, yesterdayMoney int64
-	_ = s.DB.QueryRow("SELECT COUNT(*) FROM orders WHERE pid=?", u.Pid).Scan(&todayOrders)
+	_ = s.DB.QueryRow("SELECT COUNT(*) FROM orders WHERE pid=? AND addtime>=?", u.Pid, dayStart).Scan(&todayOrders)
 	_ = s.DB.QueryRow("SELECT COUNT(*) FROM orders WHERE pid=? AND status IN(1,3) AND addtime>=?", u.Pid, dayStart).Scan(&todayOk)
 	_ = s.DB.QueryRow("SELECT COALESCE(SUM(money),0) FROM orders WHERE pid=? AND status IN(1,3) AND addtime>=?", u.Pid, dayStart).Scan(&todayMoney)
 	_ = s.DB.QueryRow("SELECT COUNT(*) FROM orders WHERE pid=? AND status IN(1,3) AND addtime<? AND addtime>=?", u.Pid, dayStart, dayStart-86400).Scan(&yesterdayOk)
@@ -293,8 +291,24 @@ func (s *Server) handleUserChannelsItemWeight(w http.ResponseWriter, r *http.Req
 func (s *Server) handleUserChannelsItemDel(w http.ResponseWriter, r *http.Request) {
 	u := s.currentUser(r)
 	id := atoint64(r.FormValue("id"))
-	_ = s.Store.DeleteMerchantItem(u.ID, id)
+	if it, err := s.Store.MerchantItemOf(u.ID, id); err == nil {
+		_ = s.Store.DeleteMerchantItem(u.ID, id)
+		s.removeUploadFile(it.Qrcode) // 同步删除磁盘文件,防上传目录无限增长
+	}
 	http.Redirect(w, r, "/user/channels?msg="+urlEscape("收款码已删除"), http.StatusFound)
+}
+
+// removeUploadFile 删除 DataDir 根下的上传文件(仅接受 /uploads/ 平铺路径,防目录穿越)
+func (s *Server) removeUploadFile(webPath string) {
+	webPath = strings.TrimSpace(webPath)
+	if webPath == "" || !strings.HasPrefix(webPath, "/uploads/") {
+		return
+	}
+	name := filepath.Base(webPath)
+	if name == "" || name == "." || name == string(filepath.Separator) || strings.Contains(name, "..") {
+		return
+	}
+	_ = os.Remove(filepath.Join(s.DataDir, name))
 }
 
 func (s *Server) handleUserChannelsRotate(w http.ResponseWriter, r *http.Request) {
@@ -627,7 +641,15 @@ func (s *Server) handleUserSettingsPassword(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	_, _ = s.DB.Exec("UPDATE users SET password_hash=? WHERE id=?", hashPassword(newPw), u.ID)
-	http.Redirect(w, r, "/user/settings?msg="+urlEscape("密码修改成功"), http.StatusFound)
+	// 管理员改掉默认密码后解除全站强制改密拦截
+	if u.Role == "admin" {
+		s.ClearDefaultAdminPwFlag()
+	}
+	// 改密后下线该账号的其他所有会话(防旧会话残留)
+	if c, err := r.Cookie(sessionCookie); err == nil {
+		s.RevokeOtherSessions(u.ID, c.Value)
+	}
+	http.Redirect(w, r, "/user/settings?msg="+urlEscape("密码修改成功,其他设备已自动下线"), http.StatusFound)
 }
 
 func (s *Server) handleUserBalance(w http.ResponseWriter, r *http.Request) {
@@ -719,7 +741,7 @@ func (s *Server) handleUserReport(w http.ResponseWriter, r *http.Request) {
 	u := s.currentUser(r)
 	dateStr := strings.TrimSpace(r.FormValue("date"))
 	dayStart := todayStart()
-	if t, err := time.Parse("2006-01-02", dateStr); err == nil {
+	if t, err := time.ParseInLocation("2006-01-02", dateStr, time.Local); err == nil {
 		t = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 		if t.Unix() < model.Now()-86400*366 {
 			t = time.Unix(dayStart, 0)
@@ -772,7 +794,7 @@ func (s *Server) handleUserReportExport(w http.ResponseWriter, r *http.Request) 
 	u := s.currentUser(r)
 	dateStr := strings.TrimSpace(r.FormValue("date"))
 	dayStart := todayStart()
-	if t, err := time.Parse("2006-01-02", dateStr); err == nil {
+	if t, err := time.ParseInLocation("2006-01-02", dateStr, time.Local); err == nil {
 		dayStart = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location()).Unix()
 	}
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
@@ -814,7 +836,7 @@ func (s *Server) handleUserReportMail(w http.ResponseWriter, r *http.Request) {
 	}
 	dateStr := strings.TrimSpace(r.FormValue("date"))
 	dayStart := todayStart()
-	if t, err := time.Parse("2006-01-02", dateStr); err == nil {
+	if t, err := time.ParseInLocation("2006-01-02", dateStr, time.Local); err == nil {
 		dayStart = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location()).Unix()
 	}
 	var okOrders int64
@@ -1039,7 +1061,7 @@ func (s *Server) handleUserDebugNotify(w http.ResponseWriter, r *http.Request) {
 		target += "?" + q.Encode()
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := service.SafeHTTPClient(10 * time.Second)
 	resp, err := client.Get(target)
 	rr := ""
 	if err != nil {
@@ -1235,11 +1257,23 @@ func (s *Server) handleUserOrderRefund(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/user/orders?err="+urlEscape("仅已支付订单可退款"), http.StatusFound)
 		return
 	}
-	// 扣回商户余额(事务: 扣款+流水+订单状态同生共死)
+	// 扣回商户余额(事务: 原子认领订单+扣款+流水同生共死)
 	refund := o.Money - o.Fee
 	tx, err := s.DB.Begin()
 	if err != nil {
 		http.Redirect(w, r, "/user/orders?err="+urlEscape("退款失败"), http.StatusFound)
+		return
+	}
+	// 原子认领订单(状态 1/3→4): 并发退款只有一个能成功
+	clRes, err := tx.Exec("UPDATE orders SET status=4, buyer=buyer||' [退款]' WHERE id=? AND status IN(1,3)", o.ID)
+	if err != nil {
+		tx.Rollback()
+		http.Redirect(w, r, "/user/orders?err="+urlEscape("退款失败"), http.StatusFound)
+		return
+	}
+	if n, _ := clRes.RowsAffected(); n == 0 {
+		tx.Rollback()
+		http.Redirect(w, r, "/user/orders?err="+urlEscape("订单已退款或状态已变化"), http.StatusFound)
 		return
 	}
 	var bal int64
@@ -1262,24 +1296,15 @@ func (s *Server) handleUserOrderRefund(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if _, err := tx.Exec("UPDATE orders SET status=4, buyer=buyer||' [退款]' WHERE id=? AND status IN(1,3)", o.ID); err != nil {
-		tx.Rollback()
-		http.Redirect(w, r, "/user/orders?err="+urlEscape("退款失败"), http.StatusFound)
-		return
-	}
 	if err := tx.Commit(); err != nil {
 		http.Redirect(w, r, "/user/orders?err="+urlEscape("退款失败"), http.StatusFound)
 		return
 	}
 	s.Store.PushMessage(u.ID, "refund", "订单退款", "订单 "+o.TradeNo+" 已退款,余额扣减 ¥"+service.MoneyStr(o.Money-o.Fee))
-	if strings.TrimSpace(u.EventWebhook) != "" {
-		go func(tno, outNo string) {
-			payload, _ := json.Marshal(map[string]any{"event": "order.refunded", "trade_no": tno, "out_trade_no": outNo, "timestamp": model.Now()})
-			client := &http.Client{Timeout: 10 * time.Second}
-			if resp, err := client.Post(u.EventWebhook, "application/json", bytes.NewReader(payload)); err == nil {
-				resp.Body.Close()
-			}
-		}(o.TradeNo, o.OutTradeNo)
+	if strings.TrimSpace(u.EventWebhook) != "" { // 退款事件(签名)
+		go s.Store.PushEvent(u, "order.refunded", o.TradeNo, map[string]any{
+			"out_trade_no": o.OutTradeNo, "refund_amount": service.MoneyStr(o.Money - o.Fee),
+		})
 	}
 	http.Redirect(w, r, "/user/orders?msg="+urlEscape("订单已退款,余额已扣减"), http.StatusFound)
 }
@@ -1485,7 +1510,7 @@ func (s *Server) handleUserOrderNotify(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUserStatementExport(w http.ResponseWriter, r *http.Request) {
 	u := s.currentUser(r)
 	month := strings.TrimSpace(r.FormValue("month"))
-	t, err := time.Parse("2006-01", month)
+	t, err := time.ParseInLocation("2006-01", month, time.Local)
 	if err != nil {
 		now := time.Unix(model.Now(), 0)
 		t = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
@@ -1695,7 +1720,10 @@ func (s *Server) handleUserLogoUpload(w http.ResponseWriter, r *http.Request) {
 // handleUserLogoDelete 删除商户 Logo
 func (s *Server) handleUserLogoDelete(w http.ResponseWriter, r *http.Request) {
 	u := s.currentUser(r)
+	var logo string
+	_ = s.DB.QueryRow("SELECT COALESCE(logo,'') FROM users WHERE id=?", u.ID).Scan(&logo)
 	_, _ = s.DB.Exec("UPDATE users SET logo='' WHERE id=?", u.ID)
+	s.removeUploadFile(logo)
 	http.Redirect(w, r, "/user/settings?msg="+urlEscape("Logo 已删除"), http.StatusFound)
 }
 
@@ -1703,7 +1731,8 @@ func (s *Server) handleUserLogoDelete(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUserMessages(w http.ResponseWriter, r *http.Request) {
 	u := s.currentUser(r)
 	_ = r.ParseForm()
-	if r.FormValue("mark_read") == "1" {
+	// 标记已读仅接受 POST(路由已带 CSRF 校验),GET 链接不允许产生副作用
+	if r.Method == http.MethodPost && r.FormValue("mark_read") == "1" {
 		s.Store.MarkMessagesRead(u.ID)
 		http.Redirect(w, r, "/user/messages", http.StatusFound)
 		return

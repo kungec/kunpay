@@ -66,6 +66,14 @@ func (s *Server) handleMonitorPush(w http.ResponseWriter, r *http.Request) {
 	}
 	content := q.Get("content")
 	ts := atoint64Or(q.Get("time"), model.Now())
+	// 时间戳钳制: 客户端时间不可信,拒绝未来时间戳与超龄时间戳(防预注入未来流水回溯匹配)
+	now := model.Now()
+	if ts > now {
+		ts = now
+	}
+	if ts < now-86400 {
+		ts = now
+	}
 	o := s.Store.ReportPayment(id, typ, money, content, ts)
 	_, _ = s.DB.Exec("UPDATE devices SET last_heartbeat=?, last_ip=? WHERE id=?", model.Now(), clientIP(r), id)
 	if o != nil {
@@ -81,19 +89,20 @@ func vmqSign(t, token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// vmqFresh 校验 V免签推送时间戳新鲜度(±120s)并缓存防重放
-func (s *Server) vmqFresh(q url.Values) bool {
+// vmqFresh 校验 V免签推送时间戳新鲜度(±120s,拒绝未来时间)并缓存防重放。
+// 重放键使用服务端解析出的设备ID+时间戳,不依赖客户端可控的 id 参数,
+// 截获的签名在窗口内无法通过更换金额/内容/id 参数重放。
+func (s *Server) vmqFresh(q url.Values, deviceID int64) bool {
 	t := q.Get("t")
 	ts, err := strconv.ParseInt(t, 10, 64)
 	if err != nil {
 		return false
 	}
 	now := model.Now()
-	if ts > now+120 || ts < now-120 {
+	if ts > now+30 || ts < now-120 {
 		return false
 	}
-	sig := q.Get("sign")
-	key := fmt.Sprintf("%d|%s|%s", ts, sig, q.Get("id"))
+	key := fmt.Sprintf("%d|%d", deviceID, ts)
 	vmqReplayMu.Lock()
 	defer vmqReplayMu.Unlock()
 	if vmqSeen == nil {
@@ -156,9 +165,9 @@ func (s *Server) handleVmqPush(w http.ResponseWriter, r *http.Request) {
 		monitorJSON(w, -1, "验签失败")
 		return
 	}
-	// 时间戳新鲜度 + 重放缓存: 截获的旧签名无法改金额重放
-	if !s.vmqFresh(q) {
-		monitorJSON(w, -1, "签名已过期,请校准设备时间")
+	// 时间戳新鲜度 + 重放缓存(设备维度): 截获的旧签名无法改金额/内容重放
+	if !s.vmqFresh(q, id) {
+		monitorJSON(w, -1, "签名已过期或重复推送,请校准设备时间")
 		return
 	}
 	typ := q.Get("type")

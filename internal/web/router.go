@@ -172,7 +172,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /user/messages", s.requireLogin(s.handleUserMessages))
 	mux.HandleFunc("POST /user/logo/upload", s.requireLogin(s.requireCSRF(s.handleUserLogoUpload)))
 	mux.HandleFunc("POST /user/logo/delete", s.requireLogin(s.requireCSRF(s.handleUserLogoDelete)))
-	mux.HandleFunc("POST /user/messages/mark_read", s.requireLogin(s.handleUserMessages))
+	mux.HandleFunc("POST /user/messages/mark_read", s.requireLogin(s.requireCSRF(s.handleUserMessages)))
 	mux.HandleFunc("GET /user/tickets/{id}", s.requireLogin(s.handleUserTicketView))
 	mux.HandleFunc("POST /user/tickets/reply", s.requireLogin(s.requireCSRF(s.handleUserTicketReply)))
 	mux.HandleFunc("POST /user/tickets/close", s.requireLogin(s.requireCSRF(s.handleUserTicketClose)))
@@ -192,13 +192,15 @@ func (s *Server) Routes() http.Handler {
 		http.Redirect(w, r, "/static/img/favicon.svg", http.StatusFound)
 	})
 
-	// 运行时上传目录(收款码): 仅允许访问具体文件,禁用目录列表
+	// 运行时上传目录(收款码/Logo/头像,平铺在 DataDir 根): 仅允许访问具体文件。
+	// 任何子目录(backups 数据库备份、downloads 等)一律 404 —— 备份含密钥/会话,绝不可经 Web 下载。
 	if s.DataDir != "" {
 		fs := http.FileServer(http.Dir(s.DataDir))
 		mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			p := r.URL.Path
-			if p == "" || p == "/" || strings.HasSuffix(p, "/") {
-				http.NotFound(w, r) // 禁用目录列表
+			if p == "" || p == "/" || strings.HasSuffix(p, "/") || strings.Contains(p, "/") ||
+				strings.Contains(p, "..") || strings.HasPrefix(p, ".") {
+				http.NotFound(w, r) // 禁用目录列表与子目录访问
 				return
 			}
 			fs.ServeHTTP(w, r)

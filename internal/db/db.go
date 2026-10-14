@@ -402,7 +402,11 @@ func (d *DB) Migrate() error {
 		if err != nil {
 			return err
 		}
-		log.Println("[init] 已创建管理员账号 admin / admin123 (请尽快修改密码)")
+		log.Println("[init] 已创建管理员账号 admin / admin123 (首次登录将强制要求修改密码)")
+		// 标记默认密码未修改: 登录后强制改密(-allow-default-admin 可关闭该强制)
+		if _, err := d.Exec("INSERT OR IGNORE INTO settings(k,v) VALUES('admin_default_pw','1')"); err != nil {
+			return err
+		}
 	}
 	// 演示商户 demo / demo123(KUNPAY_SKIP_DEMO=1 或 -skip-demo 时跳过)
 	if os.Getenv("KUNPAY_SKIP_DEMO") == "1" || os.Getenv("KUNPAY_SKIP_DEMO") == "true" {

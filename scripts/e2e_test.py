@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""KunPay 端到端功能测试"""
+"""KunPay 端到端功能测试
+启动方式(本地回调与默认管理员开关仅测试环境使用):
+  ./kunpay -port 8787 -db /tmp/kunpay-e2e.db -data /tmp/kunpay-data -captcha=false -allow-local-notify -allow-default-admin
+"""
 import hashlib, json, re, subprocess, sys, threading, time, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 

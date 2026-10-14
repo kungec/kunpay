@@ -355,6 +355,20 @@ func (s *Server) handleEpayApi(w http.ResponseWriter, r *http.Request) {
 			out["msg"] = "系统错误"
 			break
 		}
+		// 原子认领订单(状态 1/3→4): 并发退款只有一个能成功,防止重复扣款
+		clRes, err := tx.Exec("UPDATE orders SET status=4 WHERE id=? AND status IN(1,3)", o.ID)
+		if err != nil {
+			tx.Rollback()
+			out["code"] = -1
+			out["msg"] = "退款失败"
+			break
+		}
+		if n, _ := clRes.RowsAffected(); n == 0 {
+			tx.Rollback()
+			out["code"] = -1
+			out["msg"] = "订单已退款或状态已变化"
+			break
+		}
 		var bal int64
 		if err := tx.QueryRow("SELECT balance FROM users WHERE id=? AND balance>=?", merchant.ID, refund).Scan(&bal); err != nil {
 			tx.Rollback()
@@ -376,12 +390,6 @@ func (s *Server) handleEpayApi(w http.ResponseWriter, r *http.Request) {
 			out["msg"] = "退款失败"
 			break
 		}
-		if _, err := tx.Exec("UPDATE orders SET status=4 WHERE id=? AND status IN(1,3)", o.ID); err != nil {
-			tx.Rollback()
-			out["code"] = -1
-			out["msg"] = "退款失败"
-			break
-		}
 		if err := tx.Commit(); err != nil {
 			out["code"] = -1
 			out["msg"] = "退款失败"
@@ -391,6 +399,12 @@ func (s *Server) handleEpayApi(w http.ResponseWriter, r *http.Request) {
 		out["refund_amount"] = service.MoneyStr(refund)
 		out["trade_no"] = o.TradeNo
 		out["msg"] = "退款成功"
+		if merchant.EventWebhook != "" { // 退款事件(签名)
+			mm := merchant
+			go s.Store.PushEvent(mm, "order.refunded", o.TradeNo, map[string]any{
+				"out_trade_no": o.OutTradeNo, "refund_amount": service.MoneyStr(refund),
+			})
+		}
 
 	case "channels": // 查询可用渠道状态
 		chs, _ := s.Store.AllChannels()

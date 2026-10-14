@@ -11,9 +11,13 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 )
+
+// moneyRe 金额格式: 1-9 位整数 + 最多两位小数
+var moneyRe = regexp.MustCompile(`^\d{1,9}(\.\d{1,2})?$`)
 
 // SortedRaw 按易支付规则构造排序串(过滤空值与 sign/sign_type,ASCII 升序,a=b&c=d)
 func SortedRaw(params map[string]string) string {
@@ -136,7 +140,7 @@ func MoneyStr(cents int64) string {
 	return fmt.Sprintf("%s%d.%02d", sign, cents/100, cents%100)
 }
 
-// ParseMoney 元字符串 -> 分;最多两位小数,非法返回 error
+// ParseMoney 元字符串 -> 分;最多两位小数,非法返回 error(不截断、不接受多余字符)
 func ParseMoney(s string) (int64, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -147,31 +151,19 @@ func ParseMoney(s string) (int64, error) {
 		neg = true
 		s = s[1:]
 	}
-	intPart, fracPart := s, ""
+	if !moneyRe.MatchString(s) {
+		return 0, fmt.Errorf("金额格式错误(最多两位小数)")
+	}
+	intPart, fracPart := s, "0"
 	if i := strings.IndexByte(s, '.'); i >= 0 {
 		intPart, fracPart = s[:i], s[i+1:]
-	}
-	if fracPart == "" {
-		fracPart = "0"
-	}
-	if len(fracPart) > 2 {
-		// 超过两位小数:截断到分
-		fracPart = fracPart[:2]
 	}
 	if intPart == "" {
 		intPart = "0"
 	}
 	var ip, fp int64
-	if _, err := fmt.Sscanf(intPart, "%d", &ip); err != nil {
-		return 0, fmt.Errorf("金额格式错误")
-	}
-	// 补齐两位解析小数
-	for len(fracPart) < 2 {
-		fracPart += "0"
-	}
-	if _, err := fmt.Sscanf(fracPart, "%d", &fp); err != nil {
-		return 0, fmt.Errorf("金额格式错误")
-	}
+	fmt.Sscanf(intPart, "%d", &ip)
+	fmt.Sscanf(fracPart, "%d", &fp)
 	total := ip*100 + fp
 	if neg {
 		total = -total

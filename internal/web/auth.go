@@ -2,6 +2,7 @@ package web
 
 import (
 	"kunzhifu/internal/service"
+	"net"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -17,6 +18,39 @@ import (
 
 const sessionCookie = "kunpay_sid"
 
+// AllowDefaultAdmin 关闭"默认管理员密码强制修改"(回归测试/演示环境用)
+var AllowDefaultAdmin = false
+
+// defPwCache 缓存"该密码哈希是否为默认密码"的 bcrypt 校验结果,避免每个请求都做慢哈希
+var defPwCache sync.Map // passwordHash -> bool
+
+// usingDefaultAdminPw 管理员是否仍在使用初始密码 admin123
+func (s *Server) usingDefaultAdminPw(u *model.User) bool {
+	if AllowDefaultAdmin || u == nil || u.Role != "admin" {
+		return false
+	}
+	if s.DB.MustSetting("admin_default_pw") != "1" {
+		return false
+	}
+	h := u.PasswordHash
+	if v, ok := defPwCache.Load(h); ok {
+		return v.(bool)
+	}
+	isDef := bcrypt.CompareHashAndPassword([]byte(h), []byte("admin123")) == nil
+	defPwCache.Store(h, isDef)
+	return isDef
+}
+
+// isPwChangePath 强制改密期间仍可访问的路径
+func isPwChangePath(p string) bool {
+	return p == "/user/settings" || p == "/user/settings/password" || p == "/logout" || p == "/user"
+}
+
+// ClearDefaultAdminPwFlag 管理员修改密码后清除强制改密标记
+func (s *Server) ClearDefaultAdminPwFlag() {
+	_, _ = s.DB.Exec("UPDATE settings SET v='0' WHERE k='admin_default_pw'")
+}
+
 var (
 	reUsername   = regexp.MustCompile(`^[a-zA-Z0-9_]{3,20}$`)
 	reEmail      = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
@@ -29,6 +63,13 @@ func (s *Server) setSession(w http.ResponseWriter, r *http.Request, userID int64
 	ua := r.UserAgent()
 	if len(ua) > 120 {
 		ua = ua[:120]
+	}
+	// 单用户最大并发会话数: 保留最近 maxSessionsPerUser-1 个,腾位给新会话
+	if maxSessionsPerUser > 0 {
+		_, _ = s.DB.Exec(`DELETE FROM sessions WHERE user_id=? AND token NOT IN (
+			SELECT token FROM sessions WHERE user_id=?
+			ORDER BY COALESCE(last_seen,0) DESC, created_at DESC LIMIT ?)`,
+			userID, userID, maxSessionsPerUser-1)
 	}
 	_, err := s.DB.Exec("INSERT INTO sessions(token,user_id,expires_at,created_at,ip,ua,last_seen) VALUES(?,?,?,?,?,?,?)",
 		token, userID, now+7*86400, now, clientIP(r), ua, now)
@@ -65,15 +106,24 @@ func (s *Server) currentUser(r *http.Request) *model.User {
 	if err != nil || c.Value == "" {
 		return nil
 	}
-	var userID, expires, lastSeen int64
+	var userID, expires, lastSeen, createdAt int64
 	var sip string
-	err = s.DB.QueryRow("SELECT user_id,expires_at,COALESCE(last_seen,0),COALESCE(ip,'') FROM sessions WHERE token=?", c.Value).
-		Scan(&userID, &expires, &lastSeen, &sip)
+	err = s.DB.QueryRow("SELECT user_id,expires_at,COALESCE(last_seen,0),created_at,COALESCE(ip,'') FROM sessions WHERE token=?", c.Value).
+		Scan(&userID, &expires, &lastSeen, &createdAt, &sip)
 	if err != nil || expires < model.Now() {
 		return nil
 	}
-	// 活跃心跳限频写库: 距上次 >60s 才更新,并记录最新 IP
+	// 空闲超时: 超过 sessionIdleTimeoutSec 无活动(以 last_seen/created_at 较新者计)即销毁会话
 	now := model.Now()
+	effLast := lastSeen
+	if effLast < createdAt {
+		effLast = createdAt
+	}
+	if sessionIdleTimeoutSec > 0 && now-effLast > sessionIdleTimeoutSec {
+		_, _ = s.DB.Exec("DELETE FROM sessions WHERE token=?", c.Value)
+		return nil
+	}
+	// 活跃心跳限频写库: 距上次 >60s 才更新,并记录最新 IP
 	lastSeenMu.Lock()
 	last := lastSeenAt[c.Value]
 	lastSeenMu.Unlock()
@@ -145,8 +195,14 @@ func (s *Server) RevokeOtherSessions(userID int64, curToken string) int64 {
 // requireLogin 包装: 未登录跳转 /login
 func (s *Server) requireLogin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if s.currentUser(r) == nil {
+		u := s.currentUser(r)
+		if u == nil {
 			http.Redirect(w, r, "/login?next="+r.URL.Path, http.StatusFound)
+			return
+		}
+		// 管理员仍在使用默认密码: 除改密相关页面外全部拦截
+		if s.usingDefaultAdminPw(u) && !isPwChangePath(r.URL.Path) {
+			http.Redirect(w, r, "/user/settings?err="+urlEscape("安全提示: 请先修改管理员默认密码后再进行其他操作"), http.StatusFound)
 			return
 		}
 		next(w, r)
@@ -163,6 +219,10 @@ func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 		}
 		if u.Role != "admin" {
 			http.Error(w, "无权访问", http.StatusForbidden)
+			return
+		}
+		if s.usingDefaultAdminPw(u) && !isPwChangePath(r.URL.Path) {
+			http.Redirect(w, r, "/user/settings?err="+urlEscape("安全提示: 请先修改管理员默认密码后再进行其他操作"), http.StatusFound)
 			return
 		}
 		if wl := s.DB.MustSetting("admin_ip_whitelist"); wl != "" {
@@ -186,11 +246,25 @@ func (s *Server) requireCSRF(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// TrustProxyHeaders 是否信任反代头(默认 true;直连暴露端口时应关闭)
+// TrustProxyHeaders 是否信任反代头(默认 true)。仅在直连对端为内网/回环地址时才
+// 真正采纳转发头 —— 反向代理几乎总是部署在本机或内网,而公网直连者提供的
+// X-Real-IP/X-Forwarded-For 不可信(可伪造绕过 IP 白名单与限流)。
 var TrustProxyHeaders = true
 
+func isTrustedProxyPeer(r *http.Request) bool {
+	ra := r.RemoteAddr
+	if h, _, err := net.SplitHostPort(ra); err == nil {
+		ra = h
+	}
+	ip := net.ParseIP(ra)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
+}
+
 func clientIP(r *http.Request) string {
-	if TrustProxyHeaders {
+	if TrustProxyHeaders && isTrustedProxyPeer(r) {
 		if xf := r.Header.Get("X-Real-IP"); xf != "" {
 			return strings.TrimSpace(strings.Split(xf, ",")[0])
 		}
@@ -448,6 +522,7 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	loginFails.Delete(loginKey(clientIP(r), username))
+	loginFails.Delete(loginKey("u", username)) // 成功登录同时清除用户名维度失败计数,避免被第三方恶意锁死
 	prevIP := u.LastLoginIP
 	curIP := clientIP(r)
 	_, _ = s.DB.Exec("UPDATE users SET last_login_at=?, last_login_ip=? WHERE id=?",
@@ -545,7 +620,8 @@ func (s *Server) handleForgotPost(w http.ResponseWriter, r *http.Request) {
 	token := db.RandKey(32)
 	_, _ = s.DB.Exec("INSERT INTO pwd_resets(token,user_id,expires_at,created_at) VALUES(?,?,?,?)",
 		token, userID, model.Now()+900, model.Now())
-	resetURL := s.absoluteURL(r) + "/reset?token=" + token
+	// 重置链接使用配置的站点地址(防 Host 头投毒窃取 Token),未配置时才回落请求推断
+	resetURL := s.baseURL(r) + "/reset?token=" + token
 	subject := "【" + s.DB.MustSetting("site_name") + "】密码重置"
 	body := mailHTML("重置登录密码", []string{
 		"您(或他人)正在重置账号 <b>" + htmlEscape(account) + "</b> 的登录密码。",

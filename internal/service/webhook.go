@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -35,7 +34,7 @@ func SendWebhookAlert(rawURL, siteName, msg string) error {
 		}
 	}()
 	body, _ := json.Marshal(payload)
-	client := &http.Client{Timeout: 6 * time.Second}
+	client := SafeHTTPClient(6 * time.Second)
 	resp, err := client.Post(rawURL, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return err

@@ -18,6 +18,8 @@ func main() {
 	srv := web.NewServer(store, cfg.DataDir, cfg.Port)
 	srv.CaptchaEnabled = cfg.Captcha
 	srv.TrustProxy = cfg.TrustProxy
+	service.AllowLocalCallbacks = cfg.AllowLocalNotify
+	web.AllowDefaultAdmin = cfg.AllowDefaultAdmin
 	if err := srv.Init(); err != nil {
 		log.Fatalf("初始化失败: %v", err)
 	}

@@ -3,7 +3,7 @@
   <div class="row between mb">
     <div class="card-title" style="margin:0">消息中心</div>
     {{if .Messages}}
-    <form method="post" action="/user/messages?mark_read=1">
+    <form method="post" action="/user/messages/mark_read">
       <input type="hidden" name="_csrf" value="{{.CSRF}}">
       <input type="hidden" name="mark_read" value="1">
       <button class="btn btn-ghost btn-sm" type="submit">✓ 全部标为已读</button>

@@ -200,11 +200,19 @@ Windows: 双击 kunpay.exe,或 cmd 执行 kunpay.exe -port 8080
 
 首次启动自动初始化:
 
-- 管理员:**admin / admin123**(请立即修改)
+- 管理员:**admin / admin123**(首次登录会被强制要求修改默认密码,修改前无法使用其他任何功能)
 - 演示商户:demo / demo123(PID 1001,供 /demo 支付测试使用)
 - 三个支付渠道(支付宝/微信/QQ,默认开启)
 
 生产环境建议:用 Nginx/Caddy 反代 + HTTPS;数据库与 data 目录随运行目录生成,注意备份;Systemd 示例见产物内部署说明。
+
+### 安全部署要点
+
+- **必须 HTTPS**:程序默认明文 HTTP,监控设备 Token、商户密钥、API 参数都会经过网络,正式部署必须置于正确配置的 HTTPS 反代之后。
+- **反代头信任**:`-trust-proxy` 默认开启,但仅当请求的直连对端是内网/回环地址时才采纳 `X-Real-IP/X-Forwarded-For`;公网直连提供的转发头一律忽略,无法伪造客户端 IP 绕过白名单。
+- **回调 SSRF 防护**:商户提交的 notify_url/return_url/webhook 默认禁止指向内网与回环地址;本地联调可用 `-allow-local-notify`(生产严禁)。
+- **备份文件不可经 Web 下载**:`data/backups/` 下的数据库备份不在 `/uploads/` 静态服务范围内(上传目录只暴露根目录平铺文件)。
+- **测试/演示专用开关**:`-allow-default-admin` 可关闭默认密码强制修改,仅限回归测试或演示环境使用。
 
 ## 上线配置流程(管理员)
 

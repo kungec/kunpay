@@ -107,10 +107,37 @@ func (s *Store) AllChannels() ([]model.Channel, error) {
 	return out, rows.Err()
 }
 
+// AllowLocalCallbacks 测试/本机联调开关: true 时回调地址允许回环地址(默认 false,生产禁止内网回调)
+var AllowLocalCallbacks = false
+
+// CallbackBlocked 校验商户可控回调地址是否应被拒绝(下单/发送时都调用,发送时复核防存储后策略变更)
+func CallbackBlocked(rawURL string) bool {
+	if rawURL == "" {
+		return false
+	}
+	if AllowLocalCallbacks {
+		return IsInternalURL(rawURL)
+	}
+	return IsInternalURLStrict(rawURL)
+}
+
+// SafeHTTPClient 严格 HTTP 客户端: 禁止跟随重定向(302 跳内网是常见 SSRF 绕过手段)
+func SafeHTTPClient(timeout time.Duration) *http.Client {
+	return &http.Client{
+		Timeout: timeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+}
+
 // PushEvent 推送订单生命周期事件到商户 Event Webhook(JSON + MD5 签名)
 func (s *Store) PushEvent(merchant *model.User, event, tradeNo string, data map[string]any) {
+	if merchant == nil {
+		return
+	}
 	hook := strings.TrimSpace(merchant.EventWebhook)
-	if hook == "" {
+	if hook == "" || CallbackBlocked(hook) {
 		return
 	}
 	payload := map[string]any{
@@ -128,7 +155,7 @@ func (s *Store) PushEvent(merchant *model.User, event, tradeNo string, data map[
 	payload["sign"] = sign
 	payload["sign_type"] = "MD5"
 	body, _ := json.Marshal(payload)
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := SafeHTTPClient(10 * time.Second)
 	resp, err := client.Post(hook, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return
@@ -155,6 +182,12 @@ func (s *Store) SetCustomAmount(tradeNo string, money int64) (*model.Order, erro
 		}
 		if money > ch.MaxMoney {
 			return nil, errors.New(fmt.Sprintf("最高支付 %s", MoneyStr(ch.MaxMoney)))
+		}
+	}
+	// 买家自填金额同样受商户风控限额约束(0=不限)
+	if u, _ := s.UserByPid(o.Pid); u != nil {
+		if err := s.checkUserLimits(u, money); err != nil {
+			return nil, err
 		}
 	}
 	now := model.Now()
@@ -215,16 +248,6 @@ func (s *Store) CreateOrder(u *model.User, req *OrderReq, clientIP string) (*mod
 	if u.LimitSingle > 0 && money > u.LimitSingle {
 		return nil, ErrLimitSingle
 	}
-	if u.LimitDaily > 0 {
-		lt := time.Unix(model.Now(), 0)
-		dayStart := time.Date(lt.Year(), lt.Month(), lt.Day(), 0, 0, 0, 0, lt.Location()).Unix()
-		var todayPaid int64
-		_ = s.DB.QueryRow("SELECT COALESCE(SUM(money),0) FROM orders WHERE pid=? AND status IN(1,3) AND addtime>=?",
-			u.Pid, dayStart).Scan(&todayPaid)
-		if todayPaid+money > u.LimitDaily {
-			return nil, ErrLimitDaily
-		}
-	}
 	name := truncate(req.Name, 127)
 	outTradeNo := truncate(req.OutTradeNo, 64)
 
@@ -251,12 +274,13 @@ func (s *Store) CreateOrder(u *model.User, req *OrderReq, clientIP string) (*mod
 	offsetOn := s.DB.MustSetting("money_offset") == "1"
 
 	// 回调地址仅允许 http/https(防非HTTP协议SSRF),并阻断内网/回环地址
+	// (-allow-local-notify 仅供本机联调,生产默认严格拒绝)
 	for _, cbu := range []string{req.NotifyURL, req.ReturnURL} {
 		lu := strings.ToLower(cbu)
 		if cbu != "" && !strings.HasPrefix(lu, "http://") && !strings.HasPrefix(lu, "https://") {
 			return nil, errors.New("通知地址仅支持 http/https 协议")
 		}
-		if cbu != "" && IsInternalURL(cbu) {
+		if cbu != "" && CallbackBlocked(cbu) {
 			return nil, errors.New("通知地址不允许指向内网地址")
 		}
 	}
@@ -292,7 +316,16 @@ func (s *Store) CreateOrder(u *model.User, req *OrderReq, clientIP string) (*mod
 			return nil, ErrAmountBusy
 		}
 	}
-	res, err := s.DB.Exec(`INSERT INTO orders(trade_no,out_trade_no,pid,type,name,money,pay_money,param,
+	// 单日限额 + 插入放同一事务,避免并发下单同时通过限额检查(单连接池下事务天然串行)
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if err := checkLimitDailyTx(tx, u, money); err != nil {
+		return nil, err
+	}
+	res, err := tx.Exec(`INSERT INTO orders(trade_no,out_trade_no,pid,type,name,money,pay_money,param,
 		notify_url,return_url,sitename,device,channel_id,status,addtime,expire_at,client_ip,custom)
 		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)`,
 		o.TradeNo, o.OutTradeNo, o.Pid, o.Type, o.Name, o.Money, o.PayMoney, o.Param,
@@ -300,6 +333,7 @@ func (s *Store) CreateOrder(u *model.User, req *OrderReq, clientIP string) (*mod
 	if err != nil {
 		// 并发竞态: UNIQUE(pid,out_trade_no) 冲突时回落到复用已有订单
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			tx.Rollback()
 			if existing := s.OrderByOutTradeNo(u.Pid, outTradeNo); existing != nil {
 				if existing.Status == 0 && existing.ExpireAt > model.Now() {
 					return existing, nil
@@ -309,28 +343,80 @@ func (s *Store) CreateOrder(u *model.User, req *OrderReq, clientIP string) (*mod
 		}
 		return nil, err
 	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
 	o.ID, _ = res.LastInsertId()
-	s.backfillUnmatched(o)
+	if !req.Custom { // 自定义金额订单定价前是占位金额,禁止回溯匹配
+		s.backfillUnmatched(o)
+	}
 	return o, nil
+}
+
+// checkLimitDailyTx 在事务内检查商户单日收款限额(0=不限)
+func checkLimitDailyTx(tx *sql.Tx, u *model.User, money int64) error {
+	if u.LimitDaily <= 0 {
+		return nil
+	}
+	lt := time.Unix(model.Now(), 0)
+	dayStart := time.Date(lt.Year(), lt.Month(), lt.Day(), 0, 0, 0, 0, lt.Location()).Unix()
+	var todayPaid int64
+	if err := tx.QueryRow("SELECT COALESCE(SUM(money),0) FROM orders WHERE pid=? AND status IN(1,3) AND addtime>=?",
+		u.Pid, dayStart).Scan(&todayPaid); err != nil {
+		return err
+	}
+	if todayPaid+money > u.LimitDaily {
+		return ErrLimitDaily
+	}
+	return nil
+}
+
+// checkUserLimits 商户风控限额(单笔+单日),CreateOrder 与 SetCustomAmount 共用
+func (s *Store) checkUserLimits(u *model.User, money int64) error {
+	if u.LimitSingle > 0 && money > u.LimitSingle {
+		return ErrLimitSingle
+	}
+	if u.LimitDaily > 0 {
+		lt := time.Unix(model.Now(), 0)
+		dayStart := time.Date(lt.Year(), lt.Month(), lt.Day(), 0, 0, 0, 0, lt.Location()).Unix()
+		var todayPaid int64
+		_ = s.DB.QueryRow("SELECT COALESCE(SUM(money),0) FROM orders WHERE pid=? AND status IN(1,3) AND addtime>=?",
+			u.Pid, dayStart).Scan(&todayPaid)
+		if todayPaid+money > u.LimitDaily {
+			return ErrLimitDaily
+		}
+	}
+	return nil
 }
 
 // backfillUnmatched 回溯匹配: 新订单创建后,若近期(订单超时窗口内)存在同类型同金额的
 // 未匹配到账流水(付款发生在下单之前),自动完成该订单并入账通知。
+// 先原子认领流水(order_id 0→订单ID)再入账,防止并发订单重复消费同一笔真实付款;
+// 流水须通过订单的设备绑定校验,且回溯窗口上下限都受约束(上限=拒绝未来时间戳)。
 func (s *Store) backfillUnmatched(o *model.Order) {
 	timeoutMin := atoiDefault(s.DB.MustSetting("order_timeout"), 5)
-	windowStart := model.Now() - int64(timeoutMin)*60
-	var logID int64
-	err := s.DB.QueryRow(`SELECT id FROM pay_logs
-		WHERE order_id=0 AND type=? AND money=? AND created_at>=? ORDER BY id ASC LIMIT 1`,
-		o.Type, o.PayMoney, windowStart).Scan(&logID)
+	now := model.Now()
+	windowStart := now - int64(timeoutMin)*60
+	var logID, logDevice int64
+	err := s.DB.QueryRow(`SELECT id,device_id FROM pay_logs
+		WHERE order_id=0 AND type=? AND money=? AND created_at>=? AND created_at<=? ORDER BY id ASC LIMIT 1`,
+		o.Type, o.PayMoney, windowStart, now).Scan(&logID, &logDevice)
 	if err != nil {
 		return // 没有可回溯的流水
 	}
-	if err := s.CompleteOrder(o, "回溯匹配"); err != nil {
+	if !s.orderAllowsDevice(o, logDevice) {
+		return // 流水来源设备与订单渠道绑定不符
+	}
+	res, err := s.DB.Exec("UPDATE pay_logs SET order_id=? WHERE id=? AND order_id=0", o.ID, logID)
+	if err != nil {
 		return
 	}
-	if _, err := s.DB.Exec("UPDATE pay_logs SET order_id=? WHERE id=?", o.ID, logID); err != nil {
-		log.Printf("[match] 回溯匹配更新流水失败: %v", err)
+	if n, _ := res.RowsAffected(); n == 0 {
+		return // 已被其他订单认领
+	}
+	if err := s.CompleteOrder(o, "回溯匹配"); err != nil {
+		s.DB.Exec("UPDATE pay_logs SET order_id=0 WHERE id=?", logID) // 入账失败退还流水
+		log.Printf("[match] 回溯匹配完成订单失败 trade_no=%s: %v", o.TradeNo, err)
 	}
 }
 
@@ -431,12 +517,12 @@ func (s *Store) ReportPayment(deviceID int64, typ string, money int64, content s
 		return nil
 	}
 	now := model.Now()
-	// 推送去重: 监控APP超时重试会重复推送同一笔到账;30 秒内同设备/同方式/同金额/同内容
-	// 且已成功匹配过的推送直接忽略,防止误匹配到第二笔同额订单。
+	// 推送去重: 监控APP超时重试/截获重放会重复推送同一笔到账;窗口内同设备/同方式/同金额/同内容
+	// 且已成功匹配过的推送直接忽略,防止误匹配到第二笔同额订单(窗口覆盖 VMQ 的新鲜度区间)。
 	var dup int
 	_ = s.DB.QueryRow(`SELECT COUNT(*) FROM pay_logs
 		WHERE device_id=? AND type=? AND money=? AND content=? AND order_id>0 AND created_at>?`,
-		deviceID, typ, money, truncate(content, 500), ts-30).Scan(&dup)
+		deviceID, typ, money, truncate(content, 500), now-300).Scan(&dup)
 	if dup > 0 {
 		return nil
 	}
@@ -600,6 +686,13 @@ func (s *Store) CompleteOrder(o *model.Order, buyer string) error {
 
 	// ---- 事务提交后的旁路动作(网络/异步,失败不影响入账) ----
 	if merchant != nil {
+		// 订单支付成功事件(签名)推送到商户 Event Webhook
+		if strings.TrimSpace(merchant.EventWebhook) != "" {
+			go s.PushEvent(merchant, "order.paid", o.TradeNo, map[string]any{
+				"out_trade_no": o.OutTradeNo, "type": o.Type,
+				"name": o.Name, "money": MoneyStr(o.Money),
+			})
+		}
 		// 商户自配 IM 机器人推送(异步,不阻塞)
 		if hook := strings.TrimSpace(merchant.NotifyWebhook); hook != "" {
 			msg := fmt.Sprintf("✅ 收款到账 %s\n订单: %s\n商品: %s", MoneyStr(o.Money), o.TradeNo, o.Name)
