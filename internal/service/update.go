@@ -143,9 +143,6 @@ func splitVer(v string) [3]int {
 			}
 			n = n*10 + int(ch-'0')
 		}
-		if n == 0 && part != "" && !strings.HasPrefix(part, "0") && !strings.HasPrefix(part, "00") {
-			// 保持 0 值语义
-		}
 		out[i] = n
 	}
 	return out

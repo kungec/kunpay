@@ -24,8 +24,6 @@ import (
 	"kunzhifu/internal/service"
 )
 
-func i64(n int64) string { return strconv.FormatInt(n, 10) }
-
 func (s *Server) handleUserDashboard(w http.ResponseWriter, r *http.Request) {
 	u := s.currentUser(r)
 	dayStart := todayStart()
@@ -675,8 +673,8 @@ func (s *Server) handleUserSettingsPassword(w http.ResponseWriter, r *http.Reque
 		http.Redirect(w, r, "/user/settings?err="+urlEscape("原密码错误"), http.StatusFound)
 		return
 	}
-	if len(newPw) < 6 {
-		http.Redirect(w, r, "/user/settings?err="+urlEscape("新密码长度至少 6 位"), http.StatusFound)
+	if err := validatePasswordStrength(newPw); err != nil {
+		http.Redirect(w, r, "/user/settings?err="+urlEscape(err.Error()), http.StatusFound)
 		return
 	}
 	if newPw != newPw2 {

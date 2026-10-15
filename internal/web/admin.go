@@ -325,8 +325,8 @@ func (s *Server) handleAdminUsersSave(w http.ResponseWriter, r *http.Request) {
 		msg = "已调整余额"
 	case "password":
 		pw := r.FormValue("password")
-		if len(pw) < 6 {
-			http.Redirect(w, r, "/admin/users?msg="+urlEscape("密码长度至少 6 位"), http.StatusFound)
+		if err := validatePasswordStrength(pw); err != nil {
+			http.Redirect(w, r, "/admin/users?msg="+urlEscape(err.Error()), http.StatusFound)
 			return
 		}
 		_, _ = s.DB.Exec("UPDATE users SET password_hash=? WHERE id=?", hashPassword(pw), id)

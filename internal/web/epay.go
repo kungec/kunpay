@@ -82,10 +82,6 @@ func paramsOfForm(r *http.Request) map[string]string {
 }
 
 // validateEpayRequest 校验公共参数与签名,返回 (merchant, req, errInfo)
-func (s *Server) validateEpayRequest(p map[string]string) (*model.User, *service.OrderReq, string) {
-	return s.validateEpayRequestIP(p, "")
-}
-
 // validateEpayRequestIP 同上,并校验商户 API IP 白名单(配置了白名单时,来源 IP 必须命中)
 func (s *Server) validateEpayRequestIP(p map[string]string, ip string) (*model.User, *service.OrderReq, string) {
 	pidStr := p["pid"]

@@ -360,8 +360,8 @@ func (s *Server) handleRegisterPost(w http.ResponseWriter, r *http.Request) {
 		fail("邮箱格式不正确")
 		return
 	}
-	if len(password) < 6 {
-		fail("密码长度至少 6 位")
+	if err := validatePasswordStrength(password); err != nil {
+		fail(err.Error())
 		return
 	}
 	if password != password2 {
@@ -708,7 +708,15 @@ func (s *Server) handleResetPost(w http.ResponseWriter, r *http.Request) {
 		renderMsg(s, w, r, "链接无效", "重置链接无效或已过期,请重新发起找回密码。", http.StatusOK)
 		return
 	}
-	if len(password) < 6 || password != password2 {
+	if pwErr := validatePasswordStrength(password); pwErr != nil {
+		d := s.pageData(r)
+		d["Page"] = "reset"
+		d["Token"] = token
+		d["Error"] = pwErr.Error()
+		s.render(w, "pub_reset", http.StatusOK, d)
+		return
+	}
+	if password != password2 {
 		d := s.pageData(r)
 		d["Page"] = "reset"
 		d["Token"] = token
@@ -750,12 +758,4 @@ func failCaptcha(s *Server, w http.ResponseWriter, r *http.Request) {
 
 func htmlEscape(s string) string {
 	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&#34;").Replace(s)
-}
-
-// isHTTPS 判断当前请求是否走 HTTPS(直连TLS或反代X-Forwarded-Proto)
-func isHTTPS(r *http.Request) bool {
-	if r.TLS != nil {
-		return true
-	}
-	return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }

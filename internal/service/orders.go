@@ -178,10 +178,10 @@ func (s *Store) SetCustomAmount(tradeNo string, money int64) (*model.Order, erro
 	ch, _ := s.ChannelByType(o.Type)
 	if ch != nil {
 		if money < ch.MinMoney {
-			return nil, errors.New(fmt.Sprintf("最低支付 %s", MoneyStr(ch.MinMoney)))
+			return nil, fmt.Errorf("最低支付 %s", MoneyStr(ch.MinMoney))
 		}
 		if money > ch.MaxMoney {
-			return nil, errors.New(fmt.Sprintf("最高支付 %s", MoneyStr(ch.MaxMoney)))
+			return nil, fmt.Errorf("最高支付 %s", MoneyStr(ch.MaxMoney))
 		}
 	}
 	// 买家自填金额同样受商户风控限额约束(0=不限)

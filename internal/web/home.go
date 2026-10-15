@@ -1,7 +1,6 @@
 package web
 
 import (
-	"html/template"
 	"net/http"
 	"strconv"
 	"strings"
@@ -34,12 +33,6 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	}
 	d["ChanStatuses"] = chanStatuses
 	s.render(w, "pub_home", http.StatusOK, d)
-}
-
-type docSection struct {
-	Slug  string
-	Title string
-	HTML  template.HTML
 }
 
 func (s *Server) handleDocs(w http.ResponseWriter, r *http.Request) {

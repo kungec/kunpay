@@ -1,7 +1,6 @@
 package web
 
 import (
-	"crypto/subtle"
 	"fmt"
 	"kunzhifu/internal/model"
 	"net"
@@ -101,13 +100,7 @@ func isAdminIPAllowed(ip, whitelist string) bool {
 	return false
 }
 
-// ---- 常量时间比较(防时序攻击) ----
-
-func constantTimeEqual(a, b string) bool {
-	return len(a) == len(b) && subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
-}
-
-// payRateLimitMiddleware 支付接口限频: 同一 IP 每分钟最多 N 次(防刷)
+// 支付接口限频窗口: 同一 IP 每分钟最多 rlLimit 次(防刷)
 var (
 	rlMu    sync.Mutex
 	rlMap   = map[string]*rlWindow{}
@@ -133,18 +126,6 @@ func payRateLimited(ip string) bool {
 	}
 	w.count++
 	return w.count > rlLimit
-}
-
-func payRateLimitMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if payRateLimited(clientIP(r)) {
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			w.WriteHeader(http.StatusTooManyRequests)
-			w.Write([]byte(`{"code":-1,"msg":"请求过于频繁,请稍后再试"}`))
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }
 
 // payRateLimitWrap 支付接口限频包装器
