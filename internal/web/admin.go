@@ -790,18 +790,19 @@ func (s *Server) handleAdminOrdersExport(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleAdminDevices(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.DB.Query(`SELECT id,name,token,last_heartbeat,last_ip,status,created_at FROM devices ORDER BY id DESC`)
+	rows, err := s.DB.Query(`SELECT id,name,token,last_heartbeat,last_ip,status,created_at,COALESCE(vmq_enabled,1) FROM devices ORDER BY id DESC`)
 	var devices []map[string]any
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
 			var id, lastHb, status, createdAt int64
 			var name, token, lastIP string
-			if rows.Scan(&id, &name, &token, &lastHb, &lastIP, &status, &createdAt) == nil {
+			var vmq int
+			if rows.Scan(&id, &name, &token, &lastHb, &lastIP, &status, &createdAt, &vmq) == nil {
 				online := lastHb > model.Now()-120
 				devices = append(devices, map[string]any{
 					"ID": id, "Name": name, "Token": token, "LastHb": lastHb,
-					"LastIP": lastIP, "Status": status, "CreatedAt": createdAt, "Online": online,
+					"LastIP": lastIP, "Status": status, "CreatedAt": createdAt, "VMQ": vmq, "Online": online,
 				})
 			}
 		}
@@ -838,6 +839,24 @@ func (s *Server) handleAdminDevicesToggle(w http.ResponseWriter, r *http.Request
 	}
 	_, _ = s.DB.Exec("UPDATE devices SET status=? WHERE id=?", newStatus, id)
 	http.Redirect(w, r, "/admin/devices?msg="+urlEscape("设备状态已更新"), http.StatusFound)
+}
+
+// handleAdminDevicesVMQ 设备级 V免签兼容协议开关(用官方监控APP的设备建议关闭,缩小伪造成本)
+func (s *Server) handleAdminDevicesVMQ(w http.ResponseWriter, r *http.Request) {
+	id := atoint64(r.FormValue("id"))
+	var vmq int
+	_ = s.DB.QueryRow("SELECT COALESCE(vmq_enabled,1) FROM devices WHERE id=?", id).Scan(&vmq)
+	newVmq := 1
+	if vmq == 1 {
+		newVmq = 0
+	}
+	_, _ = s.DB.Exec("UPDATE devices SET vmq_enabled=? WHERE id=?", newVmq, id)
+	s.audit(r, "device.vmq", fmt.Sprintf("设备#%d V免签兼容 %d→%d", id, vmq, newVmq))
+	msg := "已开启该设备的 V免签兼容推送"
+	if newVmq == 0 {
+		msg = "已关闭该设备的 V免签兼容推送(仅原生监控APP可上报)"
+	}
+	http.Redirect(w, r, "/admin/devices?msg="+urlEscape(msg), http.StatusFound)
 }
 
 func (s *Server) handleAdminDevicesDel(w http.ResponseWriter, r *http.Request) {

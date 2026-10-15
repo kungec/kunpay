@@ -19,8 +19,11 @@ type DB struct {
 	*sql.DB
 }
 
-func Open(path string) (*DB, error) {
-	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=synchronous(NORMAL)", path)
+func Open(path string, syncMode string) (*DB, error) {
+	if syncMode != "OFF" && syncMode != "FULL" && syncMode != "EXTRA" {
+		syncMode = "NORMAL"
+	}
+	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=synchronous(%s)", path, syncMode)
 	d, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
@@ -322,6 +325,7 @@ func (d *DB) Migrate() error {
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN event_webhook TEXT DEFAULT ''")
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN cashier_notice TEXT DEFAULT ''")
 	_, _ = d.Exec("ALTER TABLE users ADD COLUMN last_totp_step INTEGER DEFAULT 0")
+	_, _ = d.Exec("ALTER TABLE devices ADD COLUMN vmq_enabled INTEGER DEFAULT 1")
 	// 会话/结算热查询索引(按 user_id 检索)
 	_, _ = d.Exec("CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)")
 	_, _ = d.Exec("CREATE INDEX IF NOT EXISTS idx_settle_user ON settle_logs(user_id, status)")
@@ -427,6 +431,14 @@ func (d *DB) Migrate() error {
 			string(hash), RandKey(32), model.Now())
 		if err != nil {
 			return err
+		}
+	}
+
+	// 生产环境提醒: demo 账号仍为默认密码(含本次刚创建的情形)
+	var demoHash string
+	if err := d.QueryRow("SELECT password_hash FROM users WHERE username='demo'").Scan(&demoHash); err == nil {
+		if bcrypt.CompareHashAndPassword([]byte(demoHash), []byte("demo123")) == nil {
+			log.Println("[安全提醒] 演示账号 demo/demo123 仍为默认密码,生产环境请禁用该账号或以 KUNPAY_SKIP_DEMO=1 重新初始化")
 		}
 	}
 	return nil

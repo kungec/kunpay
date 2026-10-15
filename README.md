@@ -213,6 +213,9 @@ Windows: 双击 kunpay.exe,或 cmd 执行 kunpay.exe -port 8080
 - **回调 SSRF 防护**:商户提交的 notify_url/return_url/webhook 默认禁止指向内网与回环地址;本地联调可用 `-allow-local-notify`(生产严禁)。
 - **备份文件不可经 Web 下载**:`data/backups/` 下的数据库备份不在 `/uploads/` 静态服务范围内(上传目录只暴露根目录平铺文件)。
 - **测试/演示专用开关**:`-allow-default-admin` 可关闭默认密码强制修改,仅限回归测试或演示环境使用。
+- **演示账号**:默认会创建 demo/demo123 供支付测试页使用(启动时若仍为默认密码会在日志提醒)。生产环境建议以 `KUNPAY_SKIP_DEMO=1` 重新初始化,或在后台直接停用该账号。
+- **监控协议**:官方安卓监控APP(v1.2.0+)已改用 POST 表单上报,设备 token 不再出现在 URL 中;旧版 GET 方式仍兼容但建议升级 APP。V免签第三方APP兼容协议可在「设备管理」中按设备关闭(只用官方APP时建议关闭)。
+- **掉电一致性**:`-db-sync=FULL`(或环境变量 KUNPAY_DB_SYNC=FULL)可确保断电零丢失,代价是写入变慢;默认 NORMAL 适合绝大多数场景。
 
 ## 上线配置流程(管理员)
 

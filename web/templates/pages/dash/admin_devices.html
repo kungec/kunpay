@@ -35,6 +35,11 @@
               <input type="hidden" name="id" value="{{.ID}}">
               <button class="btn btn-sm btn-ghost" type="submit">{{if eq .Status 1}}停用{{else}}启用{{end}}</button>
             </form>
+            <form method="post" action="/admin/devices/vmq" style="display:inline" data-confirm-title="V免签兼容" data-confirm="切换该设备的 V免签兼容推送开关?使用官方监控APP的设备建议关闭,可缩小签名被截获后的伪造成本。">
+              <input type="hidden" name="_csrf" value="{{$.CSRF}}">
+              <input type="hidden" name="id" value="{{.ID}}">
+              <button class="btn btn-sm {{if eq .VMQ 1}}btn-ghost{{else}}btn-outline{{end}}" type="submit">V免签{{if eq .VMQ 1}}开{{else}}关{{end}}</button>
+            </form>
             <form method="post" action="/admin/devices/del" data-confirm="删除后使用该 Token 的监控APP将无法上报,确定删除?" style="display:inline">
               <input type="hidden" name="_csrf" value="{{$.CSRF}}">
               <input type="hidden" name="id" value="{{.ID}}">

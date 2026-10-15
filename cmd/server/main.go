@@ -69,7 +69,7 @@ func main() {
 }
 
 func mustDB(cfg *config.Config) *db.DB {
-	d, err := db.Open(cfg.DBPath)
+	d, err := db.Open(cfg.DBPath, cfg.DBSync)
 	if err != nil {
 		log.Fatalf("打开数据库失败: %v", err)
 	}

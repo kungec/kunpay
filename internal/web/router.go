@@ -126,6 +126,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /admin/devices", s.requireAdmin(s.handleAdminDevices))
 	mux.HandleFunc("POST /admin/devices/add", s.requireAdmin(s.requireCSRF(s.handleAdminDevicesAdd)))
 	mux.HandleFunc("POST /admin/devices/toggle", s.requireAdmin(s.requireCSRF(s.handleAdminDevicesToggle)))
+	mux.HandleFunc("POST /admin/devices/vmq", s.requireAdmin(s.requireCSRF(s.handleAdminDevicesVMQ)))
 	mux.HandleFunc("POST /admin/devices/del", s.requireAdmin(s.requireCSRF(s.handleAdminDevicesDel)))
 	mux.HandleFunc("GET /admin/settles", s.requireAdmin(s.handleAdminSettles))
 	mux.HandleFunc("POST /admin/settles/do", s.requireAdmin(s.requireCSRF(s.handleAdminSettlesDo)))

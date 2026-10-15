@@ -6,6 +6,7 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
@@ -19,12 +20,20 @@ public final class Api {
 
     private Api() {}
 
-    /** GET 请求并返回响应体;失败抛异常 */
-    private static String get(String url) throws Exception {
+    /** POST 表单请求并返回响应体;token 走 body 不进 URL(避免服务端访问日志留痕);失败抛异常 */
+    private static String post(String url, String form) throws Exception {
         HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
         conn.setConnectTimeout(8000);
         conn.setReadTimeout(8000);
-        conn.setRequestMethod("GET");
+        conn.setRequestMethod("POST");
+        conn.setDoOutput(true);
+        byte[] data = form.getBytes("UTF-8");
+        conn.setFixedLengthStreamingMode(data.length);
+        conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+        OutputStream os = conn.getOutputStream();
+        os.write(data);
+        os.flush();
+        os.close();
         int code = conn.getResponseCode();
         InputStream in = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
         if (in == null) in = conn.getInputStream();
@@ -34,7 +43,7 @@ public final class Api {
         while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
         in.close();
         String body = bos.toString("UTF-8");
-        Log.d("KunPay", "GET " + url.replaceAll("token=[^&]+", "token=***") + " -> " + code + " " + body);
+        Log.d("KunPay", "POST " + url + " -> " + code + " " + body);
         return body;
     }
 
@@ -52,7 +61,7 @@ public final class Api {
             @Override
             public void run() {
                 try {
-                    String body = get(trim(server) + "/monitor/heart?token=" + enc(token));
+                    String body = post(trim(server) + "/monitor/heart", "token=" + enc(token));
                     JSONObject o = new JSONObject(body);
                     cb.onResult(o.optInt("code") == 1, body);
                 } catch (Exception e) {
@@ -69,9 +78,9 @@ public final class Api {
             @Override
             public void run() {
                 try {
-                    String url = trim(server) + "/monitor/push?token=" + enc(token)
-                            + "&type=" + type + "&money=" + enc(money) + "&content=" + enc(content);
-                    String body = get(url);
+                    String body = post(trim(server) + "/monitor/push",
+                            "token=" + enc(token) + "&type=" + type
+                                    + "&money=" + enc(money) + "&content=" + enc(content));
                     JSONObject o = new JSONObject(body);
                     boolean ok = o.optInt("code") >= 1;
                     cb.onResult(ok, body);

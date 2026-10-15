@@ -36,9 +36,15 @@ func (s *Server) deviceByToken(token string) (int64, bool) {
 	return id, true
 }
 
-// handleMonitorHeart GET /monitor/heart?token=xxx 设备心跳
+// monitorParams 汇总 GET query 与 POST 表单(新版监控APP用 POST,body 中携带 token,避免进访问日志)
+func monitorParams(r *http.Request) url.Values {
+	_ = r.ParseForm()
+	return r.Form
+}
+
+// handleMonitorHeart /monitor/heart?token=xxx 设备心跳(GET/POST 均可)
 func (s *Server) handleMonitorHeart(w http.ResponseWriter, r *http.Request) {
-	id, ok := s.deviceByToken(r.URL.Query().Get("token"))
+	id, ok := s.deviceByToken(monitorParams(r).Get("token"))
 	if !ok {
 		monitorJSON(w, -1, "设备token无效")
 		return
@@ -47,9 +53,9 @@ func (s *Server) handleMonitorHeart(w http.ResponseWriter, r *http.Request) {
 	monitorJSON(w, 1, "心跳成功")
 }
 
-// handleMonitorPush GET /monitor/push?token=xxx&type=alipay&money=1.23&content=xxx 到账上报
+// handleMonitorPush /monitor/push?token=xxx&type=alipay&money=1.23&content=xxx 到账上报(GET/POST 均可)
 func (s *Server) handleMonitorPush(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
+	q := monitorParams(r)
 	id, ok := s.deviceByToken(q.Get("token"))
 	if !ok {
 		monitorJSON(w, -1, "设备token无效")
@@ -130,8 +136,8 @@ func (s *Server) vmqAuth(q url.Values) (int64, bool) {
 	if t == "" || sign == "" {
 		return 0, false
 	}
-	// 遍历设备校验(设备量小,可接受)
-	rows, err := s.DB.Query("SELECT id,token,status FROM devices")
+	// 遍历设备校验(设备量小,可接受);vmq_enabled=0 的设备已禁用 V免签兼容协议
+	rows, err := s.DB.Query("SELECT id,token,status,COALESCE(vmq_enabled,1) FROM devices")
 	if err != nil {
 		return 0, false
 	}
@@ -139,8 +145,8 @@ func (s *Server) vmqAuth(q url.Values) (int64, bool) {
 	for rows.Next() {
 		var id int64
 		var token string
-		var status int
-		if rows.Scan(&id, &token, &status) == nil && status == 1 &&
+		var status, vmqOn int
+		if rows.Scan(&id, &token, &status, &vmqOn) == nil && status == 1 && vmqOn == 1 &&
 			subtle.ConstantTimeCompare([]byte(vmqSign(t, token)), []byte(strings.ToLower(sign))) == 1 {
 			return id, true
 		}

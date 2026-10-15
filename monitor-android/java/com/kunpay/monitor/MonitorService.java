@@ -121,6 +121,7 @@ public class MonitorService extends NotificationListenerService {
                         public void onResult(boolean ok, String msg) {
                             if (ok) {
                                 hbOkCount++;
+                                flushPending(); // 心跳期网络可用,周期性补发积压队列
                                 prefs.edit().putString("last_hb",
                                         new SimpleDateFormat("MM-dd HH:mm:ss", Locale.CHINA)
                                                 .format(new Date())).apply();
@@ -161,11 +162,12 @@ public class MonitorService extends NotificationListenerService {
                 }
                 return;
             }
-            // 严格模式下,微信通知要求标题含"微信支付"(服务通知),排除普通聊天消息
+            // 严格模式下,微信通知必须来自"微信支付"服务通知(标题或文本含"微信支付")。
+            // 个人聊天的通知标题是发送者昵称,即使正文写"转账 xx 元"也会被拦下,
+            // 因此不再单独凭"转账/红包"字样放行(其真实到账通知同样出自微信支付服务号)。
             if (strict && "com.tencent.mm".equals(pkg)) {
                 boolean isPayNotice = title.contains("微信支付") || text.contains("微信支付");
-                boolean isTransfer = content.contains("转账") || content.contains("红包");
-                if (!isPayNotice && !isTransfer) {
+                if (!isPayNotice) {
                     log("[wxpay] 非微信支付服务通知,已忽略: " + clip(content));
                     return;
                 }
@@ -193,6 +195,7 @@ public class MonitorService extends NotificationListenerService {
                         public void onResult(boolean ok, String msg) {
                             if (ok) {
                                 log("✓ 上报成功: " + msg);
+                                flushPending(); // 网络恢复,顺带补发队列中积压的到账
                                 if (prefs.getBoolean("voice_announce", true) && ttsReady) {
                                     String amt = fMoney.replace(",", "");
                                     try { tts.speak("收款" + Float.parseFloat(amt) + "元",
@@ -249,7 +252,13 @@ public class MonitorService extends NotificationListenerService {
         } catch (Exception ignore) {}
     }
 
+    private boolean flushBusy = false;
+
     private void flushPending() {
+        synchronized (this) {
+            if (flushBusy) return;
+            flushBusy = true;
+        }
         try {
             org.json.JSONArray arr = new org.json.JSONArray(prefs.getString("pending_pushes", "[]"));
             if (arr.length() == 0) return;
@@ -277,6 +286,8 @@ public class MonitorService extends NotificationListenerService {
             else log("重试队列已全部上报完成");
         } catch (Exception e) {
             log("重试队列异常: " + e.getMessage());
+        } finally {
+            flushBusy = false;
         }
     }
 
