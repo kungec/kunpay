@@ -236,11 +236,13 @@ func (s *Store) checkLowBalance() {
 	rows.Close() // 先关闭结果集再发告警(连接池仅 1 个连接,回调里再查库会自锁)
 	for _, u := range lows {
 		key := fmt.Sprintf("lowbal_%d", u.uid)
-		if _, ok := lowBalanceAlerted.Load(key); !ok {
-			lowBalanceAlerted.Store(key, time.Now())
-			if AlertFn != nil {
-				AlertFn(fmt.Sprintf("商户 %s 余额不足 ¥10.00,请及时充值。", u.username))
-			}
+		// 同一商户 24 小时内只提醒一次(余额恢复后立即解除,可再次触发)
+		if ts, ok := lowBalanceAlerted.Load(key); ok && time.Since(ts.(time.Time)) < 24*time.Hour {
+			continue
+		}
+		lowBalanceAlerted.Store(key, time.Now())
+		if AlertFn != nil {
+			AlertFn(fmt.Sprintf("商户 %s 余额不足 ¥10.00,请及时充值。", u.username))
 		}
 	}
 }
@@ -753,7 +755,10 @@ func (s *Store) checkChannelHealth() {
 		}
 		rate := float64(c.paid) / float64(c.total) * 100
 		key := "chan_" + c.typ
-		if _, ok := lowBalanceAlerted.Load(key); !ok && rate < 50 {
+		if ts, ok := lowBalanceAlerted.Load(key); (ok && time.Since(ts.(time.Time)) < 24*time.Hour) || rate >= 50 {
+			continue
+		}
+		{
 			lowBalanceAlerted.Store(key, time.Now())
 			msg := fmt.Sprintf("渠道 %s(%s) 近1小时成功率仅 %.1f%%(%d/%d),请检查收款码和监控设备。", c.name, c.typ, rate, c.paid, c.total)
 			log.Println("[alert] " + msg)
