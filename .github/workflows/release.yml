@@ -34,15 +34,27 @@ jobs:
       - name: 构建 Android 监控 APK
         working-directory: monitor-android
         run: bash build-android.sh
-      - name: 打包
+      - name: 打包(与 README 下载表一致的分平台归档)
         run: |
           mkdir -p release
-          cp -r dist/* release/
-          cp monitor-android/KunPayMonitor.apk release/ 2>/dev/null || true
-          cd release && zip -qr ../kunpay-${{ github.ref_name }}.zip . && cd ..
+          cd dist
+          for d in kunpay_*/; do
+            name="${d%/}"
+            case "$name" in
+              *windows*) (cd "$name" && zip -qr "../${name}.zip" .) ;;
+              *) tar -czf "../${name}.tar.gz" "$name" ;;
+            esac
+          done
+          cd ..
+          cp dist/kunpay_*.tar.gz dist/kunpay_*.zip release/
+          cp monitor-android/KunPayMonitor.apk release/
+          zip -qr kunpay-${{ github.ref_name }}-all.zip release/
       - name: 创建 GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            kunpay-${{ github.ref_name }}.zip
+            release/kunpay_*.tar.gz
+            release/kunpay_*.zip
+            release/KunPayMonitor.apk
+            kunpay-${{ github.ref_name }}-all.zip
