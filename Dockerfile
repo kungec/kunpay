@@ -14,14 +14,16 @@ RUN apk add --no-cache ca-certificates tzdata && \
     cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     echo "Asia/Shanghai" > /etc/timezone
 
+RUN addgroup -S kunpay && adduser -S kunpay -G kunpay
 WORKDIR /app
 COPY --from=builder /out/kunpay /app/kunpay
-RUN chmod +x /app/kunpay && mkdir -p /app/data
+RUN chmod +x /app/kunpay && mkdir -p /app/data && chown -R kunpay:kunpay /app
 
+USER kunpay
 EXPOSE 8080
 VOLUME ["/app/data"]
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:8080/ > /dev/null 2>&1 || exit 1
+  CMD wget -qO- http://127.0.0.1:8080/healthz > /dev/null 2>&1 || exit 1
 
 ENTRYPOINT ["/app/kunpay"]

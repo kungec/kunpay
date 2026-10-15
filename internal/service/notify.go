@@ -371,6 +371,8 @@ func (s *Store) cleanOldLogs(keepDays int) {
 	cut := time.Now().AddDate(0, 0, -keepDays).Unix()
 	r1, _ := s.DB.Exec("DELETE FROM pay_logs WHERE created_at<?", cut)
 	r2, _ := s.DB.Exec("DELETE FROM notify_logs WHERE created_at<?", cut)
+	s.DB.Exec("DELETE FROM login_logs WHERE created_at<?", cut)
+	s.DB.Exec("DELETE FROM audit_logs WHERE created_at<?", cut)
 	// 已关闭超过保留期的工单及其会话一并清理
 	r3, _ := s.DB.Exec("DELETE FROM tickets WHERE status=2 AND updated_at<?", cut)
 	if n3, _ := r3.RowsAffected(); n3 > 0 {

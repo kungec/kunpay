@@ -1083,6 +1083,12 @@ func (s *Server) handleAdminSettingsSave(w http.ResponseWriter, r *http.Request)
 				continue
 			}
 		}
+		if k == "smtp_pass" {
+			// 密码不回显到页面(防 HTML 源码泄露);留空 = 保持已存值不变
+			if v == "" {
+				continue
+			}
+		}
 		_ = s.DB.SetSetting(k, v)
 	}
 	s.audit(r, "settings.save", "更新系统设置")

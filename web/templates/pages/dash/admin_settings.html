@@ -304,7 +304,7 @@
         </div>
         <div class="form-item">
           <label>密码/授权码</label>
-          <input class="input" type="password" name="smtp_pass" value="{{index .S "smtp_pass"}}">
+          <input class="input" type="password" name="smtp_pass" placeholder="{{if index .S "smtp_pass"}}已配置,留空保持不变{{else}}SMTP 授权码/密码{{end}}" autocomplete="new-password">
         </div>
         <div class="form-item">
           <label>发件人显示(选填)</label>
