@@ -13,6 +13,8 @@
     <a href="/doc/order" class="{{if eq .DocPage "order"}}on{{end}}">[API] 查询单个订单</a>
     <a href="/doc/orders" class="{{if eq .DocPage "orders"}}on{{end}}">[API] 批量查询订单</a>
     <a href="/doc/channels" class="{{if eq .DocPage "channels"}}on{{end}}">[API] 查询渠道状态</a>
+    <a href="/doc/refund" class="{{if eq .DocPage "refund"}}on{{end}}">[API] 订单退款</a>
+    <a href="/doc/webhook" class="{{if eq .DocPage "webhook"}}on{{end}}">事件推送(Webhook)</a>
     <div class="grp">监控对接</div>
     <a href="/doc/monitor" class="{{if eq .DocPage "monitor"}}on{{end}}">监控APP对接</a>
     <a href="/doc/tutorial" class="{{if eq .DocPage "tutorial"}}on{{end}}">监控部署详细教程</a>
@@ -368,6 +370,45 @@ sign=$(base64 -w 0 sig.bin)</pre>
     <p>· 优先从推送内容中识别平台订单号精确匹配;· 否则按「支付方式 + 到账金额」精确匹配最早的待支付订单;· 为避免同额冲突,整数金额下单时会自动追加随机小数尾数(可在系统设置关闭);· 订单超时(默认 5 分钟)后不再参与匹配。</p>
     <h2>收款码轮询</h2>
     <p>商户中心「我的通道」中,同一支付方式可绑定多个自己的收款码:绑定 ≥2 个并启用后即可开启轮询,订单将按"最久未使用优先"轮流使用各个收款码,实现多码分摊收款。停用/删除导致启用码不足 2 个时轮询自动关闭;未绑定自有码的通道回落平台收款码。</p>
+    {{else if eq .DocPage "refund"}}
+    <h1>[API] 订单退款</h1>
+    <p>URL地址:<span class="url-chip">/api.php?act=refund&amp;pid={商户ID}&amp;key={商户密钥}&amp;out_trade_no={商户订单号}</span></p>
+    <h2>请求方式</h2>
+    <p>GET 或 POST。仅<strong>已支付</strong>(status=1 或 3)的订单可退款;退款金额 = 订单金额 - 手续费,从商户余额原子扣除(并发重复请求只会成功一次)。</p>
+    <h2>返回结果</h2>
+    <pre><code>{"code": 1, "msg": "退款成功", "refund_amount": "0.99", "trade_no": "2026..."}
+{"code": -1, "msg": "订单已退款或状态已变化"}
+{"code": -1, "msg": "商户余额不足,无法退款"}</code></pre>
+    <h2>注意事项</h2>
+    <p>· 退款后订单状态置为 4(已退款),买家侧收银台同步展示;· 若开启事件推送,会发送 <code>order.refunded</code> 事件;· 退款不追回已经发出的邀请返佣以外的平台侧数据。</p>
+
+    {{else if eq .DocPage "webhook"}}
+    <h1>事件推送(Webhook)</h1>
+    <p>在商户中心「个人设置」配置 <strong>事件推送地址(event_webhook)</strong> 后,订单生命周期变化会以 JSON POST 推送到该地址(HTTPS 公网地址,平台禁止推送目标为内网)。</p>
+    <h2>支持的事件</h2>
+    <pre><code>order.paid     支付成功(含管理员补单)
+order.expired  订单超时未支付
+order.refunded 订单已退款</code></pre>
+    <h2>报文格式</h2>
+    <pre><code>{
+  "event": "order.paid",
+  "trade_no": "202610151234567890123456",
+  "out_trade_no": "商户订单号",
+  "type": "alipay",
+  "name": "商品名称",
+  "money": "10.00",
+  "timestamp": 1728950400,
+  "sign": "md5签名",
+  "sign_type": "MD5"
+}</code></pre>
+    <p>不同事件携带的字段略有差异:<code>order.paid</code> 含 name/money;<code>order.refunded</code> 含 refund_amount;<code>order.expired</code> 仅基础字段。</p>
+    <h2>验签方式</h2>
+    <p>与接口签名一致:取 <code>event</code> 与 <code>trade_no</code> 两个参数,按 ASCII 升序拼 <code>event=xxx&amp;trade_no=xxx</code>,末尾拼接商户密钥取 MD5,与报文中 <code>sign</code> 比对(小写)。PHP 示例:</p>
+    <pre><code>$raw = "event={$_POST['event']}&trade_no={$_POST['trade_no']}" . $key;
+if (md5($raw) !== $_POST['sign']) { die("verify fail"); }</code></pre>
+    <h2>注意事项</h2>
+    <p>· 推送为单次尝试(10 秒超时),请保证地址公网可达、快速响应;· 未投递成功不影响入账,请以 <code>api.php</code> 查询或异步通知为准做兜底;· 同一订单的重复事件请以 <code>trade_no</code> 幂等处理。</p>
+
     {{else}}
     <h1>开发文档</h1>
     <p>请从左侧选择要查看的接口文档。</p>
