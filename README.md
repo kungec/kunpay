@@ -9,6 +9,7 @@
 一套使用 **Go 语言**开发的个人免签约「码支付」平台,易支付(EasyPay)协议完全兼容,现有商户系统**零改造接入**(submit.php / mapi.php / api.php)。
 编译产物为**单个二进制文件**(页面、静态资源、SQLite 驱动全部 go:embed 内嵌),**Windows / Linux / macOS** 一键部署,零外部依赖。
 配套**监控客户端全家桶**:安卓APP(自动监听收款通知,POST 加密上报)、Windows/macOS 监控助手(心跳保活+上报控制台),支持云手机 7×24 挂机与主备设备自动接管。
+同作者生态:**[坤面板 KunPanel](https://github.com/kungec/kunpanel)** 服务器运维管理面板 —— 推荐以其部署坤支付,反向代理/Let's Encrypt 证书/WAF 防火墙/计划任务备份开箱即用(见下文安装部署)。
 
 ### ✨ 核心特性
 
@@ -39,16 +40,58 @@
 
 > 感谢 **[KJ VPS](https://www.kjvps.com)** 为本项目提供跨境 VPS 支持。
 
-## ⚡ Linux 一键安装
+## 🚀 安装部署
 
-在全新的 Linux 服务器上以 root 执行一条命令(Ubuntu/Debian/CentOS/RHEL/Rocky/Alma/Fedora/openSUSE/Arch/Alpine,x86_64/aarch64):
+### 方式一(推荐): 通过坤面板部署
+
+推荐配合同作者的 **[坤面板 KunPanel](https://github.com/kungec/kunpanel)** 部署管理 —— 轻量级服务器运维面板(Go 单二进制),自带 **网站反向代理 / Let's Encrypt 证书 / WAF 防火墙 / 文件管理 / 终端 / 计划任务 / 告警推送**,支付站点从部署到防护一步到位:
+
+**第 1 步 · 安装坤面板**(Ubuntu/Debian/CentOS/RHEL/Rocky/Alma/Fedora/openSUSE/Arch/Alpine):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kungec/kunpanel/main/scripts/install.sh | bash
+```
+
+安装完成会输出面板地址、随机安全入口与随机管理员密码(支持 `--port/--username/--password` 自定义)。
+
+**第 2 步 · 面板内部署坤支付**(两种任选):
+
+- **终端方式**: 面板顶部「终端」进入服务器命令行,直接执行坤支付一键安装脚本:
+
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/kungec/kunpay/main/scripts/install.sh | bash
+  ```
+
+- **文件方式**: 面板「文件管理」新建 `/opt/kunpay` 并从 [Releases](https://github.com/kungec/kunpay/releases) 上传解压 `kunpay` 主程序;再用「应用商店 → 自定义应用」或「计划任务」以 `/opt/kunpay/kunpay -port 8080` 常驻保活。
+
+**第 3 步 · 面板「网站」添加反向代理**: 域名指向服务器 → 新建反向代理站点 → 上游填 `127.0.0.1:8080` → 一键申请 Let's Encrypt 证书。坤面板的 WAF 将自动为支付页提供 CC 防御与恶意请求拦截。
+
+**第 4 步 · 「计划任务」每日备份** `/opt/kunpay/data`,告警推送可接入邮件/钉钉/飞书/Webhook。
+
+### 方式二: 一键脚本裸机部署(无面板)
+
+在全新的 Linux 服务器上以 root 执行一条命令(Ubuntu/Debian/CentOS/RHEL/Rocky/Alma/Fedora/openSUSE/Arch/Alpine,x86_64/aarch64,systemd/OpenRC/SysV 自适应):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kungec/kunpay/main/scripts/install.sh | bash
 ```
 
-自动完成: 下载最新版 → 安装到 `/opt/kunpay` → 创建系统用户与服务(systemd/OpenRC/SysV 自适应)→ 开机自启并启动。
+自动完成: 下载最新版 → 安装到 `/opt/kunpay` → 创建系统用户与服务 → 开机自启并启动 → 健康检查确认。
 卸载: 命令末尾加 `uninstall` 参数(数据库与收款码数据保留)。指定版本: 前面加 `KUNPAY_VERSION=v1.2.1`。
+
+### Windows 部署
+
+下载 [Release](https://github.com/kungec/kunpay/releases) 中的 `kunpay_windows_amd64.zip`,解压后双击 `kunpay.exe` 即可(默认 8080 端口);首次运行请允许防火墙弹窗。验证码输入请切换英文半角输入法,详细见下文「Windows 部署常见问题」。
+
+### 数据与目录
+
+| 路径 | 内容 |
+|---|---|
+| `/opt/kunpay/kunpay` | 主程序 |
+| `/opt/kunpay/data/kunpay.db` | SQLite 数据库(全部业务数据) |
+| `/opt/kunpay/data/` | 收款码、下载中心等上传文件 |
+
+> 升级 = 替换主程序并重启服务,**数据目录永不覆盖**;数据库与文件请定期备份。
 
 ## ⬇ 快速下载
 
@@ -207,44 +250,7 @@ kunpay_darwin_amd64/kunpay       Intel Mac
 
 ### 部署
 
-```bash
-# Linux
-chmod +x kunpay
-./kunpay -port 8080
-```
-
-```
-Windows: 双击 kunpay.exe,或 cmd 执行 kunpay.exe -port 8080
-```
-
-| 参数 | 环境变量 | 默认 | 说明 |
-|---|---|---|---|
-| `-port` | KUNPAY_PORT | 8080 | HTTP 监听端口 |
-| `-db` | KUNPAY_DB | ./kunpay.db | SQLite 数据库路径 |
-| `-data` | KUNPAY_DATA | ./data | 收款码等上传文件目录 |
-
-首次启动自动初始化:
-
-- 管理员:**admin / admin123**(首次登录会被强制要求修改默认密码,修改前无法使用其他任何功能)
-- 演示商户:demo / demo123(PID 1001,供 /demo 支付测试使用)
-- 三个支付渠道(支付宝/微信/QQ,默认开启)
-
-生产环境建议:用 Nginx/Caddy 反代 + HTTPS;数据库与 data 目录随运行目录生成,注意备份;Systemd 示例见产物内部署说明。
-
-### 安全部署要点
-
-- **必须 HTTPS**:程序默认明文 HTTP,监控设备 Token、商户密钥、API 参数都会经过网络,正式部署必须置于正确配置的 HTTPS 反代之后。
-- **反代头信任**:`-trust-proxy` 默认开启,但仅当请求的直连对端是内网/回环地址时才采纳 `X-Real-IP/X-Forwarded-For`;公网直连提供的转发头一律忽略,无法伪造客户端 IP 绕过白名单。
-- **回调 SSRF 防护**:商户提交的 notify_url/return_url/webhook 默认禁止指向内网与回环地址;本地联调可用 `-allow-local-notify`(生产严禁)。
-- **备份文件不可经 Web 下载**:`data/backups/` 下的数据库备份不在 `/uploads/` 静态服务范围内(上传目录只暴露根目录平铺文件)。
-- **测试/演示专用开关**:`-allow-default-admin` 可关闭默认密码强制修改,仅限回归测试或演示环境使用。
-- **Windows 部署常见问题**:
-  - "老是提示验证码错误": ① 输入验证码时请切换到英文半角输入(中文输入法的全角字符已被服务端自动归一化兼容,但请避免候选框干扰);② 若在 IIS/Nginx 反代后部署,**务必关闭对登录页的输出缓存**(程序已发送 no-store 禁止缓存头,请确认代理未覆盖);③ 验证码 10 分钟有效,超时点击图片刷新;
-  - 端口占用: 程序会自动顺延端口并在日志打印实际监听地址;
-  - 防火墙: 首次运行 Windows 防火墙会弹窗,请允许访问网络。
-- **演示账号**:默认会创建 demo/demo123 供支付测试页使用(启动时若仍为默认密码会在日志提醒)。生产环境建议以 `KUNPAY_SKIP_DEMO=1` 重新初始化,或在后台直接停用该账号。
-- **监控协议**:官方安卓监控APP(v1.2.0+)已改用 POST 表单上报,设备 token 不再出现在 URL 中;旧版 GET 方式仍兼容但建议升级 APP。V免签第三方APP兼容协议可在「设备管理」中按设备关闭(只用官方APP时建议关闭)。
-- **掉电一致性**:`-db-sync=FULL`(或环境变量 KUNPAY_DB_SYNC=FULL)可确保断电零丢失,代价是写入变慢;默认 NORMAL 适合绝大多数场景。
+服务器部署请看上文 **[🚀 安装部署](#-安装部署)**:推荐通过坤面板部署(反代/证书/WAF/备份一步到位),或使用一键脚本裸机部署;Windows 直接双击 `kunpay.exe`。
 
 ## 上线配置流程(管理员)
 
