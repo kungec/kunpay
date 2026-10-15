@@ -1177,10 +1177,15 @@ func (s *Server) handleAdminPayLogMatch(w http.ResponseWriter, r *http.Request) 
 	id := atoint64(r.FormValue("id"))
 	tradeNo := strings.TrimSpace(r.FormValue("trade_no"))
 	var logID, logMoney int64
-	var logType string
-	err := s.DB.QueryRow("SELECT id,money,type FROM pay_logs WHERE id=?", id).Scan(&logID, &logMoney, &logType)
+	var claimed int64
+	err := s.DB.QueryRow("SELECT id,money,order_id FROM pay_logs WHERE id=?", id).Scan(&logID, &logMoney, &claimed)
 	if err != nil {
 		http.Redirect(w, r, "/admin/paylogs?msg="+urlEscape("流水不存在"), http.StatusFound)
+		return
+	}
+	// 同一笔真实付款只允许入账一次: 已被其他订单认领的流水禁止再次匹配
+	if claimed > 0 {
+		http.Redirect(w, r, "/admin/paylogs?msg="+urlEscape(fmt.Sprintf("该流水已匹配过订单(入账ID %d),一笔付款不可重复入账", claimed)), http.StatusFound)
 		return
 	}
 	o := s.Store.OrderByTradeNo(tradeNo)
@@ -1201,7 +1206,7 @@ func (s *Server) handleAdminPayLogMatch(w http.ResponseWriter, r *http.Request) 
 		http.Redirect(w, r, "/admin/paylogs?msg="+urlEscape("入账失败: "+err.Error()), http.StatusFound)
 		return
 	}
-	_, _ = s.DB.Exec("UPDATE pay_logs SET order_id=? WHERE id=?", o.ID, logID)
+	_, _ = s.DB.Exec("UPDATE pay_logs SET order_id=? WHERE id=? AND order_id=0", o.ID, logID)
 	s.audit(r, "paylog.match", o.TradeNo+" ¥"+service.MoneyStr(logMoney))
 	http.Redirect(w, r, "/admin/paylogs?msg="+urlEscape("已匹配订单 "+o.TradeNo+" 并入账通知"), http.StatusFound)
 }
