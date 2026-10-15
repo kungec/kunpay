@@ -298,7 +298,11 @@ func (s *Server) render(w http.ResponseWriter, name string, status int, data any
 		entry = "page"
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-cache")
+	// 页面内嵌一次性验证码 id 与会话数据,禁止任何缓存:
+	// 若被代理/CDN 缓存,多个访客共享同一已销毁验证码 → 全部"验证码错误"
+	//(Windows IIS 输出缓存/ARR 反代部署尤其高发)
+	w.Header().Set("Cache-Control", "no-cache, no-store, max-age=0, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
 	w.WriteHeader(status)
 	if err := t.ExecuteTemplate(w, entry, data); err != nil {
 		log.Printf("[tpl] 渲染 %s 失败: %v", name, err)

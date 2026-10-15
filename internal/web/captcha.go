@@ -75,7 +75,27 @@ func verifyCaptcha(id, input string) bool {
 	if !ok || e.exp.Before(time.Now()) {
 		return false
 	}
-	return strings.EqualFold(e.code, strings.TrimSpace(input))
+	return strings.EqualFold(e.code, normalizeCaptchaInput(input))
+}
+
+// normalizeCaptchaInput 验证码输入归一化:
+// 中文输入法(Windows 上尤甚)易产生全角字符与首尾空格,统一转为半角并去除空白后再比对,
+// 否则用户明明输入了正确的验证码也会被误判"验证码错误"。
+func normalizeCaptchaInput(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		switch {
+		case r == 0x3000: // 全角空格
+			continue
+		case r >= 0xFF01 && r <= 0xFF5E: // 全角 ASCII → 半角
+			r -= 0xFEE0
+		case r == ' ' || r == '\t' || r == '\r' || r == '\n':
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 func dbRandKey6() string {

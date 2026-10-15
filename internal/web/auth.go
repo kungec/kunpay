@@ -731,7 +731,10 @@ func (s *Server) handleResetPost(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/login", http.StatusFound)
 }
 
-// newCaptchaData 生成验证码并注入页面数据(未启用时跳过)
+// newCaptchaData 生成验证码并注入页面数据(未启用时跳过)。
+// 页面含一次性验证码 id,禁止任何缓存: securityHeaders 已全局 no-store
+// (若被代理/CDN 缓存,多个访客会共享同一个已销毁的验证码,全部提示"验证码错误",
+// Windows 上用 IIS 输出缓存/ARR 反代的部署尤其高发)。
 func (s *Server) newCaptchaData(d map[string]any) {
 	if !s.CaptchaEnabled {
 		return
