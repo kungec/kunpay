@@ -162,6 +162,10 @@ func ParseMoney(s string) (int64, error) {
 	if intPart == "" {
 		intPart = "0"
 	}
+	// 小数位按位补齐: "1" → "10"(0.1 元 = 10 分,缺补零会缩小 10 倍)
+	for len(fracPart) < 2 {
+		fracPart += "0"
+	}
 	var ip, fp int64
 	fmt.Sscanf(intPart, "%d", &ip)
 	fmt.Sscanf(fracPart, "%d", &fp)
