@@ -209,7 +209,7 @@ func (s *Server) handleOrderCheckPage(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "pub_order_check", http.StatusOK, d)
 }
 
-// isValidTradeNo 校验订单号格式(纯数字,14-23位)
+// isValidTradeNo 校验订单号格式(纯数字,14-30位)
 func isValidTradeNo(s string) bool {
 	if len(s) < 14 || len(s) > 30 {
 		return false
