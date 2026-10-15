@@ -2,7 +2,7 @@ package service
 
 import (
 	"crypto"
-	"crypto/md5"
+	"crypto/md5" // #nosec G501 -- 易支付协议签名规定使用 MD5(兼容性要求,非安全哈希用途)
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"

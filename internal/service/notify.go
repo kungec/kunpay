@@ -609,7 +609,7 @@ func (s *Store) autoBackup() {
 	}
 	lastBackupDay = today_i64(today)
 	dir := filepath.Join(s.DataDir, "backups")
-	_ = os.MkdirAll(dir, 0o755)
+	_ = os.MkdirAll(dir, 0o750)
 	name := fmt.Sprintf("auto-%s-%s.db", today, lt.Format("150405"))
 	target := filepath.Join(dir, name)
 	if _, err := s.DB.Exec("VACUUM INTO ?", target); err != nil {

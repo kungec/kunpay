@@ -3,7 +3,7 @@ package service
 import (
 	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha1"
+	"crypto/sha1" // #nosec G505/G401 -- RFC 6238 TOTP 标准规定使用 SHA1
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base32"

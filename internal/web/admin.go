@@ -1285,7 +1285,7 @@ func (s *Server) handleAdminAudit(w http.ResponseWriter, r *http.Request) {
 // handleAdminBackupCreate 创建数据库备份(SQLite VACUUM INTO,在线安全备份)
 func (s *Server) handleAdminBackupCreate(w http.ResponseWriter, r *http.Request) {
 	dir := filepath.Join(s.DataDir, "backups")
-	_ = os.MkdirAll(dir, 0o755)
+	_ = os.MkdirAll(dir, 0o750)
 	name := "backup-" + timeFormat(model.Now(), "20060102150405") + ".db"
 	target := filepath.Join(dir, name)
 	_ = os.Remove(target)
@@ -1317,7 +1317,7 @@ var backupNameRe = regexp.MustCompile(`^backup-\d{14}\.db$`)
 // downloadList 下载中心文件列表(名称/大小)
 func (s *Server) downloadList() []map[string]any {
 	dir := filepath.Join(s.DataDir, "downloads")
-	_ = os.MkdirAll(dir, 0o755)
+	_ = os.MkdirAll(dir, 0o750)
 	var out []map[string]any
 	if ents, err := os.ReadDir(dir); err == nil {
 		for _, e := range ents {

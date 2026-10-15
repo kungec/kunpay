@@ -1613,7 +1613,7 @@ func (s *Server) handleUserStatementExport(w http.ResponseWriter, r *http.Reques
 // handleDownload 公开下载中心: 列出数据目录 downloads/ 下的文件
 func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	dir := filepath.Join(s.DataDir, "downloads")
-	_ = os.MkdirAll(dir, 0o755)
+	_ = os.MkdirAll(dir, 0o750)
 	type finfo struct {
 		Name     string
 		SizeText string
@@ -1665,7 +1665,7 @@ func (s *Server) handleAdminDownloadsUpload(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	dir := filepath.Join(s.DataDir, "downloads")
-	_ = os.MkdirAll(dir, 0o755)
+	_ = os.MkdirAll(dir, 0o750)
 	dst, err := os.Create(filepath.Join(dir, name))
 	if err != nil {
 		http.Redirect(w, r, "/admin/settings?err="+urlEscape("保存文件失败"), http.StatusFound)

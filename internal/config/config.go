@@ -52,7 +52,7 @@ func Load() *Config {
 		os.Exit(0)
 	}
 
-	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
+	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
 		log.Fatalf("创建数据目录失败: %v", err)
 	}
 	return cfg

@@ -107,7 +107,14 @@ func main() {
 	if !*noOpen {
 		go openBrowser(url)
 	}
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	httpSrv := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+	}
+	if err := httpSrv.ListenAndServe(); err != nil {
 		log.Printf("监听失败: %v", err)
 	}
 }

@@ -216,7 +216,6 @@ var funcMap = template.FuncMap{
 	"fdate":           fdate,
 	"shortdate":       shortdate,
 	"substr":          subStr,
-	"safehtml":        func(s string) template.HTML { return template.HTML(s) },
 	"json":            jsonFor,
 	"daysLabels":      daysLabels,
 	"daysValues":      daysValues,
