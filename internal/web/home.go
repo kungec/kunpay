@@ -235,9 +235,13 @@ func (s *Server) handleOrderReceipt(w http.ResponseWriter, r *http.Request) {
 		renderMsg(s, w, r, "订单不存在", "未找到该订单,请确认订单号是否正确", http.StatusNotFound)
 		return
 	}
-	// 验证支付金额后两位(防遍历)
+	// 防遍历: 必须携带支付金额后两位(空参数不再放行,否则拿到 trade_no 即可看完整小票)
 	payStr := service.MoneyStr(o.PayMoney)
-	if payParam != "" && payParam != payStr[len(payStr)-2:] {
+	if payParam == "" {
+		renderMsg(s, w, r, "缺少验证参数", "请在链接中附带支付金额后两位(pay 参数)", http.StatusBadRequest)
+		return
+	}
+	if payParam != payStr[len(payStr)-2:] {
 		renderMsg(s, w, r, "验证失败", "支付金额后两位不匹配", http.StatusForbidden)
 		return
 	}
