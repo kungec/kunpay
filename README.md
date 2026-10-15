@@ -2,12 +2,26 @@
 
 <p align="center">
   <b>开源个人免签约码支付系统 · Go 语言单文件部署</b><br>
-  易支付协议兼容 · 个人收款码自动监控 · 多码轮询 · 三平台监控客户端
+  易支付协议兼容 · 监控客户端全家桶 · 多码轮询 · 事件推送 · 审计级资金流水<br>
+  <sub>v1.2.1 · 经过 15 轮安全审计 / 黑盒渗透 / 数据竞争检测的持续加固</sub>
 </p>
 
-一套使用 **Go 语言**开发的个人免签约「码支付」平台,参考 SHMPAY(xpay)风格实现。
-编译产物为**单个二进制文件**(前端页面、静态资源、SQLite 驱动全部内嵌),支持 **Windows / Linux / macOS** 一键部署,无需安装任何依赖。
-配套**收款监控客户端全家桶**:安卓APP(自动监听收款通知)、Windows/macOS 监控助手(心跳保活+上报控制台)。
+一套使用 **Go 语言**开发的个人免签约「码支付」平台,易支付(EasyPay)协议完全兼容,现有商户系统**零改造接入**(submit.php / mapi.php / api.php)。
+编译产物为**单个二进制文件**(页面、静态资源、SQLite 驱动全部 go:embed 内嵌),**Windows / Linux / macOS** 一键部署,零外部依赖。
+配套**监控客户端全家桶**:安卓APP(自动监听收款通知,POST 加密上报)、Windows/macOS 监控助手(心跳保活+上报控制台),支持云手机 7×24 挂机与主备设备自动接管。
+
+### ✨ 核心特性
+
+| | |
+|---|---|
+| 💰 **个人收款码直收** | 微信/支付宝/QQ 收款码自动监控到账,资金直达个人账户,平台不经手 |
+| 🔁 **多码轮询** | 同通道多收款码加权轮询分摊收款,按订单号确定性取码,主备设备离线自动接管 |
+| 🔌 **易支付协议兼容** | submit/mapi/api 三接口 + 签名校验,支持 MD5 与 RSA-SHA256 双签名,IP 白名单/商户级限流 |
+| 📢 **事件 Webhook** | 支付/过期/退款事件签名推送 + 异步通知 POST/GET 可选 + 回调测试工具 |
+| 🧾 **审计级资金流水** | 每一笔余额变动有 before/after 流水,余额与流水强守恒,结算/退款全事务化 |
+| 🔐 **安全加固** | 强制改密/TOTP 双因子/登录日志/CSRF/限流/SSRF 防护/防重放,-race 检测零竞争 |
+| 📊 **商户自助** | 仪表盘(实时到账提醒)/对账单/提现/邀请返佣/消息中心/收款链接+二维码 |
+| 🛡 **运维友好** | 健康检查/自动备份/慢任务告警/优雅关停/系统自检/版本更新提示 |
 
 > ⚠️ **免责声明**:本项目仅供学习研究。支付业务受严格监管,请勿用于违法违规场景,正式商用请自行评估合规风险并取得相关资质。详见 [LICENSE](LICENSE) 附加条款。
 
@@ -29,9 +43,9 @@
 
 | 下载 | 说明 |
 |---|---|
-| [**📱 安卓监控APP (APK)**](https://github.com/kungec/kunpay/releases/download/v1.0.0/KunPayMonitor.apk) | 自动监听微信/支付宝/QQ收款通知,安装即用 |
-| [**💻 Windows 监控助手**](https://github.com/kungec/kunpay/releases/download/v1.0.0/KunPayMonitor_win64.zip) | 心跳保活 + 手动上报控制台 |
-| **🖥 平台主程序** | [Linux](https://github.com/kungec/kunpay/releases/download/v1.0.0/kunpay_linux_amd64.tar.gz) · [Windows](https://github.com/kungec/kunpay/releases/download/v1.0.0/kunpay_windows_amd64.zip) · [macOS](https://github.com/kungec/kunpay/releases/download/v1.0.0/kunpay_darwin_arm64.tar.gz) |
+| [**📱 安卓监控APP (APK)**](https://github.com/kungec/kunpay/releases/download/v1.2.1/KunPayMonitor.apk) | 自动监听微信/支付宝/QQ收款通知,安装即用 |
+| [**💻 Windows 监控助手**](https://github.com/kungec/kunpay/releases/download/v1.2.1/KunPayMonitor_win64.zip) | 心跳保活 + 手动上报控制台 |
+| **🖥 平台主程序** | [Linux](https://github.com/kungec/kunpay/releases/download/v1.2.1/kunpay_linux_amd64.tar.gz) · [Windows](https://github.com/kungec/kunpay/releases/download/v1.2.1/kunpay_windows_amd64.zip) · [macOS](https://github.com/kungec/kunpay/releases/download/v1.2.1/kunpay_darwin_arm64.tar.gz) |
 
 > 更多版本与源码见 [Releases](https://github.com/kungec/kunpay/releases) 页面。推送 `v*` 标签时 CI 会自动构建全平台产物并发布 Release。
 
