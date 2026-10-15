@@ -30,6 +30,10 @@ for d in dist/kunpay_*/; do
   cat > "$d/部署说明.txt" <<EOF
 KunPay 码支付系统 - 启动说明
 
+0. Linux 一键安装(推荐,自动注册 systemd 服务):
+   curl -fsSL https://raw.githubusercontent.com/kungec/kunpay/main/scripts/install.sh | bash
+   升级/重装: 重新执行同一命令(数据保留);卸载: 命令末尾加 uninstall
+
 1. 将 kunpay(或 kunpay.exe)上传到服务器任意目录
 2. 启动:
    Linux/macOS:  chmod +x kunpay && ./kunpay -port 8080

@@ -39,6 +39,17 @@
 
 > 感谢 **[KJ VPS](https://www.kjvps.com)** 为本项目提供跨境 VPS 支持。
 
+## ⚡ Linux 一键安装
+
+在全新的 Linux 服务器上以 root 执行一条命令(Ubuntu/Debian/CentOS/RHEL/Rocky/Alma/Fedora/openSUSE/Arch/Alpine,x86_64/aarch64):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kungec/kunpay/main/scripts/install.sh | bash
+```
+
+自动完成: 下载最新版 → 安装到 `/opt/kunpay` → 创建系统用户与服务(systemd/OpenRC/SysV 自适应)→ 开机自启并启动。
+卸载: 命令末尾加 `uninstall` 参数(数据库与收款码数据保留)。指定版本: 前面加 `KUNPAY_VERSION=v1.2.1`。
+
 ## ⬇ 快速下载
 
 | 下载 | 说明 |
