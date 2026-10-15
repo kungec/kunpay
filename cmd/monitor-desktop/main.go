@@ -13,6 +13,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -41,6 +42,7 @@ type LogEntry struct {
 type App struct {
 	mu        sync.Mutex
 	cfg       Config
+	cfgPath   string
 	logs      []LogEntry
 	hbOK      bool
 	hbErr     string
@@ -59,7 +61,7 @@ func main() {
 	noOpen := flag.Bool("no-open", false, "不自动打开浏览器")
 	flag.Parse()
 
-	app := &App{startAt: time.Now()}
+	app := &App{startAt: time.Now(), cfgPath: *cfgPath}
 	app.loadConfig(*cfgPath)
 	if *server != "" {
 		app.cfg.Server = strings.TrimRight(*server, "/")
@@ -133,7 +135,7 @@ func (a *App) doHeartbeat() (bool, string) {
 		return false, "请先配置平台地址与设备Token"
 	}
 	client := &http.Client{Timeout: 8 * time.Second}
-	resp, err := client.Get(cfg.Server + "/monitor/heart?token=" + cfg.Token)
+	resp, err := client.PostForm(cfg.Server+"/monitor/heart", url.Values{"token": {cfg.Token}})
 	if err != nil {
 		return false, "心跳失败: " + err.Error()
 	}
@@ -157,10 +159,10 @@ func (a *App) doPush(typ, money, content string) (bool, string) {
 	if cfg.Server == "" || cfg.Token == "" {
 		return false, "请先配置平台地址与设备Token"
 	}
-	url := fmt.Sprintf("%s/monitor/push?token=%s&type=%s&money=%s&content=%s",
-		cfg.Server, cfg.Token, typ, money, content)
 	client := &http.Client{Timeout: 8 * time.Second}
-	resp, err := client.Get(url)
+	resp, err := client.PostForm(cfg.Server+"/monitor/push", url.Values{
+		"token": {cfg.Token}, "type": {typ}, "money": {money}, "content": {content},
+	})
 	if err != nil {
 		return false, "上报失败: " + err.Error()
 	}
@@ -253,9 +255,8 @@ func (a *App) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 	a.mu.Lock()
 	a.cfg.Server = strings.TrimRight(strings.TrimSpace(in.Server), "/")
 	a.cfg.Token = strings.TrimSpace(in.Token)
-	cfgPath := flagConfigPath()
 	a.mu.Unlock()
-	a.saveConfig(cfgPath)
+	a.saveConfig(a.cfgPath)
 	ok, msg := a.doHeartbeat()
 	a.mu.Lock()
 	a.hbOK, a.hbErr, a.hbLast = ok, msg, time.Now()
@@ -305,10 +306,6 @@ func (a *App) handleHeartbeatNow(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---------- 工具 ----------
-
-func flagConfigPath() string {
-	return "kunpay-monitor.json"
-}
 
 func maskToken(t string) string {
 	if t == "" {
