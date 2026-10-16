@@ -43,11 +43,11 @@ jobs:
             name="${d%/}"
             case "$name" in
               *windows*) (cd "$name" && zip -qr "../${name}.zip" .) ;;
-              *) tar -czf "../${name}.tar.gz" "$name" ;;
+              *) tar -czf "./${name}.tar.gz" "$name" ;;
             esac
           done
           cd ..
-          cp dist/kunpay_*.tar.gz dist/kunpay_*.zip release/ 2>/dev/null || true
+          cp dist/kunpay_*.tar.gz dist/kunpay_*.zip release/
           # 安卓APK
           cp monitor-android/KunPayMonitor.apk release/
           # 全量包
