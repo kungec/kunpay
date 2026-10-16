@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"kunzhifu/internal/model"
@@ -20,6 +21,103 @@ import (
 )
 
 const updateAPI = "https://api.github.com/repos/%s/releases/latest"
+
+// 国内访问 GitHub 直连不稳定,内置加速镜像候选列表(按可用性自动切换)
+var ghMirrors = []string{
+	"",                      // 直连(优先)
+	"https://gh-proxy.com/", // 国内常用加速
+	"https://ghfast.top/",   // 备选
+	"https://ghproxy.net/",  // 备选
+}
+
+// ghWorkingMirror 缓存当前可用的镜像下标(-1 = 未探测,0 = 直连)
+var (
+	ghMirrorMu  sync.Mutex
+	ghMirrorIdx = -1
+)
+
+// ghURL 将 GitHub 原始 URL 包装为当前可用的访问地址。
+// 优先使用管理员配置的 github_proxy 设置;未配置时使用上次探测成功的镜像。
+func ghURL(rawURL string) string {
+	proxy := strings.TrimSpace(strings.TrimRight(ghProxyVal, "/"))
+	if proxy != "" {
+		return proxy + "/" + rawURL
+	}
+	ghMirrorMu.Lock()
+	idx := ghMirrorIdx
+	ghMirrorMu.Unlock()
+	if idx >= 0 && idx < len(ghMirrors) && ghMirrors[idx] != "" {
+		return ghMirrors[idx] + rawURL
+	}
+	return rawURL
+}
+
+// ghProxyVal 包级缓存,由 Store.RefreshGhProxy 或启动时注入
+var ghProxyVal string
+
+// SetGhProxy 设置 GitHub 加速前缀
+func SetGhProxy(v string) { ghProxyVal = strings.TrimRight(strings.TrimSpace(v), "/") }
+
+// RefreshGhProxy 从数据库读取 github_proxy 设置并缓存(每次检查更新前调用)
+func (s *Store) RefreshGhProxy() {
+	if v := strings.TrimSpace(s.DB.MustSetting("github_proxy")); v != "" {
+		SetGhProxy(v)
+	}
+}
+
+// ghFetch 带自动镜像切换的 HTTP GET: 依次尝试直连和各镜像,成功后缓存
+func ghFetch(rawURL string, timeout time.Duration) ([]byte, error) {
+	ghMirrorMu.Lock()
+	idx := ghMirrorIdx
+	ghMirrorMu.Unlock()
+
+	// 已有缓存的可用镜像 → 直接用
+	if idx >= 0 {
+		var tryURL string
+		if idx < len(ghMirrors) && ghMirrors[idx] != "" {
+			tryURL = ghMirrors[idx] + rawURL
+		} else {
+			tryURL = rawURL
+		}
+		data, err := httpGetWithTimeout(tryURL, timeout)
+		if err == nil {
+			return data, nil
+		}
+		// 缓存的镜像失效,重新探测
+	}
+
+	// 依次探测: 直连 → 各镜像
+	for i, prefix := range ghMirrors {
+		tryURL := prefix + rawURL
+		data, err := httpGetWithTimeout(tryURL, timeout)
+		if err == nil {
+			ghMirrorMu.Lock()
+			ghMirrorIdx = i
+			ghMirrorMu.Unlock()
+			return data, nil
+		}
+	}
+	return nil, fmt.Errorf("所有 GitHub 镜像均不可达")
+}
+
+func httpGetWithTimeout(rawURL string, timeout time.Duration) ([]byte, error) {
+	client := &http.Client{Timeout: timeout}
+	req, err := http.NewRequest("GET", rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "KunPay-Updater")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+}
 
 // ReleaseInfo GitHub 最新 Release 摘要(缓存于设置 update_latest)
 type ReleaseInfo struct {
@@ -44,25 +142,11 @@ func repoOf(s *Store) string {
 
 // CheckUpdate 拉取 GitHub 最新 Release 并缓存;返回是否发现比当前更新的版本
 func (s *Store) CheckUpdate() (*ReleaseInfo, bool, error) {
-	url := fmt.Sprintf(updateAPI, repoOf(s))
-	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequest("GET", url, nil)
+	s.RefreshGhProxy()
+	apiURL := fmt.Sprintf(updateAPI, repoOf(s))
+	body, err := ghFetch(apiURL, 15*time.Second)
 	if err != nil {
-		return nil, false, err
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "KunPay-Updater")
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, false, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return nil, false, fmt.Errorf("GitHub API 返回 %d", resp.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return nil, false, err
+		return nil, false, fmt.Errorf("连接 GitHub 失败(已尝试直连与加速镜像): %v", err)
 	}
 	var gh struct {
 		TagName     string `json:"tag_name"`
@@ -159,6 +243,7 @@ func splitVer(v string) [3]int {
 // DoUpdate 下载指定版本的二进制并替换当前运行文件(不重启,由调用方决定重启方式)。
 // 返回用户可读的状态消息。
 func (s *Store) DoUpdate(tag string) (string, error) {
+	s.RefreshGhProxy()
 	goos, goarch := runtime.GOOS, runtime.GOARCH
 
 	var assetName string
@@ -169,7 +254,8 @@ func (s *Store) DoUpdate(tag string) (string, error) {
 	}
 
 	repo := repoOf(s)
-	dlURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", repo, tag, assetName)
+	rawDL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", repo, tag, assetName)
+	dlURL := ghURL(rawDL)
 
 	// 下载到临时文件
 	tmpDir, err := os.MkdirTemp("", "kunpay-update-*")

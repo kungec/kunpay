@@ -1103,7 +1103,7 @@ func (s *Server) handleAdminSettingsSave(w http.ResponseWriter, r *http.Request)
 		"money_offset", "register_open", "min_settle", "pay_notice", "invite_open", "footer_text", "poll_interval",
 		"site_url", "smtp_host", "smtp_port", "smtp_user", "smtp_pass", "smtp_tls", "smtp_from", "admin_ip_whitelist",
 		"alert_email", "device_alert", "merchant_notice", "alert_webhook", "invite_rate", "auto_settle", "circuit_breaker",
-		"backup_auto", "backup_keep", "statement_auto", "ip_blacklist", "digest_auto", "update_repo", "auto_approve_max", "auto_approve_settle"}
+		"backup_auto", "backup_keep", "statement_auto", "ip_blacklist", "digest_auto", "update_repo", "auto_approve_max", "auto_approve_settle", "github_proxy"}
 	// 开关类型设置: 浏览器在 checkbox 未勾选时不发送该字段,
 	// 必须将「字段不存在」解释为「用户取消勾选」→ 保存 "0"
 	checkboxKeys := map[string]bool{

@@ -177,6 +177,15 @@
       {{end}}
       <div><span class="muted">上次检查</span><br><b>{{if .CheckAt}}{{.CheckAt}}{{else}}从未{{end}}</b></div>
       <div><span class="muted">检查仓库</span><br><b class="mono">{{.UpdateRepo}}</b></div>
+      <div style="margin-top:8px;max-width:360px">
+        <span class="muted">GitHub 加速代理</span><br>
+        <form method="post" action="/admin/settings/save" class="row" style="gap:8px;align-items:center">
+          <input type="hidden" name="_csrf" value="{{.CSRF}}">
+          <input class="input mono" name="github_proxy" value="{{index .S "github_proxy"}}" placeholder="https://gh-proxy.com" style="flex:1">
+          <button class="btn btn-outline btn-sm" type="submit">保存</button>
+        </form>
+        <div class="muted" style="font-size:11.5px;margin-top:4px">国内服务器配置后检查更新与在线更新均走代理;留空自动探测内置镜像</div>
+      </div>
     </div>
     {{if and .Latest .Latest.Newer}}
     <div class="alert ok">
