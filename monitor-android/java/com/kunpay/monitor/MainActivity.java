@@ -73,6 +73,19 @@ public class MainActivity extends Activity {
         refreshLog();
         refreshStatus();
 
+        // 扫码配对: 处理 kunpay://pair?server=xx&token=xx deep link
+        android.net.Uri data = getIntent() != null ? getIntent().getData() : null;
+        if (data != null && "kunpay".equals(data.getScheme()) && "pair".equals(data.getHost())) {
+            String sv = data.getQueryParameter("server");
+            String tk = data.getQueryParameter("token");
+            if (sv != null && tk != null && !sv.isEmpty() && !tk.isEmpty()) {
+                etServer.setText(sv);
+                etToken.setText(tk);
+                prefs.edit().putString("server", sv).putString("token", tk).apply();
+                android.widget.Toast.makeText(this, "✓ 配对成功,已自动填入", android.widget.Toast.LENGTH_LONG).show();
+            }
+        }
+
         // 安全: 不再接受外部 Intent extras 配置(任意应用可借此重配 Token 外传);
         // 初始化一律通过本界面手动填写。如需批量配置,请用设备管理方案。
 

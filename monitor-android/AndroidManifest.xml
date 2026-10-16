@@ -26,6 +26,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- 扫码配对: 手机相机扫管理后台的二维码 → 自动跳转完成配置 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="kunpay" android:host="pair" />
+            </intent-filter>
         </activity>
 
         <service

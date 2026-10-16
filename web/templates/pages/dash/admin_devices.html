@@ -95,7 +95,7 @@
 </div>
 <script>
 function showPairQR(token) {
-  var pairURL = location.origin + '/monitor/pair?t=' + encodeURIComponent(token);
+  var pairURL = 'kunpay://pair?server=' + encodeURIComponent(location.origin) + '&token=' + encodeURIComponent(token);
   document.getElementById('pairQRImg').src = '/user/qr?text=' + encodeURIComponent(pairURL);
   document.getElementById('pairQRText').textContent = pairURL;
   document.getElementById('pairQRModal').style.display = 'flex';
