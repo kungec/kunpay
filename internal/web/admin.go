@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -987,6 +988,37 @@ func (s *Server) handleAdminSettlesDo(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleAdminUpdateCheck 管理员手动检查更新
+
+// handleAdminUpdateDo 执行在线更新: 下载新版本二进制并替换(需重启服务生效)
+func (s *Server) handleAdminUpdateDo(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	tag := strings.TrimSpace(r.FormValue("tag"))
+	if tag == "" {
+		http.Redirect(w, r, "/admin/settings?err="+urlEscape("缺少版本号"), http.StatusFound)
+		return
+	}
+	if !service.IsNewerVersion(tag, version.Version) {
+		http.Redirect(w, r, "/admin/settings?msg="+urlEscape("当前已是最新版本"), http.StatusFound)
+		return
+	}
+	msg, err := s.Store.DoUpdate(tag)
+	if err != nil {
+		s.audit(r, "update.do", "失败: "+err.Error())
+		http.Redirect(w, r, "/admin/settings?err="+urlEscape("更新失败: "+err.Error()), http.StatusFound)
+		return
+	}
+	s.audit(r, "update.do", "成功: "+msg)
+	// Linux systemd 环境: 自动重启服务
+	if runtime.GOOS == "linux" {
+		if _, err := os.Stat("/run/systemd/system"); err == nil {
+			exec.Command("systemctl", "restart", "kunpay").Start()
+			http.Redirect(w, r, "/admin/settings?msg="+urlEscape("更新成功,服务正在重启..."), http.StatusFound)
+			return
+		}
+	}
+	http.Redirect(w, r, "/admin/settings?msg="+urlEscape(msg), http.StatusFound)
+}
+
 func (s *Server) handleAdminUpdateCheck(w http.ResponseWriter, r *http.Request) {
 	info, newer, err := s.Store.CheckUpdate()
 	if err != nil {

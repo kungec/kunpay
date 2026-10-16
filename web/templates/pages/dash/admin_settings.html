@@ -184,8 +184,13 @@
       {{if .Latest.PublishAt}}<span class="muted"> · 发布于 {{.Latest.PublishAt}}</span>{{end}}
       <div style="margin-top:8px;white-space:pre-wrap;font-size:12.5px;line-height:1.8;max-height:180px;overflow:auto;background:rgba(0,0,0,.03);border-radius:8px;padding:10px">{{.Latest.Notes}}</div>
       <div class="row mt" style="gap:8px;flex-wrap:wrap">
-        <a class="btn btn-primary btn-sm" href="{{.Latest.URL}}" target="_blank">查看 / 下载更新 →</a>
-        <span class="muted" style="font-size:12px">下载对应平台压缩包替换程序后重启即可完成升级</span>
+        <form method="post" action="/admin/update/do" style="display:inline">
+          <input type="hidden" name="_csrf" value="{{.CSRF}}">
+          <input type="hidden" name="tag" value="{{.Latest.Tag}}">
+          <button class="btn btn-primary btn-sm" type="submit" data-confirm="将自动下载 {{.Latest.Tag}} 并替换当前程序,下载完成后需重启服务。确定继续?">⚡ 一键更新</button>
+        </form>
+        <a class="btn btn-outline btn-sm" href="{{.Latest.URL}}" target="_blank">手动下载 →</a>
+        <span class="muted" style="font-size:12px">自动更新将下载对应平台二进制并替换当前程序,替换后需重启服务加载新版本</span>
       </div>
     </div>
     {{end}}

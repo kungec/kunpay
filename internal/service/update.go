@@ -1,10 +1,16 @@
 package service
 
 import (
+	"archive/tar"
+	"archive/zip"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -146,4 +152,189 @@ func splitVer(v string) [3]int {
 		out[i] = n
 	}
 	return out
+}
+
+// ---------- 自动更新 ----------
+
+// DoUpdate 下载指定版本的二进制并替换当前运行文件(不重启,由调用方决定重启方式)。
+// 返回用户可读的状态消息。
+func (s *Store) DoUpdate(tag string) (string, error) {
+	goos, goarch := runtime.GOOS, runtime.GOARCH
+
+	var assetName string
+	if goos == "windows" {
+		assetName = fmt.Sprintf("kunpay_%s_%s.zip", goos, goarch)
+	} else {
+		assetName = fmt.Sprintf("kunpay_%s_%s.tar.gz", goos, goarch)
+	}
+
+	repo := repoOf(s)
+	dlURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", repo, tag, assetName)
+
+	// 下载到临时文件
+	tmpDir, err := os.MkdirTemp("", "kunpay-update-*")
+	if err != nil {
+		return "", fmt.Errorf("创建临时目录失败: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	tmpArchive := filepath.Join(tmpDir, assetName)
+	client := SafeHTTPClient(120 * time.Second)
+	resp, err := client.Get(dlURL)
+	if err != nil {
+		return "", fmt.Errorf("下载失败: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("下载返回 %d(请确认 %s 是否存在于该版本)", resp.StatusCode, assetName)
+	}
+	tmpFile, err := os.Create(tmpArchive)
+	if err != nil {
+		return "", err
+	}
+	if _, err = io.Copy(tmpFile, resp.Body); err != nil {
+		tmpFile.Close()
+		return "", fmt.Errorf("下载写入失败: %v", err)
+	}
+	tmpFile.Close()
+
+	// 确定当前可执行文件路径
+	exePath, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("获取当前程序路径失败: %v", err)
+	}
+	exePath, _ = filepath.Abs(exePath)
+
+	// 从压缩包中提取二进制到临时位置
+	newBin := filepath.Join(tmpDir, "kunpay.new")
+	if goos == "windows" {
+		err = extractZipBinary(tmpArchive, newBin, "kunpay.exe")
+	} else {
+		err = extractTarGzBinary(tmpArchive, newBin, "kunpay")
+	}
+	if err != nil {
+		return "", fmt.Errorf("解压失败: %v", err)
+	}
+
+	// 验证新二进制非空且可执行
+	fi, err := os.Stat(newBin)
+	if err != nil || fi.Size() < 1024 {
+		return "", fmt.Errorf("解压后的二进制异常(大小 %d)", fiSize(newBin))
+	}
+	if goos != "windows" {
+		os.Chmod(newBin, 0o755)
+	}
+
+	// 备份当前 → 替换为新版
+	backupPath := exePath + ".bak"
+	os.Remove(backupPath)
+	if err := os.Rename(exePath, backupPath); err != nil {
+		// Windows 上运行中的 exe 无法 rename,改用 copy+replace
+		if err2 := copyFile(exePath, backupPath); err2 != nil {
+			return "", fmt.Errorf("备份当前程序失败: %v", err2)
+		}
+		if err2 := copyFile(newBin, exePath); err2 != nil {
+			return "", fmt.Errorf("替换程序失败: %v(Windows 可能需要手动停止程序后替换)", err2)
+		}
+		return "更新已写入,请手动重启程序以加载新版本", nil
+	}
+	if err := os.Rename(newBin, exePath); err != nil {
+		// 回滚
+		os.Rename(backupPath, exePath)
+		return "", fmt.Errorf("替换程序失败(已回滚): %v", err)
+	}
+
+	return fmt.Sprintf("更新成功(备份: %s.bak),请重启服务加载新版本", exePath), nil
+}
+
+func fiSize(path string) int64 {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return fi.Size()
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, in)
+	return err
+}
+
+// extractTarGzBinary 从 tar.gz 中提取指定名称的二进制文件
+func extractTarGzBinary(archive, dest, binName string) error {
+	f, err := os.Open(archive)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return err
+	}
+	defer gz.Close()
+	tr := tar.NewReader(gz)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			return fmt.Errorf("压缩包中未找到 %s", binName)
+		}
+		if err != nil {
+			return err
+		}
+		// 匹配文件名(忽略目录前缀)
+		base := filepath.Base(hdr.Name)
+		if base == binName && hdr.Typeflag == tar.TypeReg {
+			out, err := os.Create(dest)
+			if err != nil {
+				return err
+			}
+			if _, err = io.Copy(out, tr); err != nil {
+				out.Close()
+				return err
+			}
+			out.Close()
+			os.Chmod(dest, 0o755)
+			return nil
+		}
+	}
+}
+
+// extractZipBinary 从 zip 中提取指定名称的二进制文件
+func extractZipBinary(archive, dest, binName string) error {
+	r, err := zip.OpenReader(archive)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	for _, f := range r.File {
+		base := filepath.Base(f.Name)
+		if base == binName {
+			rc, err := f.Open()
+			if err != nil {
+				return err
+			}
+			defer rc.Close()
+			out, err := os.Create(dest)
+			if err != nil {
+				return err
+			}
+			if _, err = io.Copy(out, rc); err != nil {
+				out.Close()
+				return err
+			}
+			out.Close()
+			return nil
+		}
+	}
+	return fmt.Errorf("压缩包中未找到 %s", binName)
 }
