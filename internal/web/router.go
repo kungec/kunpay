@@ -68,6 +68,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /pay/{tradeNo}/qr", s.handlePayQR)
 
 	// 监控设备 API(自有协议 + V免签兼容)
+	mux.HandleFunc("GET /monitor/pair", s.handleMonitorPair)
 	mux.HandleFunc("GET /monitor/heart", s.handleMonitorHeart)
 	mux.HandleFunc("POST /monitor/heart", s.handleMonitorHeart)
 	mux.HandleFunc("GET /monitor/push", s.handleMonitorPush)

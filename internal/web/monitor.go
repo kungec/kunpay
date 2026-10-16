@@ -55,6 +55,36 @@ func (s *Server) handleMonitorHeart(w http.ResponseWriter, r *http.Request) {
 	monitorJSON(w, 1, "心跳成功")
 }
 
+// handleMonitorPair GET /monitor/pair?t={token} — APP 扫码配对
+func (s *Server) handleMonitorPair(w http.ResponseWriter, r *http.Request) {
+	token := strings.TrimSpace(r.URL.Query().Get("t"))
+	if token == "" {
+		monitorJSON(w, -1, "缺少 token 参数")
+		return
+	}
+	id, ok := s.deviceByToken(token)
+	if !ok {
+		monitorJSON(w, -1, "设备token无效")
+		return
+	}
+	scheme := "http"
+	if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+		scheme = "https"
+	}
+	host := r.Host
+	if host == "" {
+		host = "localhost"
+	}
+	_ = id
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	json.NewEncoder(w).Encode(map[string]any{
+		"code":   1,
+		"msg":    "配对成功",
+		"server": scheme + "://" + host,
+		"token":  token,
+	})
+}
+
 // handleMonitorPush /monitor/push 到账上报(GET/POST 均可)
 //
 // v2 签名(推荐,官方监控APP已启用): 附加 ts(秒级时间戳) 与
