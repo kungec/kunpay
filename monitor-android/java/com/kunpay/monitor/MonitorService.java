@@ -38,9 +38,27 @@ public class MonitorService extends NotificationListenerService {
             "com.tencent.mobileqq",              // QQ
             "com.tencent.tim"                    // TIM(QQ通道)
     ));
-    /** 金额提取: 关键词(收款/到账/入账/入帐)后最近的数字 */
-    private static final Pattern AMOUNT = Pattern.compile(
-            "(?:收款|到账|入账|入帐|转账)[^0-9]{0,12}(([0-9]{1,3}(,[0-9]{3})+|[0-9]+)(?:\\.[0-9]{1,2})?)");
+    /** 金额提取(三级回退, 首个命中即用):
+     *  1. "N元" 后缀 —— 真实收款通知的标准格式, 最可靠;
+     *  2. "¥/￥" 前缀;
+     *  3. 关键词(收款/到账/入账/入帐/转账)后最近的数字, 并排除"[N条]"等聚合计数。
+     *  背景: 微信"微信收款助手"聚合通知的标题形如"微信收款助手 [10条]…",
+     *  旧正则从第一个"收款"起就近取数, 把"10条"当成金额上报 ¥10 导致无法匹配订单。 */
+    private static final Pattern AMT_YUAN = Pattern.compile(
+            "([0-9]{1,3}(?:,[0-9]{3})+(?:\\.[0-9]{1,2})?|[0-9]+(?:\\.[0-9]{1,2})?)\\s*元");
+    private static final Pattern AMT_SYMBOL = Pattern.compile(
+            "[¥￥]\\s*([0-9]{1,3}(?:,[0-9]{3})+(?:\\.[0-9]{1,2})?|[0-9]+(?:\\.[0-9]{1,2})?)");
+    private static final Pattern AMT_KEYWORD = Pattern.compile(
+            "(?:收款|到账|入账|入帐|转账)[^0-9]{0,12}(([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\\.[0-9]{1,2})?)(?![条个位笔人次折层名秒分])");
+
+    /** 依次尝试三种模式, 未命中返回 null */
+    private static String extractMoney(String content) {
+        for (Pattern p : new Pattern[]{AMT_YUAN, AMT_SYMBOL, AMT_KEYWORD}) {
+            Matcher m = p.matcher(content);
+            if (m.find()) return m.group(1).replace(",", ""); // 千分位(1,234.50 → 1234.50)
+        }
+        return null;
+    }
 
     private final HandlerThread worker = new HandlerThread("kunpay-worker");
     private Handler handler;
@@ -175,12 +193,11 @@ public class MonitorService extends NotificationListenerService {
                 }
             }
 
-            Matcher m = AMOUNT.matcher(content);
-            if (!m.find()) {
+            String money = extractMoney(content);
+            if (money == null) {
                 if (known) log("[" + shortPkg(pkg) + "] 检测到通知但未识别到金额: " + clip(content));
                 return;
             }
-            String money = m.group(1).replace(",", ""); // 千分位(1,234.50 → 1234.50)
             String type = mapType(pkg, content);
 
             boolean enabled = prefs.getBoolean("ch_" + type, true);

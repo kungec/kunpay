@@ -3,7 +3,7 @@
 <p align="center">
   <b>开箱即用的个人免签约码支付系统 · Go 单文件部署</b><br>
   易支付协议完全兼容 · 安卓APP扫码配对 · 多码轮询 · 审计级资金流水<br>
-  <sub>v1.3.1 · 经过 29 轮安全审计 / 黑盒渗透 / 数据竞争检测的持续加固</sub>
+  <sub>v1.3.2 · 经过 29 轮安全审计 / 黑盒渗透 / 数据竞争检测的持续加固</sub>
 </p>
 
 **坤支付**是一套用 **Go 语言**从零编写的个人免签约「码支付」平台:绑定你自己的微信 / 支付宝 / QQ 收款码,安卓监控APP 自动监听到账通知并回填订单——**资金全程直达个人账户,平台不经手一分钱**。
@@ -81,7 +81,7 @@ curl -fsSL https://raw.githubusercontent.com/kungec/kunpay/main/scripts/install.
 ```
 
 自动完成: 下载最新版 → 安装到 `/opt/kunpay` → 创建系统用户与服务 → 开机自启并启动 → 健康检查确认。
-卸载: 命令末尾加 `uninstall` 参数(数据库与收款码数据保留)。指定版本: 前面加 `KUNPAY_VERSION=v1.3.1`。
+卸载: 命令末尾加 `uninstall` 参数(数据库与收款码数据保留)。指定版本: 前面加 `KUNPAY_VERSION=v1.3.2`。
 
 ### Windows 部署
 
@@ -101,8 +101,8 @@ curl -fsSL https://raw.githubusercontent.com/kungec/kunpay/main/scripts/install.
 
 | 下载 | 说明 |
 |---|---|
-| [**📱 安卓监控APP (APK)**](https://github.com/kungec/kunpay/releases/download/v1.3.1/KunPayMonitor.apk) | 自动监听微信/支付宝/QQ收款通知,安装即用 |
-| **🖥 平台主程序** | [Linux](https://github.com/kungec/kunpay/releases/download/v1.3.1/kunpay_linux_amd64.tar.gz) · [Windows](https://github.com/kungec/kunpay/releases/download/v1.3.1/kunpay_windows_amd64.zip) · [macOS](https://github.com/kungec/kunpay/releases/download/v1.3.1/kunpay_darwin_arm64.tar.gz) |
+| [**📱 安卓监控APP (APK)**](https://github.com/kungec/kunpay/releases/download/v1.3.2/KunPayMonitor.apk) | 自动监听微信/支付宝/QQ收款通知,安装即用 |
+| **🖥 平台主程序** | [Linux](https://github.com/kungec/kunpay/releases/download/v1.3.2/kunpay_linux_amd64.tar.gz) · [Windows](https://github.com/kungec/kunpay/releases/download/v1.3.2/kunpay_windows_amd64.zip) · [macOS](https://github.com/kungec/kunpay/releases/download/v1.3.2/kunpay_darwin_arm64.tar.gz) |
 
 > 更多版本与源码见 [Releases](https://github.com/kungec/kunpay/releases) 页面。推送 `v*` 标签时 CI 会自动构建全平台产物并发布 Release。
 
