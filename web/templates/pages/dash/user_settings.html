@@ -75,19 +75,13 @@
         <label>收银台自定义 Logo(选填,显示在您的收银台页面)</label>
         <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
           {{if .Merchant.Logo}}<img src="{{.Merchant.Logo}}" alt="logo" style="height:40px;border-radius:8px">{{end}}
-          <form method="post" action="/user/logo/upload" enctype="multipart/form-data" style="display:inline-flex;gap:6px;align-items:center">
-            <input type="hidden" name="_csrf" value="{{.CSRF}}">
-            <label class="file-upload" style="width:auto">
-              <span>{{if .Merchant.Logo}}更换 Logo{{else}}上传 Logo{{end}}</span>
-              <input type="file" name="logo" accept="image/png,image/jpeg,image/webp" required onchange="this.closest('form').querySelector('button[type=submit]').click()">
-            </label>
-            <button class="btn btn-primary btn-sm" type="submit">上传</button>
-          </form>
+          <label class="file-upload" style="width:auto;display:inline-flex">
+            <span>{{if .Merchant.Logo}}更换 Logo{{else}}上传 Logo{{end}}</span>
+            <input type="file" id="logoFile" name="logo" accept="image/png,image/jpeg,image/webp" style="display:none"
+                   onchange="uploadLogo(this.files[0])">
+          </label>
           {{if .Merchant.Logo}}
-          <form method="post" action="/user/logo/delete" style="display:inline">
-            <input type="hidden" name="_csrf" value="{{.CSRF}}">
-            <button class="btn btn-ghost btn-sm" type="submit">删除</button>
-          </form>
+          <button class="btn btn-ghost btn-sm" type="button" onclick="deleteLogo()">删除</button>
           {{end}}
         </div>
         <div class="tip">显示在您的收银台页面,增强品牌辨识度</div>
@@ -107,6 +101,29 @@
       </div>
       <button class="btn btn-primary" type="submit">保存修改</button>
     </form>
+  </div>
+  <script>
+  function uploadLogo(file) {
+    if (!file) return;
+    var fd = new FormData();
+    fd.append('_csrf', '{{.CSRF}}');
+    fd.append('logo', file);
+    var btn = document.querySelector('.file-upload span');
+    var orig = btn.textContent; btn.textContent = '上传中...';
+    fetch('/user/logo/upload', { method: 'POST', body: fd })
+      .then(function(r) { return r.text(); })
+      .then(function() { location.reload(); })
+      .catch(function() { btn.textContent = orig; alert('上传失败'); });
+  }
+  function deleteLogo() {
+    if (!confirm('确定删除 Logo?')) return;
+    var fd = new FormData();
+    fd.append('_csrf', '{{.CSRF}}');
+    fetch('/user/logo/delete', { method: 'POST', body: fd })
+      .then(function() { location.reload(); })
+      .catch(function() { alert('删除失败'); });
+  }
+  </script>
   </div>
   <div class="card">
     <div class="card-title">修改密码</div>

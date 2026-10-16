@@ -3,6 +3,7 @@ package web
 import (
 	"bufio"
 	"database/sql"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"github.com/skip2/go-qrcode"
@@ -1773,6 +1774,11 @@ func (s *Server) handleUserLogoUpload(w http.ResponseWriter, r *http.Request) {
 	io.Copy(dst, file)
 	_, _ = s.DB.Exec("UPDATE users SET logo=? WHERE id=?", "/uploads/"+fn, u.ID)
 	s.removeUploadFile(oldLogo)
+	if strings.Contains(r.Header.Get("Accept"), "application/json") || r.Header.Get("X-Requested-With") == "fetch" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		return
+	}
 	http.Redirect(w, r, "/user/settings?msg="+urlEscape("Logo 已上传,收银台将显示您的品牌 Logo"), http.StatusFound)
 }
 
@@ -1783,6 +1789,11 @@ func (s *Server) handleUserLogoDelete(w http.ResponseWriter, r *http.Request) {
 	_ = s.DB.QueryRow("SELECT COALESCE(logo,'') FROM users WHERE id=?", u.ID).Scan(&logo)
 	_, _ = s.DB.Exec("UPDATE users SET logo='' WHERE id=?", u.ID)
 	s.removeUploadFile(logo)
+	if r.Header.Get("X-Requested-With") == "fetch" || strings.Contains(r.Header.Get("Accept"), "application/json") {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		return
+	}
 	http.Redirect(w, r, "/user/settings?msg="+urlEscape("Logo 已删除"), http.StatusFound)
 }
 
