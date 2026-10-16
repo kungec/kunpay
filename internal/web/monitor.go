@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"kunzhifu/internal/model"
 	"kunzhifu/internal/service"
@@ -275,4 +276,71 @@ func (s *Server) handleVmqPush(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	monitorJSON(w, 2, "已记录,未匹配到订单")
+}
+
+// ---------- 配对码: 用 6 位短码代替手动复制 Token,5 分钟有效 ----------
+
+var (
+	pairCodeMu   sync.Mutex
+	pairCodeData = map[string]pairEntry{} // 6位码 → 设备信息
+)
+
+type pairEntry struct {
+	token string
+	exp   time.Time
+}
+
+// GeneratePairCode 为指定设备生成 6 位配对码(5 分钟有效)
+func GeneratePairCode(token string) string {
+	code := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
+	pairCodeMu.Lock()
+	pairCodeData[code] = pairEntry{token: token, exp: time.Now().Add(5 * time.Minute)}
+	pairCodeMu.Unlock()
+	return code
+}
+
+// ExchangePairCode 用 6 位配对码换取设备 Token(一次性)
+func ExchangePairCode(code string) (string, bool) {
+	pairCodeMu.Lock()
+	e, ok := pairCodeData[code]
+	if ok {
+		delete(pairCodeData, code)
+	}
+	pairCodeMu.Unlock()
+	if !ok || e.exp.Before(time.Now()) {
+		return "", false
+	}
+	return e.token, true
+}
+
+// handleMonitorPairExchange POST /monitor/pair/exchange — APP 用 6 位配对码换取 Token
+func (s *Server) handleMonitorPairExchange(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Code string `json:"code"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&in)
+	code := strings.TrimSpace(in.Code)
+	if len(code) != 6 {
+		monitorJSON(w, -1, "配对码格式错误(6 位数字)")
+		return
+	}
+	token, ok := ExchangePairCode(code)
+	if !ok {
+		monitorJSON(w, -1, "配对码无效或已过期")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	json.NewEncoder(w).Encode(map[string]any{
+		"code":   1,
+		"msg":    "配对成功",
+		"token":  token,
+		"server": fmt.Sprintf("%s://%s", schemeOf(r), r.Host),
+	})
+}
+
+func schemeOf(r *http.Request) string {
+	if r.TLS != nil {
+		return "https"
+	}
+	return "http"
 }

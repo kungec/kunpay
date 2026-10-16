@@ -830,13 +830,15 @@ func (s *Server) handleAdminDevicesAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	// 新设备默认关闭 V免签兼容协议(安全默认): 仅当用户使用第三方 V免签 APP 时,
 	// 才需在设备列表手动开启。官方监控APP走原生 /monitor/push,不受影响。
+	tokenVal := db.RandKey(24)
 	_, err := s.DB.Exec("INSERT INTO devices(name,token,status,created_at,vmq_enabled) VALUES(?,?,1,?,0)",
-		name, db.RandKey(24), model.Now())
+		name, tokenVal, model.Now())
 	if err != nil {
 		http.Redirect(w, r, "/admin/devices?msg="+urlEscape("添加失败"), http.StatusFound)
 		return
 	}
-	http.Redirect(w, r, "/admin/devices?msg="+urlEscape("设备已添加(默认关闭 V免签兼容,如用第三方 V免签 APP 请在列表开启),请将 Token 配置到监控APP"), http.StatusFound)
+	pairCode := GeneratePairCode(tokenVal)
+	http.Redirect(w, r, "/admin/devices?msg="+urlEscape(fmt.Sprintf("设备已添加! 配对码: %s (5分钟内有效,在监控APP输入此码即可自动完成配置)", pairCode)), http.StatusFound)
 }
 
 func (s *Server) handleAdminDevicesToggle(w http.ResponseWriter, r *http.Request) {
