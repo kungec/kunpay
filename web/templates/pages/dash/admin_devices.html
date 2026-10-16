@@ -29,32 +29,30 @@
             onclick="event.stopPropagation();showPairQR('{{.Token}}')">📱 扫码配对</button>
         </td>
         <td>{{if .Online}}<span class="badge badge-green">● 在线</span>{{else}}<span class="badge badge-gray">离线</span>{{end}}</td>
-        <td class="muted">{{fdate .LastHb}}</td>
-        <td class="mono muted">{{.LastIP}}</td>
+        <td class="muted">{{fdate .LastHeartbeat}}</td>
+        <td class="mono">{{.IP}}</td>
         <td>{{if eq .Status 1}}<span class="badge badge-blue">启用</span>{{else}}<span class="badge badge-red">停用</span>{{end}}</td>
         <td>
-          <div class="actions-cell">
-            <form method="post" action="/admin/devices/toggle" style="display:inline">
-              <input type="hidden" name="_csrf" value="{{$.CSRF}}">
-              <input type="hidden" name="id" value="{{.ID}}">
-              <button class="btn btn-sm btn-ghost" type="submit">{{if eq .Status 1}}停用{{else}}启用{{end}}</button>
-            </form>
-            <form method="post" action="/admin/devices/vmq" style="display:inline" data-confirm-title="V免签兼容" data-confirm="切换该设备的 V免签兼容推送开关?使用官方监控APP的设备建议关闭,可缩小签名被截获后的伪造成本。">
-              <input type="hidden" name="_csrf" value="{{$.CSRF}}">
-              <input type="hidden" name="id" value="{{.ID}}">
-              <button class="btn btn-sm {{if eq .VMQ 1}}btn-ghost{{else}}btn-outline{{end}}" type="submit">V免签{{if eq .VMQ 1}}开{{else}}关{{end}}</button>
-            </form>
-            <form method="post" action="/admin/devices/del" data-confirm="删除后使用该 Token 的监控APP将无法上报,确定删除?" style="display:inline">
-              <input type="hidden" name="_csrf" value="{{$.CSRF}}">
-              <input type="hidden" name="id" value="{{.ID}}">
-              <button class="btn btn-sm btn-danger" type="submit">删除</button>
-            </form>
-          </div>
+          <form method="post" action="/admin/devices/toggle" style="display:inline">
+            <input type="hidden" name="_csrf" value="{{$.CSRF}}">
+            <input type="hidden" name="id" value="{{.ID}}">
+            <button class="btn btn-sm btn-ghost" type="submit">{{if eq .Status 1}}停用{{else}}启用{{end}}</button>
+          </form>
+          <form method="post" action="/admin/devices/vmq" style="display:inline" data-confirm-title="V免签兼容" data-confirm="切换该设备的 V免签兼容推送开关?使用官方监控APP的设备建议关闭,可缩小签名被截获后的伪造成本。">
+            <input type="hidden" name="_csrf" value="{{$.CSRF}}">
+            <input type="hidden" name="id" value="{{.ID}}">
+            <button class="btn btn-sm {{if eq .VMQ 1}}btn-ghost{{else}}btn-outline{{end}}" type="submit">V免签{{if eq .VMQ 1}}开{{else}}关{{end}}</button>
+          </form>
+          <form method="post" action="/admin/devices/del" data-confirm="删除后使用该 Token 的监控APP将无法上报,确定删除?" style="display:inline">
+            <input type="hidden" name="_csrf" value="{{$.CSRF}}">
+            <input type="hidden" name="id" value="{{.ID}}">
+            <button class="btn btn-sm btn-danger" type="submit">删除</button>
+          </form>
         </td>
       </tr>
       {{end}}
       {{else}}
-      <tr><td colspan="8"><div class="empty">暂无监控设备,点击右上角「添加设备」创建</div></td></tr>
+      <tr><td colspan="8"><div class="empty">暂无设备,请在上方添加</div></td></tr>
       {{end}}
     </table>
   </div>
@@ -62,27 +60,8 @@
     使用方法:点击「📱 扫码配对」生成二维码 → 打开监控APP扫一扫即可自动完成配置。<br>
     也可手动复制 Token,在监控APP中配置: 平台地址 + Token。<br>
     <span style="color:#e07b00">⚠ 新设备 V免签兼容默认关闭(安全审计),第三方 V免签 APP 用户请点操作列「V免签关」切换为开。</span><br>
-    · 心跳地址: <code>/appHeart</code> · 到账推送: <code>/appPushV</code> (本平台已兼容 V免签协议,亦可使用自有协议 <code>/monitor/heart</code> 与 <code>/monitor/push</code>)
   </div>
 </div>
-{{end}}
-
-<script>
-(function () {
-  var ck = document.getElementById('autoRf');
-  if (!ck) return;
-  var key = ck.getAttribute('data-key');
-  ck.checked = localStorage.getItem(key) === '1';
-  var tick = function () {
-    if (ck.checked) { location.reload(); }
-  };
-  ck.addEventListener('change', function () {
-    localStorage.setItem(key, ck.checked ? '1' : '0');
-    if (ck.checked) { setTimeout(tick, 1000); }
-  });
-  if (ck.checked) { setInterval(tick, 30000); }
-})();
-</script>
 
 <div id="pairQRModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;align-items:center;justify-content:center" onclick="this.style.display='none'">
   <div style="background:#fff;border-radius:16px;padding:24px;text-align:center;max-width:320px" onclick="event.stopPropagation()">
@@ -101,3 +80,4 @@ function showPairQR(token) {
   document.getElementById('pairQRModal').style.display = 'flex';
 }
 </script>
+{{end}}
