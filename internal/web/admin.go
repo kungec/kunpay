@@ -313,16 +313,33 @@ func (s *Server) handleAdminUsersSave(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/admin/users?msg="+urlEscape("金额格式错误"), http.StatusFound)
 			return
 		}
-		res, err := s.DB.Exec("UPDATE users SET balance=balance+? WHERE id=?", amount, id)
-		if err != nil || rowsAffected(res) == 0 {
+		tx, err := s.DB.Begin()
+		if err != nil {
 			http.Redirect(w, r, "/admin/users?msg="+urlEscape("调整失败"), http.StatusFound)
 			return
 		}
 		var balance int64
-		_ = s.DB.QueryRow("SELECT balance FROM users WHERE id=?", id).Scan(&balance)
-		_, _ = s.DB.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
+		if err := tx.QueryRow("SELECT balance FROM users WHERE id=?", id).Scan(&balance); err != nil {
+			tx.Rollback()
+			http.Redirect(w, r, "/admin/users?msg="+urlEscape("调整失败"), http.StatusFound)
+			return
+		}
+		if _, err := tx.Exec("UPDATE users SET balance=balance+? WHERE id=?", amount, id); err != nil {
+			tx.Rollback()
+			http.Redirect(w, r, "/admin/users?msg="+urlEscape("调整失败"), http.StatusFound)
+			return
+		}
+		if _, err := tx.Exec(`INSERT INTO balance_logs(user_id,type,amount,before,after,memo,created_at)
 			VALUES(?,?,?,?,?,?,?)`,
-			id, "adjust", amount, balance-amount, balance, "管理员调整余额", model.Now())
+			id, "adjust", amount, balance, balance+amount, "管理员调整余额", model.Now()); err != nil {
+			tx.Rollback()
+			http.Redirect(w, r, "/admin/users?msg="+urlEscape("调整失败"), http.StatusFound)
+			return
+		}
+		if err := tx.Commit(); err != nil {
+			http.Redirect(w, r, "/admin/users?msg="+urlEscape("调整失败"), http.StatusFound)
+			return
+		}
 		msg = "已调整余额"
 	case "password":
 		pw := r.FormValue("password")
