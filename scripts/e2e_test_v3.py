@@ -97,6 +97,8 @@ def main():
         db.commit()
 
     print("== C1 并发同金额下单: pay_money 必须全部唯一 ==")
+    db.execute("UPDATE settings SET v='1' WHERE k='money_offset'")
+    db.commit()
     results, threads = [], []
     def c1(i):
         tno, j = create_order(f"V3COLL-{i}")

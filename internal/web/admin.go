@@ -1072,18 +1072,31 @@ func (s *Server) handleAdminSettingsSave(w http.ResponseWriter, r *http.Request)
 		"site_url", "smtp_host", "smtp_port", "smtp_user", "smtp_pass", "smtp_tls", "smtp_from", "admin_ip_whitelist",
 		"alert_email", "device_alert", "merchant_notice", "alert_webhook", "invite_rate", "auto_settle", "circuit_breaker",
 		"backup_auto", "backup_keep", "statement_auto", "ip_blacklist", "digest_auto", "update_repo", "auto_approve_max", "auto_approve_settle"}
+	// 开关类型设置: 浏览器在 checkbox 未勾选时不发送该字段,
+	// 必须将「字段不存在」解释为「用户取消勾选」→ 保存 "0"
+	checkboxKeys := map[string]bool{
+		"money_offset": true, "register_open": true, "invite_open": true,
+		"auto_settle": true, "circuit_breaker": true, "backup_auto": true,
+		"statement_auto": true, "digest_auto": true, "auto_approve_settle": true,
+	}
+
 	for _, k := range keys {
-		v := strings.TrimSpace(r.FormValue(k))
-		if r.Form[k] == nil {
+		present := r.Form[k] != nil
+
+		if checkboxKeys[k] {
+			// checkbox: 勾选 → "1"; 未勾选(字段不存在) → "0"
+			v := "0"
+			if present {
+				v = "1"
+			}
+			_ = s.DB.SetSetting(k, v)
 			continue
 		}
-		if k == "money_offset" || k == "register_open" || k == "invite_open" || k == "auto_settle" || k == "circuit_breaker" || k == "backup_auto" || k == "statement_auto" || k == "digest_auto" || k == "auto_approve_settle" {
-			if v == "on" || v == "1" {
-				v = "1"
-			} else {
-				v = "0"
-			}
+
+		if !present {
+			continue
 		}
+		v := strings.TrimSpace(r.FormValue(k))
 		if k == "min_settle" {
 			// 表单单位为元,存储按分
 			if fv, err := strconv.ParseFloat(v, 64); err == nil && fv > 0 {
