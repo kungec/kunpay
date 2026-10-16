@@ -1,15 +1,18 @@
 # 坤支付 KunPay
 
 <p align="center">
-  <b>开源个人免签约码支付系统 · Go 语言单文件部署</b><br>
-  易支付协议兼容 · 监控客户端全家桶 · 多码轮询 · 事件推送 · 审计级资金流水<br>
+  <b>开箱即用的个人免签约码支付系统 · Go 单文件部署</b><br>
+  易支付协议完全兼容 · 安卓APP扫码配对 · 多码轮询 · 审计级资金流水<br>
   <sub>v1.3.1 · 经过 29 轮安全审计 / 黑盒渗透 / 数据竞争检测的持续加固</sub>
 </p>
 
-一套使用 **Go 语言**开发的个人免签约「码支付」平台,易支付(EasyPay)协议完全兼容,现有商户系统**零改造接入**(submit.php / mapi.php / api.php)。
-编译产物为**单个二进制文件**(页面、静态资源、SQLite 驱动全部 go:embed 内嵌),**Windows / Linux / macOS** 一键部署,零外部依赖。
-配套**安卓监控APP**(自动监听微信/支付宝/QQ 收款通知,POST 加密上报,HMAC-SHA256 签名防重放),支持云手机 7×24 挂机与主备设备自动接管。
-同作者生态:**[坤面板 KunPanel](https://github.com/kungec/kunpanel)** 服务器运维管理面板 —— 推荐以其部署坤支付,反向代理/Let's Encrypt 证书/WAF 防火墙/计划任务备份开箱即用(见下文安装部署)。
+**坤支付**是一套用 **Go 语言**从零编写的个人免签约「码支付」平台:绑定你自己的微信 / 支付宝 / QQ 收款码,安卓监控APP 自动监听到账通知并回填订单——**资金全程直达个人账户,平台不经手一分钱**。
+
+- **🎯 零依赖部署**:页面、静态资源、SQLite 驱动全部 go:embed 内嵌,**一个二进制文件**跑起整个平台,Windows / Linux / macOS 全平台支持;
+- **🔌 存量商户零改造**:易支付(EasyPay)协议完全兼容,`submit.php` / `mapi.php` / `api.php` 三接口原样对接,MD5 / RSA 双签名;
+- **📱 手机就是监控端**:安卓APP「扫一扫」扫码即完成配对,新手教程按步引导,严格来源模式防聊天文本伪造,支持云手机 7×24 挂机与主备设备自动接管;
+- **🧾 审计级资金流水**:每一笔余额变动都有 before/after 流水,余额与流水强守恒,结算 / 退款 / 返佣全事务化;
+- **🤝 同作者生态**:推荐用 **[坤面板 KunPanel](https://github.com/kungec/kunpanel)** 部署坤支付 —— 反向代理 / Let's Encrypt 证书 / WAF 防火墙 / 计划任务备份开箱即用(见下文安装部署)。
 
 ### ✨ 核心特性
 
@@ -28,17 +31,18 @@
 
 ## 💎 赞助商
 
-<table>
+<table align="center">
   <tr>
-    <td align="center" width="280">
-      <a href="https://www.kjvps.com" target="_blank"><b>KJ VPS</b></a><br>
-      <sub>跨境 VPS 服务商 · 高速稳定 · 全球节点</sub><br>
+    <td align="center" width="300">
+      <a href="https://www.kjvps.com" target="_blank"><img src="https://img.shields.io/badge/%E8%B5%9E%E5%8A%A9%E5%95%86-KJ_VPS-2e63f6?style=for-the-badge&labelColor=1a1a2e" alt="KJ VPS" /></a><br><br>
+      <b><a href="https://www.kjvps.com" target="_blank">KJ VPS</a></b> · 跨境 VPS 服务商<br>
+      <sub>高速稳定 · 全球节点 · 为本项目提供服务器支持</sub><br>
       <a href="https://www.kjvps.com" target="_blank">www.kjvps.com</a>
     </td>
   </tr>
 </table>
 
-> 感谢 **[KJ VPS](https://www.kjvps.com)** 为本项目提供跨境 VPS 支持。
+> 感谢 **[KJ VPS](https://www.kjvps.com)** 为本项目提供跨境 VPS 支持。如你也想赞助本项目(服务器 / 带宽 / 资金),欢迎通过 Issue 联系。
 
 ## 🚀 安装部署
 
@@ -110,28 +114,34 @@ curl -fsSL https://raw.githubusercontent.com/kungec/kunpay/main/scripts/install.
 
 ## 界面预览
 
-| 平台首页 | 收银台 |
+**平台门户**
+
+| 平台首页 | 收银台(扫码支付,金额含防撞尾数) |
 |---|---|
 | ![首页](docs/screenshots/home.png) | ![收银台](docs/screenshots/cashier.png) |
 
-| 商户中心 | 监控通道(多码轮询) |
+**商户中心**
+
+| 商户仪表盘(实时成交趋势) | 我的通道(多码轮询) |
 |---|---|
 | ![商户中心](docs/screenshots/dashboard.png) | ![我的通道](docs/screenshots/channels.png) |
+| **每日对账单(支持导出/邮件订阅)** | |
+| ![对账单](docs/screenshots/report.png) | |
 
-| 每日对账单 | 管理后台 |
-|---|---|
-| ![对账单](docs/screenshots/report.png) | ![管理后台](docs/screenshots/admin.png) |
+**管理后台**
 
-| 渠道管理(轮询+统计) | 订单详情(通知投递排障) |
+| 平台概览 | 渠道管理(限额/设备绑定/支付宝UID) |
 |---|---|
-| ![渠道管理](docs/screenshots/admin_channels.png) | ![订单详情](docs/screenshots/order_detail.png) |
+| ![管理后台](docs/screenshots/admin.png) | ![渠道管理](docs/screenshots/admin_channels.png) |
+| **订单详情(通知投递排障)** | |
+| ![订单详情](docs/screenshots/order_detail.png) | |
 
-| 安卓监控APP |
-|---|---|
-| ![安卓监控APP](docs/screenshots/monitor_android.png) |
+**监控与运维**
 
-| 公开运行状态页 | 实时数据大屏 |
+| 安卓监控APP(在线状态 + 三通道开关) | 安卓监控APP(新手引导 + 权限横幅) |
 |---|---|
+| ![安卓监控APP](docs/screenshots/monitor_android.png) | ![安卓监控APP引导](docs/screenshots/monitor_android_setup.png) |
+| **公开运行状态页** | **实时数据大屏** |
 | ![运行状态](docs/screenshots/status.png) | ![数据大屏](docs/screenshots/screen.png) |
 
 ## 收款监控客户端
@@ -305,15 +315,6 @@ python3 scripts/e2e_test.py        # 需先以全新数据库启动服务:
 ## ⚠️ 使用须知
 
 本系统仅用于学习研究或合法合规的自有收款场景。支付行业受严格监管,请勿用于违法违规交易;正式商用请自行评估合规风险并取得相关资质。
-
-## 赞助商
-
-<div align="center">
-  <a href="https://www.kjvps.com" target="_blank">
-    <img src="https://img.shields.io/badge/赞助商-KJ_VPS-2e63f6?style=for-the-badge&labelColor=1a1a2e" alt="KJ VPS 跨境VPS">
-  </a>
-  <br><sub>跨境 VPS 服务商 · 高速稳定 · 全球节点 — <a href="https://www.kjvps.com">www.kjvps.com</a></sub>
-</div>
 
 ## 开源与贡献
 
