@@ -72,6 +72,42 @@
                 android:textSize="12.5sp" />
         </LinearLayout>
 
+        <!-- 通知权限警告横幅 -->
+        <LinearLayout
+            android:id="@+id/permWarning"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#FDEBEC"
+            android:orientation="vertical"
+            android:padding="14dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⚠ 收款检测未启用"
+                android:textColor="#DC2626"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="通知使用权未授权,无法检测收款通知。"
+                android:textColor="#991B1B"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/btnGoPerm"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="前往授权"
+                android:background="@drawable/bg_btn_primary"
+                android:textColor="#FFFFFF" />
+        </LinearLayout>
+
         <!-- 绑定配置 -->
         <LinearLayout
             android:layout_width="match_parent"

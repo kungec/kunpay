@@ -152,7 +152,9 @@ public class MonitorService extends NotificationListenerService {
             String content = (title + " " + text).trim();
             if (content.isEmpty()) return;
             boolean own = getPackageName().equals(pkg);
-            if (own) return; // 忽略自己的常驻通知
+            if (own) return;
+            // 记录所有收到的通知(用户可在日志中确认APP正在监听)
+            log("[收到通知] " + shortPkg(pkg) + ": " + clip(content));
 
             boolean known = KNOWN_PACKAGES.contains(pkg);
             boolean strict = prefs.getBoolean("strict_source", true); // 严格来源模式: 防聊天文本伪造到账

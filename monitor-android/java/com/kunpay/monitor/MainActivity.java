@@ -201,11 +201,29 @@ public class MainActivity extends Activity {
         });
     }
 
-    @Override
+    private void updatePermWarning() {
+        boolean enabled = listenerEnabled();
+        android.view.View warning = findViewById(R.id.permWarning);
+        if (warning == null) return;
+        warning.setVisibility(enabled ? android.view.View.GONE : android.view.View.VISIBLE);
+        android.view.View btn = warning.findViewById(R.id.btnGoPerm);
+        if (btn != null) {
+            btn.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    try {
+                        startActivity(new android.content.Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+                    } catch (Exception ignore) {}
+                }
+            });
+        }
+    }
+
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == 100) {
             refreshListenerState();
+        updatePermWarning();
             ensureService(); // 授权后重连,让系统恢复监听事件投递
             toast("通知权限已更新");
         }
