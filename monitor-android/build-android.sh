@@ -71,7 +71,6 @@ else
   $BT/apksigner sign --ks "$KS" --ks-pass pass:android --key-pass pass:android \
     --out KunPayMonitor.apk "$OUT/app.aligned.apk"
 fi
-  --out KunPayMonitor.apk "$OUT/app.aligned.apk"
 "$BT/apksigner" verify KunPayMonitor.apk && echo "签名校验通过"
 
 echo "==> 完成: monitor-android/KunPayMonitor.apk"
