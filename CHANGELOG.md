@@ -1,5 +1,30 @@
 # 更新日志
 
+## v1.2.1 之后的变更 (main 分支,将随下个 tag 发布)
+
+### 安全(第二轮外部审计 20 项 + 后续深查)
+- /uploads 扩展名白名单(.png/.jpg/.jpeg/.gif/.webp),.db 等一律 404
+- 监控精确匹配统一设备/存活窗口校验(防跨设备/过期完成)
+- 通知回调 Dial 层 IP 复查(防 DNS rebinding)
+- 交易小票 /receipt 强制金额后两位校验(修平台域 XSS)
+- 密码强度策略接线(≥6位/须含字母/纯数字需≥10位)
+- 桌面助手: 随机控制台令牌 + Host 校验(防网页跨站伪造到账/篡改)
+- redroid ADB 端口绑 127.0.0.1;安卓 allowBackup=false + 移除 Intent 配置
+- 随机数失败 fail-closed;验证码容量上限;登录失败计数加锁
+- Webhook 签名覆盖全部字段;api.php 不回显密钥 + no-store;商户限流移到验签后
+- `-trusted-proxy-cidr` 参数;Docker DB 落数据卷;redroid 非 privileged 端口绑定
+- 原生监控推送 HMAC-SHA256 v2 签名(时间窗+nonce,安卓APP已启用)
+- 新设备 VMQ 兼容默认关闭(第三方 V免签 APP 需手动开启)
+- 验证码输入全角归一化(中文输入法兼容)+ 渲染页面 no-store(防代理缓存)
+- 手工匹配流水已认领校验(防重复入账);收款码配额(每通道 20 个);Logo 替换清旧文件
+- 供应链: service 非 root;SHA-256 强校验;keystore 环境变量
+
+### 优化
+- Go 工具链升级 1.27.2(35 个 stdlib 漏洞清零);staticcheck 0 告警;gosec 分诊完毕
+- 交易小票 /receipt 强制校验;ParseMoney 严格两位小数;过期订单补单复活修复
+- Linux 一键安装脚本(scripts/install.sh);官网下载页一键安装区块
+
+
 ## 1.2.1 (2026-10-15)
 
 ### 修复
