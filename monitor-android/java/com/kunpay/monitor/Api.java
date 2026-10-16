@@ -11,6 +11,9 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+
 /** 与 KunPay 平台 /monitor/heart、/monitor/push 协议交互 */
 public final class Api {
 
@@ -71,16 +74,19 @@ public final class Api {
         }).start();
     }
 
-    /** 到账上报 */
+    /** 到账上报(v2: HMAC-SHA256 签名覆盖全部业务字段,防截获重放/改额) */
     public static void push(String server, String token, final String type,
                             final String money, final String content, final Callback cb) {
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
+                    String ts = String.valueOf(System.currentTimeMillis() / 1000L);
+                    String sig = hmacSHA256Hex(token, ts + "\n" + type + "\n" + money + "\n" + content);
                     String body = post(trim(server) + "/monitor/push",
                             "token=" + enc(token) + "&type=" + type
-                                    + "&money=" + enc(money) + "&content=" + enc(content));
+                                    + "&money=" + enc(money) + "&content=" + enc(content)
+                                    + "&ts=" + ts + "&sig=" + sig);
                     JSONObject o = new JSONObject(body);
                     boolean ok = o.optInt("code") >= 1;
                     cb.onResult(ok, body);
@@ -89,6 +95,15 @@ public final class Api {
                 }
             }
         }).start();
+    }
+
+    private static String hmacSHA256Hex(String key, String data) throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(key.getBytes("UTF-8"), "HmacSHA256"));
+        byte[] h = mac.doFinal(data.getBytes("UTF-8"));
+        StringBuilder sb = new StringBuilder(h.length * 2);
+        for (byte b : h) sb.append(String.format("%02x", b));
+        return sb.toString();
     }
 
     private static String trim(String s) {

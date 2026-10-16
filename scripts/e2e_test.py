@@ -103,10 +103,15 @@ def main():
     m = re.search(r'name="_csrf" value="([0-9a-f]+)"', dev_page)
     csrf = m.group(1)
     st, hd, _ = req("/admin/devices/add", {"_csrf": csrf, "name": "测试手机"}, {"Cookie": admin_jar["cookie"]})
+    # v1.2.1 起: 新设备 VMQ 兼容默认关闭,本测试专门覆盖 V免签协议,需显式开启
     _, _, dev_page = req("/admin/devices", headers={"Cookie": admin_jar["cookie"]})
     tok_m = re.search(r"copyText\('([0-9a-f]{48})'", dev_page)
     token = tok_m.group(1) if tok_m else None
     check("设备 Token 创建", token is not None)
+    dev_id_m = re.search(r'name="id" value="(\d+)"', dev_page)
+    if dev_id_m and token:
+        st, _, _ = req("/admin/devices/vmq", {"_csrf": csrf, "id": dev_id_m.group(1)}, {"Cookie": admin_jar["cookie"]})
+        check("VMQ 兼容开启", st in (200, 302))
 
     print("== 4. 提交订单 (submit.php) ==")
     params = {

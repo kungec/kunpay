@@ -1,7 +1,9 @@
 package web
 
 import (
+	"crypto/hmac"
 	"crypto/md5"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
@@ -53,10 +55,17 @@ func (s *Server) handleMonitorHeart(w http.ResponseWriter, r *http.Request) {
 	monitorJSON(w, 1, "心跳成功")
 }
 
-// handleMonitorPush /monitor/push?token=xxx&type=alipay&money=1.23&content=xxx 到账上报(GET/POST 均可)
+// handleMonitorPush /monitor/push 到账上报(GET/POST 均可)
+//
+// v2 签名(推荐,官方监控APP已启用): 附加 ts(秒级时间戳) 与
+// sig = hex(HMAC-SHA256(token, ts+"\n"+type+"\n"+money+"\n"+content))。
+// 服务端校验 ±300s 时间窗 + nonce 缓存 —— Token 即使被截获,截获的签名也无法
+// 复用(_nonce 一次性)或改金额重放(签名覆盖金额)。
+// 未携带签名的旧版客户端回落 token-only 模式(兼容,安全强度依赖传输层)。
 func (s *Server) handleMonitorPush(w http.ResponseWriter, r *http.Request) {
 	q := monitorParams(r)
-	id, ok := s.deviceByToken(q.Get("token"))
+	token := q.Get("token")
+	id, ok := s.deviceByToken(token)
 	if !ok {
 		monitorJSON(w, -1, "设备token无效")
 		return
@@ -72,9 +81,42 @@ func (s *Server) handleMonitorPush(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	content := q.Get("content")
-	ts := atoint64Or(q.Get("time"), model.Now())
-	// 时间戳钳制: 客户端时间不可信,拒绝未来时间戳与超龄时间戳(防预注入未来流水回溯匹配)
 	now := model.Now()
+	// v2 签名校验: HMAC-SHA256 覆盖全部业务字段 + ±300s 时间窗 + nonce 一次性
+	if sig := q.Get("sig"); sig != "" {
+		tsStr := q.Get("ts")
+		tsN, err := strconv.ParseInt(tsStr, 10, 64)
+		if err != nil || tsN > now+30 || tsN < now-300 {
+			monitorJSON(w, -1, "签名时间戳无效")
+			return
+		}
+		mac := hmac.New(sha256.New, []byte(token))
+		// 签名材料使用客户端原始 money 字符串(与安卓端一致),避免格式化差异
+		mac.Write([]byte(tsStr + "\n" + typ + "\n" + q.Get("money") + "\n" + content))
+		if subtle.ConstantTimeCompare([]byte(hex.EncodeToString(mac.Sum(nil))), []byte(strings.ToLower(sig))) != 1 {
+			monitorJSON(w, -1, "签名校验失败")
+			return
+		}
+		nonceKey := "push:" + strconv.FormatInt(id, 10) + ":" + sig[:16]
+		pushNonceMu.Lock()
+		if pushNonces == nil {
+			pushNonces = map[string]bool{}
+		}
+		if pushNonces[nonceKey] {
+			pushNonceMu.Unlock()
+			monitorJSON(w, -1, "重复推送")
+			return
+		}
+		pushNonces[nonceKey] = true
+		if len(pushNonces) > 8192 {
+			for k := range pushNonces {
+				delete(pushNonces, k)
+			}
+		}
+		pushNonceMu.Unlock()
+	}
+	ts := atoint64Or(q.Get("time"), now)
+	// 时间戳钳制: 客户端时间不可信,拒绝未来时间戳与超龄时间戳(防预注入未来流水回溯匹配)
 	if ts > now {
 		ts = now
 	}
@@ -126,6 +168,11 @@ func (s *Server) vmqFresh(q url.Values, deviceID int64) bool {
 	}
 	return true
 }
+
+var (
+	pushNonceMu sync.Mutex
+	pushNonces  = map[string]bool{} // v2 签名 nonce: 设备+签名前缀 → 已用
+)
 
 var vmqReplayMu sync.Mutex
 var vmqSeen = map[string]bool{}
