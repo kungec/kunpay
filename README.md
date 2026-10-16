@@ -3,7 +3,7 @@
 <p align="center">
   <b>开源个人免签约码支付系统 · Go 语言单文件部署</b><br>
   易支付协议兼容 · 监控客户端全家桶 · 多码轮询 · 事件推送 · 审计级资金流水<br>
-  <sub>v1.3.0 · 经过 15 轮安全审计 / 黑盒渗透 / 数据竞争检测的持续加固</sub>
+  <sub>v1.3.1 · 经过 29 轮安全审计 / 黑盒渗透 / 数据竞争检测的持续加固</sub>
 </p>
 
 一套使用 **Go 语言**开发的个人免签约「码支付」平台,易支付(EasyPay)协议完全兼容,现有商户系统**零改造接入**(submit.php / mapi.php / api.php)。
@@ -77,7 +77,7 @@ curl -fsSL https://raw.githubusercontent.com/kungec/kunpay/main/scripts/install.
 ```
 
 自动完成: 下载最新版 → 安装到 `/opt/kunpay` → 创建系统用户与服务 → 开机自启并启动 → 健康检查确认。
-卸载: 命令末尾加 `uninstall` 参数(数据库与收款码数据保留)。指定版本: 前面加 `KUNPAY_VERSION=v1.2.1`。
+卸载: 命令末尾加 `uninstall` 参数(数据库与收款码数据保留)。指定版本: 前面加 `KUNPAY_VERSION=v1.3.1`。
 
 ### Windows 部署
 
@@ -97,8 +97,8 @@ curl -fsSL https://raw.githubusercontent.com/kungec/kunpay/main/scripts/install.
 
 | 下载 | 说明 |
 |---|---|
-| [**📱 安卓监控APP (APK)**](https://github.com/kungec/kunpay/releases/download/v1.3.0/KunPayMonitor.apk) | 自动监听微信/支付宝/QQ收款通知,安装即用 |
-| **🖥 平台主程序** | [Linux](https://github.com/kungec/kunpay/releases/download/v1.3.0/kunpay_linux_amd64.tar.gz) · [Windows](https://github.com/kungec/kunpay/releases/download/v1.3.0/kunpay_windows_amd64.zip) · [macOS](https://github.com/kungec/kunpay/releases/download/v1.3.0/kunpay_darwin_arm64.tar.gz) |
+| [**📱 安卓监控APP (APK)**](https://github.com/kungec/kunpay/releases/download/v1.3.1/KunPayMonitor.apk) | 自动监听微信/支付宝/QQ收款通知,安装即用 |
+| **🖥 平台主程序** | [Linux](https://github.com/kungec/kunpay/releases/download/v1.3.1/kunpay_linux_amd64.tar.gz) · [Windows](https://github.com/kungec/kunpay/releases/download/v1.3.1/kunpay_windows_amd64.zip) · [macOS](https://github.com/kungec/kunpay/releases/download/v1.3.1/kunpay_darwin_arm64.tar.gz) |
 
 > 更多版本与源码见 [Releases](https://github.com/kungec/kunpay/releases) 页面。推送 `v*` 标签时 CI 会自动构建全平台产物并发布 Release。
 
@@ -138,12 +138,11 @@ curl -fsSL https://raw.githubusercontent.com/kungec/kunpay/main/scripts/install.
 
 | 端 | 产物 | 功能 |
 |---|---|---|
-| 安卓 | `monitor-android/KunPayMonitor.apk` | **自动监控**:监听微信/支付宝/QQ收款通知,自动提取金额上报;30秒心跳;三通道独立开关;实时日志 |
-| Windows / macOS / Linux | `dist/monitor/KunPayMonitor_*` | 心跳保活(设备常在线)、手动/模拟到账上报、本地 Web 控制台,用于联调与保号 |
+| 安卓 | `monitor-android/KunPayMonitor.apk` | **自动监控**:监听微信/支付宝/QQ收款通知,自动提取金额上报;30秒心跳;三通道独立开关;实时日志;新手教程引导;扫码即用配对;严格来源模式防聊天文本伪造 |
 
-安卓端使用:安装 APK → 填平台地址与设备Token → 授予通知使用权 + 电池白名单 → 保持后台运行。
-桌面端使用:运行后自动打开浏览器控制台(127.0.0.1:8210),填入地址与 Token 即可。
-构建:安卓端 `monitor-android/build-android.sh`(需 JDK17 + Android build-tools)。
+安卓端使用:安装 APK → 打开「扫一扫」扫描设备页「扫码配对」二维码(自动填入地址与 Token)→ 按教程引导授予通知使用权 + 允许通知 + 电池白名单 → 保持后台运行。
+构建:`monitor-android/build-android.sh`(需 JDK17 + Android build-tools)。
+> 旧桌面监控助手已停止随版发布(源码保留于 `cmd/monitor-desktop`),统一使用「安卓监控APP + 服务器」模式。
 
 ## 功能总览
 
