@@ -24,7 +24,7 @@
         <td>{{.ID}}</td>
         <td><b>{{.Name}}</b></td>
         <td class="mono">
-          <span onclick="copyText('{{.Token}}','Token已复制')" style="cursor:pointer">{{.Token[:8]}}…</span>
+          <span onclick="copyText('{{.Token}}','Token已复制')" style="cursor:pointer">{{.Token}}</span>
           <br><button class="btn btn-sm btn-outline mt" style="font-size:11px;padding:2px 8px" type="button"
             onclick="event.stopPropagation();showPairQR('{{.Token}}')">📱 扫码配对</button>
         </td>
