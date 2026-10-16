@@ -88,7 +88,14 @@ trap 'rm -rf "$TMPDIR_DL"' EXIT
 info "正在下载 $ASSET ..."
 fetch "$DL_URL" "$TMPDIR_DL/pkg.tar.gz" || die "下载失败: 请检查网络(国内服务器可先 export https_proxy=http://代理:端口)与版本号是否存在于 Releases"
 
-sha256sum "$TMPDIR_DL/pkg.tar.gz" 2>/dev/null | awk '{print "  sha256: " $1}' || true
+if command -v sha256sum >/dev/null 2>&1; then
+    GOT=$(sha256sum "$TMPDIR_DL/pkg.tar.gz" | awk '{print $1}')
+    echo "  sha256: $GOT"
+    # 供应链: KUNPAY_SHA256=<期望值> 时强制校验(不匹配立即终止)
+    if [ -n "${KUNPAY_SHA256:-}" ] && [ "$GOT" != "${KUNPAY_SHA256,,}" ]; then
+        die "SHA-256 校验失败! 期望 ${KUNPAY_SHA256,,} 实际 $GOT —— 疑似下载被篡改,已终止安装"
+    fi
+fi
 
 # ---------- 解压安装 ----------
 mkdir -p "$INSTALL_DIR" "$DATA_DIR"

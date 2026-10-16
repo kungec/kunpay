@@ -217,6 +217,7 @@ func (s *Server) handleEpayMapi(w http.ResponseWriter, r *http.Request) {
 
 // handleEpayApi GET /api.php —— 商户信息/订单查询
 func (s *Server) handleEpayApi(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store") // 含商户敏感信息,禁止任何缓存
 	_ = r.ParseForm()
 	out := map[string]any{}
 	act := r.FormValue("act")
@@ -245,7 +246,7 @@ func (s *Server) handleEpayApi(w http.ResponseWriter, r *http.Request) {
 		_ = s.DB.QueryRow("SELECT COUNT(*) FROM orders WHERE pid=? AND status IN(1,3) AND addtime<? AND addtime>=?", pid, dayStart, dayStart-86400).Scan(&yesterday)
 		out["code"] = 1
 		out["pid"] = merchant.Pid
-		out["key"] = merchant.Skey
+		// 长期密钥不在响应中回显(请求方本就持有;回显徒增日志与代理泄露面)
 		out["active"] = merchant.Status
 		out["money"] = service.MoneyStr(merchant.Balance)
 		out["type"] = merchant.SettleType

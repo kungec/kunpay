@@ -21,12 +21,8 @@ const totpPeriod = 30
 func GenerateTOTPSecret() string {
 	buf := make([]byte, 20)
 	if _, err := rand.Read(buf); err != nil {
-		// crypto/rand 失败极罕见,退化为时间混合熵
-		now := uint64(time.Now().UnixNano())
-		for i := range buf {
-			buf[i] = byte(now >> (uint(i%8) * 8))
-			now = now*6364136223846793005 + 1442695040888963407
-		}
+		// TOTP 密钥必须来自密码学熵源: 时间混合熵可预测,宁可失败也不生成弱密钥
+		panic("crypto/rand 不可用,无法生成 TOTP 密钥: " + err.Error())
 	}
 	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(buf)
 }

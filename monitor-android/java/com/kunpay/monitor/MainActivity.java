@@ -73,20 +73,8 @@ public class MainActivity extends Activity {
         refreshLog();
         refreshStatus();
 
-        // 支持 adb / 快捷方式带参初始化: am start ... --es server xx --es token xx
-        Intent in = getIntent();
-        if (in != null) {
-            String sv = in.getStringExtra("server");
-            String tk = in.getStringExtra("token");
-            if (sv != null && !sv.isEmpty()) {
-                etServer.setText(sv);
-                prefs.edit().putString("server", sv).apply();
-            }
-            if (tk != null && !tk.isEmpty()) {
-                etToken.setText(tk);
-                prefs.edit().putString("token", tk).apply();
-            }
-        }
+        // 安全: 不再接受外部 Intent extras 配置(任意应用可借此重配 Token 外传);
+        // 初始化一律通过本界面手动填写。如需批量配置,请用设备管理方案。
 
         btnSave.setOnClickListener(new View.OnClickListener() {
             @Override

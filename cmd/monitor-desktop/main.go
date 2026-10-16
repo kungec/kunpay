@@ -4,7 +4,9 @@
 package main
 
 import (
+	crand "crypto/rand"
 	_ "embed"
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -43,6 +45,7 @@ type App struct {
 	mu        sync.Mutex
 	cfg       Config
 	cfgPath   string
+	consoleTk string
 	logs      []LogEntry
 	hbOK      bool
 	hbErr     string
@@ -61,7 +64,7 @@ func main() {
 	noOpen := flag.Bool("no-open", false, "不自动打开浏览器")
 	flag.Parse()
 
-	app := &App{startAt: time.Now(), cfgPath: *cfgPath}
+	app := &App{startAt: time.Now(), cfgPath: *cfgPath, consoleTk: randConsoleToken()}
 	app.loadConfig(*cfgPath)
 	if *server != "" {
 		app.cfg.Server = strings.TrimRight(*server, "/")
@@ -77,12 +80,27 @@ func main() {
 	go app.heartbeatLoop()
 
 	mux := http.NewServeMux()
+	// 变更类接口防护: 校验 Host(仅本机) + 启动期随机令牌(恶意网页无法读取),
+	// 防浏览器跨站/网页向本机端口伪造到账或篡改平台配置
+	guard := func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if h := r.Host; !strings.HasPrefix(h, "127.0.0.1:") && !strings.HasPrefix(h, "localhost:") {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+			if r.Header.Get("X-KunConsole") != app.consoleTk {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+			next(w, r)
+		}
+	}
 	mux.HandleFunc("GET /{$}", app.handleConsole)
 	mux.HandleFunc("GET /api/status", app.handleStatus)
-	mux.HandleFunc("POST /api/config", app.handleSaveConfig)
-	mux.HandleFunc("POST /api/push", app.handlePush)
-	mux.HandleFunc("POST /api/simulate", app.handleSimulate)
-	mux.HandleFunc("POST /api/heartbeat", app.handleHeartbeatNow)
+	mux.HandleFunc("POST /api/config", guard(app.handleSaveConfig))
+	mux.HandleFunc("POST /api/push", guard(app.handlePush))
+	mux.HandleFunc("POST /api/simulate", guard(app.handleSimulate))
+	mux.HandleFunc("POST /api/heartbeat", guard(app.handleHeartbeatNow))
 
 	// 端口被占用(可能已有实例在跑)时自动顺延,保证双击启动总能打开控制台
 	addr := ""
@@ -225,7 +243,18 @@ func writeJSON(w http.ResponseWriter, v any) {
 
 func (a *App) handleConsole(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = pageTpl.Execute(w, nil)
+	w.Header().Set("Cache-Control", "no-store")
+	_ = pageTpl.Execute(w, map[string]string{"ConsoleToken": a.consoleTk})
+}
+
+// randConsoleToken 本地控制台令牌: 每次启动随机生成,内嵌进控制台页,
+// 变更类 API 要求携带 —— 防止恶意网页跨站调用本机接口伪造到账/篡改配置。
+func randConsoleToken() string {
+	b := make([]byte, 24)
+	if _, err := crand.Read(b); err != nil {
+		panic("crypto/rand 不可用: " + err.Error())
+	}
+	return base64.RawURLEncoding.EncodeToString(b)
 }
 
 func (a *App) handleStatus(w http.ResponseWriter, r *http.Request) {

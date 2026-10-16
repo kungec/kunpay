@@ -20,6 +20,7 @@ type Config struct {
 	AllowLocalNotify  bool   // 允许回调地址指向回环/内网(仅本机联调用,生产必须关闭)
 	AllowDefaultAdmin bool   // 关闭管理员默认密码强制修改(仅回归测试/演示用)
 	DBSync            string // SQLite synchronous 模式: NORMAL(默认)/FULL(断电零丢失,写慢)
+	TrustedProxyCIDRs string // 受信反代 CIDR 列表(逗号分隔);配置后仅这些直连对端可采信转发头
 }
 
 func Load() *Config {
@@ -45,6 +46,7 @@ func Load() *Config {
 	flag.BoolVar(&cfg.AllowLocalNotify, "allow-local-notify", envBool("KUNPAY_ALLOW_LOCAL_NOTIFY"), "允许异步通知/回调地址指向内网回环地址(仅本机联调,生产必须关闭)")
 	flag.BoolVar(&cfg.AllowDefaultAdmin, "allow-default-admin", envBool("KUNPAY_ALLOW_DEFAULT_ADMIN"), "关闭管理员默认密码强制修改(仅回归测试/演示用)")
 	flag.StringVar(&cfg.DBSync, "db-sync", envOr("KUNPAY_DB_SYNC", "NORMAL"), "SQLite synchronous 模式: NORMAL(默认,快,断电可能丢最后几笔)或 FULL(断电零丢失,写入变慢)")
+	flag.StringVar(&cfg.TrustedProxyCIDRs, "trusted-proxy-cidr", envOr("KUNPAY_TRUSTED_PROXY_CIDR", ""), "受信反代 CIDR 列表(逗号分隔,如 10.0.0.5/32,192.168.1.0/24);配置后仅这些直连对端可采信 X-Real-IP/X-Forwarded-For")
 	showVer := flag.Bool("version", false, "打印版本号后退出")
 	flag.Parse()
 	if *showVer {

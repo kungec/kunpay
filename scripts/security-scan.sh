@@ -15,5 +15,5 @@ echo "==> gofmt"; test -z "$(gofmt -l . | head -1)" && echo "  格式一致"
 echo "==> go vet"; go vet ./... && echo "  通过"
 echo "==> staticcheck"; staticcheck ./... && echo "  0 告警"
 echo "==> gosec"; gosec -quiet -exclude=G104,G404,G501,G401,G505,G203,G304,G204,G301,G114 ./... && echo "  无未分类问题"
-echo "==> govulncheck"; GOTOOLCHAIN=auto govulncheck ./... | tail -3
+echo "==> govulncheck"; GOTOOLCHAIN=auto govulncheck ./... | grep -E "affected|vulnerabilities|Vulnerability" | head -8
 echo "==> 全部通过"

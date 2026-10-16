@@ -283,6 +283,13 @@ func (s *Server) handleUserChannelsUpload(w http.ResponseWriter, r *http.Request
 		return
 	}
 	_, _ = file.Seek(0, 0)
+	// 配额: 每商户每通道最多 20 个收款码,防上传目录被灌满
+	var cnt int
+	_ = s.DB.QueryRow("SELECT COUNT(*) FROM merchant_channel_items WHERE user_id=? AND type=?", u.ID, typ).Scan(&cnt)
+	if cnt >= 20 {
+		http.Redirect(w, r, "/user/channels?err="+urlEscape("该通道收款码已达上限(20 个),请先删除不需要的码"), http.StatusFound)
+		return
+	}
 	name := strings.TrimSpace(r.FormValue("name"))
 	if name == "" {
 		name = "收款码" + strconv.Itoa(int(model.Now())%1000)
@@ -1753,6 +1760,9 @@ func (s *Server) handleUserLogoUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = file.Seek(0, 0)
+	// 替换时清理旧 Logo 文件,防孤儿文件堆积
+	var oldLogo string
+	_ = s.DB.QueryRow("SELECT COALESCE(logo,'') FROM users WHERE id=?", u.ID).Scan(&oldLogo)
 	fn := fmt.Sprintf("ulogo_%d_%s%s", u.ID, db.RandKey(6), ext)
 	dst, err := os.Create(filepath.Join(s.DataDir, fn))
 	if err != nil {
@@ -1762,6 +1772,7 @@ func (s *Server) handleUserLogoUpload(w http.ResponseWriter, r *http.Request) {
 	defer dst.Close()
 	io.Copy(dst, file)
 	_, _ = s.DB.Exec("UPDATE users SET logo=? WHERE id=?", "/uploads/"+fn, u.ID)
+	s.removeUploadFile(oldLogo)
 	http.Redirect(w, r, "/user/settings?msg="+urlEscape("Logo 已上传,收银台将显示您的品牌 Logo"), http.StatusFound)
 }
 

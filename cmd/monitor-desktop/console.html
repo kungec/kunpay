@@ -116,7 +116,7 @@ label { display: block; font-size: 13px; color: var(--text2); margin: 0 0 7px; }
 }
 </style>
 </head>
-<body>
+<body data-ct="{{.ConsoleToken}}">
 <div class="wrap">
   <div class="hero">
     <div class="logo">
@@ -263,6 +263,18 @@ async function simulate() {
 }
 refresh();
 setInterval(refresh, 8000);
+</script>
+<script>
+(function () {
+  var tk = document.body.getAttribute('data-ct') || '';
+  var of = window.fetch;
+  window.fetch = function (input, init) {
+    init = init || {};
+    init.headers = new Headers(init.headers || {});
+    init.headers.set('X-KunConsole', tk);
+    return of(input, init);
+  };
+})();
 </script>
 </body>
 </html>

@@ -26,6 +26,9 @@ func main() {
 	srv.TrustProxy = cfg.TrustProxy
 	service.AllowLocalCallbacks = cfg.AllowLocalNotify
 	web.AllowDefaultAdmin = cfg.AllowDefaultAdmin
+	if cfg.TrustedProxyCIDRs != "" {
+		web.SetTrustedProxyCIDRs(cfg.TrustedProxyCIDRs)
+	}
 	if err := srv.Init(); err != nil {
 		log.Fatalf("初始化失败: %v", err)
 	}

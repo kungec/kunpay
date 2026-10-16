@@ -461,8 +461,7 @@ func RandDigits(n int) string {
 	for i := range out {
 		v, err := rand.Int(rand.Reader, max)
 		if err != nil {
-			out[i] = byte('0' + i%10)
-			continue
+			panic("crypto/rand 不可用,无法生成安全随机数: " + err.Error())
 		}
 		out[i] = byte('0' + v.Int64())
 	}

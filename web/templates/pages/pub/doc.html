@@ -403,8 +403,12 @@ order.refunded 订单已退款</code></pre>
 }</code></pre>
     <p>不同事件携带的字段略有差异:<code>order.paid</code> 含 name/money;<code>order.refunded</code> 含 refund_amount;<code>order.expired</code> 仅基础字段。</p>
     <h2>验签方式</h2>
-    <p>与接口签名一致:取 <code>event</code> 与 <code>trade_no</code> 两个参数,按 ASCII 升序拼 <code>event=xxx&amp;trade_no=xxx</code>,末尾拼接商户密钥取 MD5,与报文中 <code>sign</code> 比对(小写)。PHP 示例:</p>
-    <pre><code>$raw = "event={$_POST['event']}&trade_no={$_POST['trade_no']}" . $key;
+    <p>与接口签名一致:<strong>对报文中除 <code>sign</code>/<code>sign_type</code> 外的全部字段</strong>(空值剔除)按 ASCII 升序拼 <code>a=b&amp;c=d</code>,末尾拼接商户密钥取 MD5,与报文中 <code>sign</code> 比对(小写)。PHP 示例:</p>
+    <pre><code>unset($_POST['sign'], $_POST['sign_type']);
+$pairs = [];
+foreach ($_POST as $k => $v) { if ($v !== "") { $pairs[] = "$k=$v"; } }
+sort($pairs);
+$raw = implode("&", $pairs) . $key;
 if (md5($raw) !== $_POST['sign']) { die("verify fail"); }</code></pre>
     <h2>注意事项</h2>
     <p>· 推送为单次尝试(10 秒超时),请保证地址公网可达、快速响应;· 未投递成功不影响入账,请以 <code>api.php</code> 查询或异步通知为准做兜底;· 同一订单的重复事件请以 <code>trade_no</code> 幂等处理。</p>

@@ -3,6 +3,8 @@ services:
     build: .
     container_name: kunpay
     restart: always
+    # DB 显式落数据卷,容器重建不丢数据
+    command: ["-port", "8080", "-db", "/app/data/kunpay.db", "-data", "/app/data"]
     ports:
       - "8080:8080"
     volumes:

@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"kunzhifu/internal/db"
@@ -121,10 +122,32 @@ func CallbackBlocked(rawURL string) bool {
 	return IsInternalURLStrict(rawURL)
 }
 
-// SafeHTTPClient 严格 HTTP 客户端: 禁止跟随重定向(302 跳内网是常见 SSRF 绕过手段)
+// SafeHTTPClient 严格 HTTP 客户端:
+//  1. 禁止跟随重定向(302 跳内网是常见 SSRF 绕过手段);
+//  2. Dial 控制回调在真实连接前复查目标 IP —— 防 DNS rebinding
+//     (校验时域名解析到公网、连接时再解析到内网的绕过手法)。
 func SafeHTTPClient(timeout time.Duration) *http.Client {
 	return &http.Client{
 		Timeout: timeout,
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout: 10 * time.Second,
+				Control: func(_, address string, _ syscall.RawConn) error {
+					host, _, err := net.SplitHostPort(address)
+					if err != nil {
+						return err
+					}
+					ip := net.ParseIP(host)
+					if ip == nil {
+						return fmt.Errorf("非 IP 连接目标: %s", host)
+					}
+					if !AllowLocalCallbacks && (ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()) {
+						return fmt.Errorf("拒绝连接内网地址: %s", ip)
+					}
+					return nil
+				},
+			}).DialContext,
+		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -148,11 +171,14 @@ func (s *Store) PushEvent(merchant *model.User, event, tradeNo string, data map[
 	for k, v := range data {
 		payload[k] = v
 	}
-	sign := Sign(map[string]string{
-		"event":    event,
-		"trade_no": tradeNo,
-	}, merchant.Skey)
-	payload["sign"] = sign
+	// 签名覆盖全部业务字段(除 sign/sign_type): 防止链路/代理篡改金额等字段后商户仍验签通过
+	signParams := map[string]string{}
+	for k, v := range payload {
+		if sv, ok := v.(string); ok && sv != "" {
+			signParams[k] = sv
+		}
+	}
+	payload["sign"] = Sign(signParams, merchant.Skey)
 	payload["sign_type"] = "MD5"
 	body, _ := json.Marshal(payload)
 	client := SafeHTTPClient(10 * time.Second)
@@ -619,9 +645,14 @@ func (s *Store) ReportPayment(deviceID int64, typ string, money int64, content s
 		return nil
 	}
 	// 1) 内容里若带有本平台订单号,优先精确匹配
+	// 安全: 精确匹配与金额匹配执行同等校验(待支付 + 存活窗口 + 设备绑定),
+	// 防止持任意设备 Token 者凭订单号完成他人/过期订单
 	var matched *model.Order
 	for _, t := range extractOrderNos(content) {
-		if o := s.OrderByTradeNo(t); o != nil && o.Status == 0 && o.PayMoney == money {
+		if o := s.OrderByTradeNo(t); o != nil && o.Status == 0 && o.PayMoney == money && o.ExpireAt > now-300 {
+			if !s.orderAllowsDevice(o, deviceID) {
+				continue
+			}
 			matched = o
 			break
 		}

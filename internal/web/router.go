@@ -8,6 +8,7 @@ import (
 	"time"
 
 	webfs "kunzhifu/web"
+	"path/filepath"
 )
 
 func (s *Server) Routes() http.Handler {
@@ -193,8 +194,9 @@ func (s *Server) Routes() http.Handler {
 		http.Redirect(w, r, "/static/img/favicon.svg", http.StatusFound)
 	})
 
-	// 运行时上传目录(收款码/Logo/头像,平铺在 DataDir 根): 仅允许访问具体文件。
-	// 任何子目录(backups 数据库备份、downloads 等)一律 404 —— 备份含密钥/会话,绝不可经 Web 下载。
+	// 运行时上传目录(收款码/Logo/头像,平铺在 DataDir 根): 仅允许访问白名单扩展名的具体文件。
+	// 数据库(.db/.db-wal/.db-sham)、备份等敏感文件一律 404 —— 曾实测一键安装把 kunpay.db
+	// 放在同一目录,匿名可下载即接管全部商户账户。
 	if s.DataDir != "" {
 		fs := http.FileServer(http.Dir(s.DataDir))
 		mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -202,6 +204,12 @@ func (s *Server) Routes() http.Handler {
 			if p == "" || p == "/" || strings.HasSuffix(p, "/") || strings.Contains(p, "/") ||
 				strings.Contains(p, "..") || strings.HasPrefix(p, ".") {
 				http.NotFound(w, r) // 禁用目录列表与子目录访问
+				return
+			}
+			switch strings.ToLower(filepath.Ext(p)) {
+			case ".png", ".jpg", ".jpeg", ".gif", ".webp": // 上传白名单扩展名
+			default:
+				http.NotFound(w, r) // .db/.exe 等一律拒绝
 				return
 			}
 			fs.ServeHTTP(w, r)

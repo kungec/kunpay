@@ -12,7 +12,7 @@ services:
     volumes:
       - /data/kunpay-cloud1:/data
     ports:
-      - "15555:5555"
+      - "127.0.0.1:15555:5555"  # 只绑本机: 初始化完成后外部无法直连 ADB
     command: androidboot.redroid_width=320 androidboot.redroid_height=640 androidboot.redroid_dpi=160 androidboot.redroid_gpu_mode=guest
     restart: always
 
@@ -23,7 +23,7 @@ services:
     volumes:
       - /data/kunpay-cloud2:/data
     ports:
-      - "15556:5555"
+      - "127.0.0.1:15556:5555"
     command: androidboot.redroid_width=320 androidboot.redroid_height=640 androidboot.redroid_dpi=160 androidboot.redroid_gpu_mode=guest
     restart: always
 
@@ -34,6 +34,6 @@ services:
     volumes:
       - /data/kunpay-cloud3:/data
     ports:
-      - "15557:5555"
+      - "127.0.0.1:15557:5555"
     command: androidboot.redroid_width=320 androidboot.redroid_height=640 androidboot.redroid_dpi=160 androidboot.redroid_gpu_mode=guest
     restart: always

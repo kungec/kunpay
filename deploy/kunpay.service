@@ -9,10 +9,17 @@ After=network.target
 
 [Service]
 Type=simple
+# 安全: 专用系统用户运行(安装脚本会自动创建;手工部署请先 useradd -r kunpay)
+User=kunpay
+Group=kunpay
 WorkingDirectory=/opt/kunpay
-ExecStart=/opt/kunpay/kunpay -port 8080
+ExecStart=/opt/kunpay/kunpay -port 8080 -db /opt/kunpay/data/kunpay.db -data /opt/kunpay/data
 Restart=always
 RestartSec=3
+# 基础加固
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
 # 安全加固
 NoNewPrivileges=true
 ProtectSystem=full

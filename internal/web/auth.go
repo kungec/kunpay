@@ -251,6 +251,22 @@ func (s *Server) requireCSRF(next http.HandlerFunc) http.HandlerFunc {
 // X-Real-IP/X-Forwarded-For 不可信(可伪造绕过 IP 白名单与限流)。
 var TrustProxyHeaders = true
 
+// trustedProxyCIDRs 显式配置的受信反代网段(-trusted-proxy-cidr);非空时仅这些对端可采信转发头
+var trustedProxyCIDRs []*net.IPNet
+
+// SetTrustedProxyCIDRs 解析并设置受信反代 CIDR 列表
+func SetTrustedProxyCIDRs(list string) {
+	for _, part := range strings.Split(list, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if _, ipnet, err := net.ParseCIDR(part); err == nil {
+			trustedProxyCIDRs = append(trustedProxyCIDRs, ipnet)
+		}
+	}
+}
+
 func isTrustedProxyPeer(r *http.Request) bool {
 	ra := r.RemoteAddr
 	if h, _, err := net.SplitHostPort(ra); err == nil {
@@ -258,6 +274,15 @@ func isTrustedProxyPeer(r *http.Request) bool {
 	}
 	ip := net.ParseIP(ra)
 	if ip == nil {
+		return false
+	}
+	// 显式配置了受信网段时,严格按清单判断(共享内网中的不可信主机不再被盲信)
+	if len(trustedProxyCIDRs) > 0 {
+		for _, n := range trustedProxyCIDRs {
+			if n.Contains(ip) {
+				return true
+			}
+		}
 		return false
 	}
 	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
@@ -426,6 +451,7 @@ func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 var loginFails sync.Map // key -> *failState
 
 type failState struct {
+	mu       sync.Mutex
 	count    int
 	lockedAt time.Time
 }
@@ -435,6 +461,8 @@ func loginKey(ip, username string) string { return ip + "|" + username }
 func loginLocked(ip, username string) (bool, time.Duration) {
 	if v, ok := loginFails.Load(loginKey(ip, username)); ok {
 		fs := v.(*failState)
+		fs.mu.Lock()
+		defer fs.mu.Unlock()
 		if fs.count >= 5 && time.Since(fs.lockedAt) < 15*time.Minute {
 			return true, 15*time.Minute - time.Since(fs.lockedAt)
 		}
@@ -450,10 +478,12 @@ func recordLoginFail(ip, username string) {
 	key := loginKey(ip, username)
 	v, _ := loginFails.LoadOrStore(key, &failState{})
 	fs := v.(*failState)
+	fs.mu.Lock()
 	fs.count++
 	if fs.count == 1 {
 		fs.lockedAt = time.Now()
 	}
+	fs.mu.Unlock()
 }
 
 func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {

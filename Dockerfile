@@ -26,4 +26,5 @@ VOLUME ["/app/data"]
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
   CMD wget -qO- http://127.0.0.1:8080/healthz > /dev/null 2>&1 || exit 1
 
-ENTRYPOINT ["/app/kunpay"]
+# DB 显式落在数据卷(容器重建不丢数据);compose 可用 command 追加参数
+ENTRYPOINT ["/app/kunpay", "-db", "/app/data/kunpay.db", "-data", "/app/data"]

@@ -52,6 +52,21 @@ func newCaptcha() (string, []byte) {
 			delete(captchaStore, k)
 		}
 	}
+	// 容量上限: 公开页可持续创建条目,防内存被灌爆(到期清理后仍满则拒绝新建)
+	if len(captchaStore) >= 20000 {
+		live := 0
+		for k, e := range captchaStore {
+			if e.exp.Before(now) {
+				delete(captchaStore, k)
+			} else {
+				live++
+			}
+		}
+		if live >= 20000 {
+			captchaMu.Unlock()
+			return "", solidPNG()
+		}
+	}
 	id := dbRandKey6()
 	code := randCaptchaCode(4)
 	captchaStore[id] = captchaEntry{code: code, exp: now.Add(10 * time.Minute)}

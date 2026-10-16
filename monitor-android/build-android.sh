@@ -56,13 +56,21 @@ echo "==> 5/6 zipalign"
 "$BT/zipalign" -f 4 "$OUT/app.unsigned.apk" "$OUT/app.aligned.apk"
 
 echo "==> 6/6 签名"
-KS="$OUT/debug.keystore"
+# 签名库: 默认临时 debug 签名(仅供测试);正式发布请设置
+#   KUNPAY_KS=/path/to/your.keystore KUNPAY_KS_PASS=密码 KUNPAY_KS_ALIAS=别名
+KS="${KUNPAY_KS:-$OUT/debug.keystore}"
 if [ ! -f "$KS" ]; then
   "$JAVA_HOME/bin/keytool" -genkeypair -keystore "$KS" \
     -alias androiddebugkey -storepass android -keypass android \
     -dname "CN=KunPay Debug,O=KunPay,C=CN" -keyalg RSA -validity 10000
 fi
-"$BT/apksigner" sign --ks "$KS" --ks-pass pass:android --key-pass pass:android \
+if [ -n "${KUNPAY_KS:-}" ]; then
+  $BT/apksigner sign --ks "$KS" --ks-pass "pass:$KUNPAY_KS_PASS" --ks-key-alias "${KUNPAY_KS_ALIAS:-androiddebugkey}" \
+    --out KunPayMonitor.apk "$OUT/app.aligned.apk"
+else
+  $BT/apksigner sign --ks "$KS" --ks-pass pass:android --key-pass pass:android \
+    --out KunPayMonitor.apk "$OUT/app.aligned.apk"
+fi
   --out KunPayMonitor.apk "$OUT/app.aligned.apk"
 "$BT/apksigner" verify KunPayMonitor.apk && echo "签名校验通过"
 

@@ -427,6 +427,13 @@ func (s *Server) handleAdminOrdersRepair(w http.ResponseWriter, r *http.Request)
 		http.Redirect(w, r, "/admin/orders?msg="+urlEscape("仅待支付或已过期订单可补单"), http.StatusFound)
 		return
 	}
+	// 过期订单(status=2)补单: CompleteOrder 只认领待支付(status=0),先复活
+	if o.Status == 2 {
+		if _, err := s.DB.Exec("UPDATE orders SET status=0 WHERE id=? AND status=2", o.ID); err != nil {
+			http.Redirect(w, r, "/admin/orders?msg="+urlEscape("补单失败: "+err.Error()), http.StatusFound)
+			return
+		}
+	}
 	if err := s.Store.CompleteOrder(o, "管理员补单"); err != nil {
 		http.Redirect(w, r, "/admin/orders?msg="+urlEscape("补单失败: "+err.Error()), http.StatusFound)
 		return
@@ -820,13 +827,15 @@ func (s *Server) handleAdminDevicesAdd(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = "监控设备-" + db.RandDigits(3)
 	}
-	_, err := s.DB.Exec("INSERT INTO devices(name,token,status,created_at) VALUES(?,?,1,?)",
+	// 新设备默认关闭 V免签兼容协议(安全默认): 仅当用户使用第三方 V免签 APP 时,
+	// 才需在设备列表手动开启。官方监控APP走原生 /monitor/push,不受影响。
+	_, err := s.DB.Exec("INSERT INTO devices(name,token,status,created_at,vmq_enabled) VALUES(?,?,1,?,0)",
 		name, db.RandKey(24), model.Now())
 	if err != nil {
 		http.Redirect(w, r, "/admin/devices?msg="+urlEscape("添加失败"), http.StatusFound)
 		return
 	}
-	http.Redirect(w, r, "/admin/devices?msg="+urlEscape("设备已添加,请将 Token 配置到监控APP"), http.StatusFound)
+	http.Redirect(w, r, "/admin/devices?msg="+urlEscape("设备已添加(默认关闭 V免签兼容,如用第三方 V免签 APP 请在列表开启),请将 Token 配置到监控APP"), http.StatusFound)
 }
 
 func (s *Server) handleAdminDevicesToggle(w http.ResponseWriter, r *http.Request) {
