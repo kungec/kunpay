@@ -31,8 +31,6 @@ jobs:
           $HOME/.android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/.android-sdk "build-tools;34.0.0" "platforms;android-34" > /dev/null
       - name: 构建平台主程序(6 平台)
         run: bash build.sh
-      - name: 构建监控助手(6 平台)
-        run: bash build-monitor.sh
       - name: 构建 Android 监控 APK
         working-directory: monitor-android
         run: bash build-android.sh
@@ -50,12 +48,6 @@ jobs:
           done
           cd ..
           cp dist/kunpay_*.tar.gz dist/kunpay_*.zip release/ 2>/dev/null || true
-          # 监控助手分平台
-          for f in dist/monitor/KunPayMonitor_win64.exe dist/monitor/KunPayMonitor_win_arm64.exe \
-                   dist/monitor/KunPayMonitor_mac dist/monitor/KunPayMonitor_mac_intel; do
-            [ -f "$f" ] && cp "$f" release/
-          done
-          [ -f dist/monitor/KunPayMonitor.app ] && zip -qr release/KunPayMonitor_mac.app.zip dist/monitor/KunPayMonitor.app || true
           # 安卓APK
           cp monitor-android/KunPayMonitor.apk release/
           # 全量包
@@ -68,9 +60,4 @@ jobs:
             release/kunpay_*.tar.gz
             release/kunpay_*.zip
             release/KunPayMonitor.apk
-            release/KunPayMonitor_win64.exe
-            release/KunPayMonitor_win_arm64.exe
-            release/KunPayMonitor_mac
-            release/KunPayMonitor_mac_intel
-            release/KunPayMonitor_mac.app.zip
             kunpay-${{ github.ref_name }}-all.zip

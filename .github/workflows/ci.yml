@@ -17,8 +17,6 @@ jobs:
         run: go vet ./...
       - name: build 平台主程序
         run: go build -o kunpay ./cmd/server
-      - name: build 监控助手
-        run: go build -o kunpay-monitor ./cmd/monitor-desktop
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:

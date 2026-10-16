@@ -8,7 +8,7 @@
 
 一套使用 **Go 语言**开发的个人免签约「码支付」平台,易支付(EasyPay)协议完全兼容,现有商户系统**零改造接入**(submit.php / mapi.php / api.php)。
 编译产物为**单个二进制文件**(页面、静态资源、SQLite 驱动全部 go:embed 内嵌),**Windows / Linux / macOS** 一键部署,零外部依赖。
-配套**监控客户端全家桶**:安卓APP(自动监听收款通知,POST 加密上报)、Windows/macOS 监控助手(心跳保活+上报控制台),支持云手机 7×24 挂机与主备设备自动接管。
+配套**安卓监控APP**(自动监听微信/支付宝/QQ 收款通知,POST 加密上报,HMAC-SHA256 签名防重放),支持云手机 7×24 挂机与主备设备自动接管。
 同作者生态:**[坤面板 KunPanel](https://github.com/kungec/kunpanel)** 服务器运维管理面板 —— 推荐以其部署坤支付,反向代理/Let's Encrypt 证书/WAF 防火墙/计划任务备份开箱即用(见下文安装部署)。
 
 ### ✨ 核心特性
@@ -98,14 +98,13 @@ curl -fsSL https://raw.githubusercontent.com/kungec/kunpay/main/scripts/install.
 | 下载 | 说明 |
 |---|---|
 | [**📱 安卓监控APP (APK)**](https://github.com/kungec/kunpay/releases/download/v1.3.0/KunPayMonitor.apk) | 自动监听微信/支付宝/QQ收款通知,安装即用 |
-| [**💻 Windows 监控助手**](https://github.com/kungec/kunpay/releases/download/v1.3.0/KunPayMonitor_win64.zip) | 心跳保活 + 手动上报控制台 |
 | **🖥 平台主程序** | [Linux](https://github.com/kungec/kunpay/releases/download/v1.3.0/kunpay_linux_amd64.tar.gz) · [Windows](https://github.com/kungec/kunpay/releases/download/v1.3.0/kunpay_windows_amd64.zip) · [macOS](https://github.com/kungec/kunpay/releases/download/v1.3.0/kunpay_darwin_arm64.tar.gz) |
 
 > 更多版本与源码见 [Releases](https://github.com/kungec/kunpay/releases) 页面。推送 `v*` 标签时 CI 会自动构建全平台产物并发布 Release。
 
 ## 云端挂机
 
-监控不依赖家里开机:把安卓监控APP跑在**云手机**上实现 7×24 自动监听,Windows/macOS 监控助手注册为系统服务跑在云服务器做心跳保活;平台内置**主备设备自动接管**——主设备离线 5 分钟,备份设备自动接管匹配,双保险不掉单。
+监控不依赖家里开机:把安卓监控APP跑在**云手机**上实现 7×24 自动监听;平台内置**主备设备自动接管**——主设备离线 5 分钟,备份设备自动接管匹配,双保险不掉单。
 
 详见 **[deploy/云端挂机部署指南.md](deploy/云端挂机部署指南.md)**(云手机 / 云服务器 / 主备双保险三套方案 + 各平台服务化脚本)。
 
@@ -127,9 +126,9 @@ curl -fsSL https://raw.githubusercontent.com/kungec/kunpay/main/scripts/install.
 |---|---|
 | ![渠道管理](docs/screenshots/admin_channels.png) | ![订单详情](docs/screenshots/order_detail.png) |
 
-| 监控助手(桌面) | 监控APP(安卓) |
+| 安卓监控APP |
 |---|---|
-| ![桌面监控助手](docs/screenshots/monitor_desktop.png) | ![安卓监控APP](docs/screenshots/monitor_android.png) |
+| ![安卓监控APP](docs/screenshots/monitor_android.png) |
 
 | 公开运行状态页 | 实时数据大屏 |
 |---|---|
@@ -144,7 +143,7 @@ curl -fsSL https://raw.githubusercontent.com/kungec/kunpay/main/scripts/install.
 
 安卓端使用:安装 APK → 填平台地址与设备Token → 授予通知使用权 + 电池白名单 → 保持后台运行。
 桌面端使用:运行后自动打开浏览器控制台(127.0.0.1:8210),填入地址与 Token 即可。
-构建:安卓端 `monitor-android/build-android.sh`(需 JDK17 + Android build-tools);桌面端 `bash build-monitor.sh`。
+构建:安卓端 `monitor-android/build-android.sh`(需 JDK17 + Android build-tools)。
 
 ## 功能总览
 
@@ -331,9 +330,6 @@ go build -o kunpay ./cmd/server
 
 # 安卓监控端(需要 JDK17 + Android build-tools,详见脚本内注释)
 bash monitor-android/build-android.sh
-
-# 桌面监控助手(Windows/macOS/Linux)
-bash build-monitor.sh
 
 # Docker
 bash build-docker.sh && docker compose up -d
