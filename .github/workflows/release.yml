@@ -19,6 +19,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: 安装构建依赖
+        run: sudo apt-get update && sudo apt-get install -y zip unzip
       - name: 安装 Android SDK 构建工具
         run: |
           mkdir -p $HOME/.android-sdk/cmdline-tools
