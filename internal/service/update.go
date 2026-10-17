@@ -4,6 +4,8 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -242,6 +244,10 @@ func splitVer(v string) [3]int {
 
 // DoUpdate 下载指定版本的二进制并替换当前运行文件(不重启,由调用方决定重启方式)。
 // 返回用户可读的状态消息。
+//
+// 安全模型: 二进制本体可经加速镜像下载, 但其 SHA-256 校验值只从信任链路获取
+// (管理员配置的 github_proxy 或直连 api.github.com, 二者均有 TLS 证书校验)。
+// 公共镜像不可信 —— 校验值拿不到或对不上时拒绝替换, 防止镜像投毒导致 RCE。
 func (s *Store) DoUpdate(tag string) (string, error) {
 	s.RefreshGhProxy()
 	goos, goarch := runtime.GOOS, runtime.GOARCH
@@ -257,7 +263,14 @@ func (s *Store) DoUpdate(tag string) (string, error) {
 	rawDL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", repo, tag, assetName)
 	dlURL := ghURL(rawDL)
 
-	// 下载到临时文件
+	// 信任链路取官方 SHA-256(不走公共自动镜像)
+	wantDigest, err := s.assetDigest(repo, tag, assetName)
+	if err != nil {
+		return "", fmt.Errorf("无法校验更新包完整性(%v);已取消更新。"+
+			"可到系统设置配置 GitHub 加速代理,或到 GitHub Releases 手动下载", err)
+	}
+
+	// 下载到临时文件(上限 512MB, 防异常响应塞满磁盘)
 	tmpDir, err := os.MkdirTemp("", "kunpay-update-*")
 	if err != nil {
 		return "", fmt.Errorf("创建临时目录失败: %v", err)
@@ -278,11 +291,21 @@ func (s *Store) DoUpdate(tag string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if _, err = io.Copy(tmpFile, resp.Body); err != nil {
+	if _, err = io.Copy(tmpFile, io.LimitReader(resp.Body, 512<<20)); err != nil {
 		tmpFile.Close()
 		return "", fmt.Errorf("下载写入失败: %v", err)
 	}
 	tmpFile.Close()
+
+	// 完整性校验: 镜像链路的二进制必须与官方 digest 一致
+	gotDigest, err := fileSHA256(tmpArchive)
+	if err != nil {
+		return "", fmt.Errorf("计算下载文件校验值失败: %v", err)
+	}
+	if !strings.EqualFold(gotDigest, wantDigest) {
+		return "", fmt.Errorf("更新包校验失败(期望 sha256:%s, 实际 sha256:%s)——"+
+			"下载链路可能被污染,已拒绝安装", wantDigest, gotDigest)
+	}
 
 	// 确定当前可执行文件路径
 	exePath, err := os.Executable()
@@ -341,6 +364,56 @@ func fiSize(path string) int64 {
 	return fi.Size()
 }
 
+// assetDigest 获取 GitHub Release 资产的官方 sha256(形如 "sha256:hex")。
+// 只走信任链路: 管理员配置的 github_proxy(管理员自行信任)或直连 api.github.com
+// (标准 TLS 证书校验); 刻意不用 ghMirrors 公共镜像 —— 镜像可被投毒, 不能作为校验锚。
+func (s *Store) assetDigest(repo, tag, assetName string) (string, error) {
+	api := fmt.Sprintf("https://api.github.com/repos/%s/releases/tags/%s", repo, tag)
+	var body []byte
+	var err error
+	if proxy := strings.TrimSpace(ghProxyVal); proxy != "" {
+		body, _ = httpGetWithTimeout(proxy+"/"+api, 20*time.Second)
+	}
+	if body == nil {
+		// 未配置代理或代理失败 → 直连(信任锚)
+		body, err = httpGetWithTimeout(api, 20*time.Second)
+	}
+	if err != nil {
+		return "", err
+	}
+	var gh struct {
+		Assets []struct {
+			Name   string `json:"name"`
+			Digest string `json:"digest"`
+		} `json:"assets"`
+	}
+	if jsonErr := json.Unmarshal(body, &gh); jsonErr != nil {
+		return "", fmt.Errorf("解析 Release 信息失败: %v", jsonErr)
+	}
+	for _, a := range gh.Assets {
+		if a.Name == assetName {
+			if !strings.HasPrefix(a.Digest, "sha256:") || len(a.Digest) != len("sha256:")+64 {
+				return "", fmt.Errorf("GitHub 未提供该资产的 sha256")
+			}
+			return strings.TrimPrefix(a.Digest, "sha256:"), nil
+		}
+	}
+	return "", fmt.Errorf("该版本下未找到 %s", assetName)
+}
+
+func fileSHA256(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
 func copyFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
@@ -377,14 +450,14 @@ func extractTarGzBinary(archive, dest, binName string) error {
 		if err != nil {
 			return err
 		}
-		// 匹配文件名(忽略目录前缀)
+		// 匹配文件名(忽略目录前缀); 大小上限 256MB(防压缩炸弹塞满磁盘)
 		base := filepath.Base(hdr.Name)
 		if base == binName && hdr.Typeflag == tar.TypeReg {
 			out, err := os.Create(dest)
 			if err != nil {
 				return err
 			}
-			if _, err = io.Copy(out, tr); err != nil {
+			if _, err = io.Copy(out, io.LimitReader(tr, 256<<20)); err != nil {
 				out.Close()
 				return err
 			}
@@ -414,7 +487,8 @@ func extractZipBinary(archive, dest, binName string) error {
 			if err != nil {
 				return err
 			}
-			if _, err = io.Copy(out, rc); err != nil {
+			// 大小上限 256MB(防压缩炸弹)
+			if _, err = io.Copy(out, io.LimitReader(rc, 256<<20)); err != nil {
 				out.Close()
 				return err
 			}

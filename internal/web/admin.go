@@ -855,6 +855,10 @@ func (s *Server) handleAdminDevicesAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pairCode := GeneratePairCode(tokenVal)
+	if pairCode == "" {
+		http.Redirect(w, r, "/admin/devices?msg="+urlEscape("设备已添加,但配对码生成失败(随机数异常),请用「扫码配对」二维码或复制 Token 手动配置"), http.StatusFound)
+		return
+	}
 	http.Redirect(w, r, "/admin/devices?msg="+urlEscape(fmt.Sprintf("设备已添加! 配对码: %s (5分钟内有效,在监控APP输入此码即可自动完成配置)", pairCode)), http.StatusFound)
 }
 
@@ -1014,6 +1018,11 @@ func (s *Server) handleAdminUpdateDo(w http.ResponseWriter, r *http.Request) {
 	tag := strings.TrimSpace(r.FormValue("tag"))
 	if tag == "" {
 		http.Redirect(w, r, "/admin/settings?err="+urlEscape("缺少版本号"), http.StatusFound)
+		return
+	}
+	// tag 直接拼进下载 URL, 严格限定版本号格式(防 URL 结构注入)
+	if !regexp.MustCompile(`^v?[0-9]+(\.[0-9]+){0,2}$`).MatchString(tag) {
+		http.Redirect(w, r, "/admin/settings?err="+urlEscape("版本号格式不正确"), http.StatusFound)
 		return
 	}
 	if !service.IsNewerVersion(tag, version.Version) {

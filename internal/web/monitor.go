@@ -3,6 +3,7 @@ package web
 import (
 	"crypto/hmac"
 	"crypto/md5"
+	crand "crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
@@ -290,9 +291,54 @@ type pairEntry struct {
 	exp   time.Time
 }
 
-// GeneratePairCode 为指定设备生成 6 位配对码(5 分钟有效)
+// 配对码爆破防护: 6 位码空间仅 10^6 且公开端点可交换,
+// 必须按 IP 限频 + 连续失败锁定, 否则 5 分钟窗口内可跑完全空间拿到设备 Token
+var (
+	pairFailMu    sync.Mutex
+	pairFailCount = map[string]int{}       // ip → 连续失败次数
+	pairFailUntil = map[string]time.Time{} // ip → 锁定截止
+)
+
+const pairFailMax = 5
+
+func pairExchangeBlocked(ip string) bool {
+	pairFailMu.Lock()
+	defer pairFailMu.Unlock()
+	if len(pairFailUntil) > 10000 {
+		pairFailUntil = map[string]time.Time{}
+	}
+	if until, ok := pairFailUntil[ip]; ok {
+		if time.Now().Before(until) {
+			return true
+		}
+		delete(pairFailUntil, ip)
+		delete(pairFailCount, ip)
+	}
+	return false
+}
+
+func pairExchangeFail(ip string) {
+	pairFailMu.Lock()
+	defer pairFailMu.Unlock()
+	if len(pairFailCount) > 10000 {
+		pairFailCount = map[string]int{}
+	}
+	pairFailCount[ip]++
+	if pairFailCount[ip] >= pairFailMax {
+		pairFailUntil[ip] = time.Now().Add(10 * time.Minute)
+		delete(pairFailCount, ip)
+	}
+}
+
+// GeneratePairCode 为指定设备生成 6 位配对码(5 分钟有效, crypto/rand 不可预测)
 func GeneratePairCode(token string) string {
-	code := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
+	var b [3]byte
+	if _, err := crand.Read(b[:]); err != nil {
+		// 随机数失败 fail-closed: 宁可不发配对码
+		return ""
+	}
+	n := (int(b[0])<<16 | int(b[1])<<8 | int(b[2])) % 1000000
+	code := fmt.Sprintf("%06d", n)
 	pairCodeMu.Lock()
 	pairCodeData[code] = pairEntry{token: token, exp: time.Now().Add(5 * time.Minute)}
 	pairCodeMu.Unlock()
@@ -315,20 +361,30 @@ func ExchangePairCode(code string) (string, bool) {
 
 // handleMonitorPairExchange POST /monitor/pair/exchange — APP 用 6 位配对码换取 Token
 func (s *Server) handleMonitorPairExchange(w http.ResponseWriter, r *http.Request) {
+	ip := clientIP(r)
+	if pairExchangeBlocked(ip) {
+		monitorJSON(w, -1, "尝试次数过多,请 10 分钟后再试")
+		return
+	}
 	var in struct {
 		Code string `json:"code"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&in)
 	code := strings.TrimSpace(in.Code)
 	if len(code) != 6 {
+		pairExchangeFail(ip)
 		monitorJSON(w, -1, "配对码格式错误(6 位数字)")
 		return
 	}
 	token, ok := ExchangePairCode(code)
 	if !ok {
+		pairExchangeFail(ip)
 		monitorJSON(w, -1, "配对码无效或已过期")
 		return
 	}
+	pairFailMu.Lock()
+	delete(pairFailCount, ip)
+	pairFailMu.Unlock()
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(map[string]any{
 		"code":   1,
