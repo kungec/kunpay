@@ -26,6 +26,9 @@ import (
 	"kunzhifu/internal/version"
 )
 
+// 在线更新版本号格式(直接拼进下载 URL, 严格限定)
+var reUpdateTag = regexp.MustCompile(`^v?[0-9]+(\.[0-9]+){0,2}$`)
+
 func (s *Server) handleAdminHome(w http.ResponseWriter, r *http.Request) {
 	dayStart := todayStart()
 	var todayOrders, todayOk, todayMoney, totalUsers, totalOrders, todayNewUsers int64
@@ -1021,7 +1024,7 @@ func (s *Server) handleAdminUpdateDo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// tag 直接拼进下载 URL, 严格限定版本号格式(防 URL 结构注入)
-	if !regexp.MustCompile(`^v?[0-9]+(\.[0-9]+){0,2}$`).MatchString(tag) {
+	if !reUpdateTag.MatchString(tag) {
 		http.Redirect(w, r, "/admin/settings?err="+urlEscape("版本号格式不正确"), http.StatusFound)
 		return
 	}
