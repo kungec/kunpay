@@ -1,10 +1,13 @@
 package com.kunpay.monitor;
 
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Handler;
@@ -95,12 +98,41 @@ public class MonitorService extends NotificationListenerService {
         handler = new Handler(worker.getLooper());
         startOwnForeground();
         startHeartbeat();
+        scheduleWatchdog(this);
         log("监控服务已启动,等待收款通知...");
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         return START_STICKY;
+    }
+
+    /** 用户从最近任务划掉: 进程即将被杀, 立即闹钟拉活兜底 */
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        log("应用被划掉,自动重新拉起监控...");
+        keepAliveNow(this);
+        super.onTaskRemoved(rootIntent);
+    }
+
+    /** 看门狗: 每 5 分钟一次闹钟(可穿越休眠), 进程意外死亡后由它拉起。
+     *  心跳每 30 秒会续期闹钟, 因此正常运行时永远轮不到触发。 */
+    static void scheduleWatchdog(Context ctx) {
+        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) return;
+        Intent i = new Intent(ctx, KeepAliveReceiver.class);
+        PendingIntent pi = PendingIntent.getBroadcast(ctx, 1001, i,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 300_000L, pi);
+    }
+
+    /** 立即拉起服务 + 续期看门狗(onTaskRemoved/开机/看门狗共用) */
+    static void keepAliveNow(Context ctx) {
+        try {
+            ctx.startForegroundService(new Intent(ctx, MonitorService.class));
+        } catch (Exception ignored) {
+        }
+        scheduleWatchdog(ctx);
     }
 
     @Override
@@ -154,6 +186,7 @@ public class MonitorService extends NotificationListenerService {
                 final String server = prefs.getString("server", "");
                 final String token = prefs.getString("token", "");
                 hbTick++;
+                scheduleWatchdog(MonitorService.this); // 续期看门狗闹钟(保持约5分钟前瞻)
                 if (!server.isEmpty() && !token.isEmpty()) {
                     // 兜底: 每 10 次心跳(约5分钟)重申一次监听绑定(幂等, 防极端场景静默掉线)
                     if (hbTick % 10 == 0 && listenerBound) {

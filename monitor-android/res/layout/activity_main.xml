@@ -314,7 +314,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:lineSpacingExtra="3dp"
-                android:text="以下 3 项授权全部完成后,监控才会启动:\n① 通知使用权(监听收款通知) ② 允许通知 ③ 电池白名单(防后台被杀)"
+                android:text="以下 3 项授权全部完成后,监控才会启动:\n① 通知使用权(监听收款通知) ② 允许通知 ③ 电池白名单(防后台被杀)\n已配置的设备支持开机自启 · 断开自动重连 · 意外被杀自动拉活"
                 android:textColor="@color/text3"
                 android:textSize="12.5sp" />
 

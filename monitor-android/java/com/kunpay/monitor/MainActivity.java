@@ -74,55 +74,16 @@ public class MainActivity extends Activity {
         refreshLog();
         refreshStatus();
 
-        // 扫码配对: 处理 kunpay://pair?server=xx&token=xx deep link
-        android.net.Uri data = getIntent() != null ? getIntent().getData() : null;
-        if (data != null && "kunpay".equals(data.getScheme()) && "pair".equals(data.getHost())) {
-            String sv = data.getQueryParameter("server");
-            String tk = data.getQueryParameter("token");
-            if (sv != null && tk != null && !sv.isEmpty() && !tk.isEmpty()) {
-                etServer.setText(sv);
-                etToken.setText(tk);
-                prefs.edit().putString("server", sv).putString("token", tk).apply();
-                android.widget.Toast.makeText(this, "✓ 配对成功,已自动填入", android.widget.Toast.LENGTH_LONG).show();
-            }
-        }
+        // 扫码配对: 处理 kunpay://pair?server=xx&token=xx deep link(冷启动)
+        handlePairing(getIntent());
 
         // 安全: 不再接受外部 Intent extras 配置(任意应用可借此重配 Token 外传);
-        // 初始化一律通过本界面手动填写。如需批量配置,请用设备管理方案。
+        // 初始化一律通过本界面手动填写或扫码配对。如需批量配置,请用设备管理方案。
 
         btnSave.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                String server = etServer.getText().toString().trim().replaceAll("/+$", "");
-                String token = etToken.getText().toString().trim();
-                if (server.isEmpty() || token.isEmpty()) {
-                    toast("请填写平台地址与设备Token");
-                    return;
-                }
-                prefs.edit().putString("server", server).putString("token", token).apply();
-                tvConn.setText("正在连接平台...");
-                Api.heartbeat(server, token, new Api.Callback() {
-                    @Override
-                    public void onResult(final boolean ok, final String msg) {
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                if (ok) {
-                                    prefs.edit().putString("last_hb", now()).apply();
-                                    tvConn.setText("✓ 平台连接成功,设备已上线 (" + now() + ")");
-                                    tvConn.setTextColor(getColor(R.color.success));
-                                    toast("连接成功");
-                                    ensureService();
-                                } else {
-                                    tvConn.setText("✗ 连接失败: " + msg);
-                                    tvConn.setTextColor(getColor(R.color.danger));
-                                    toast("连接失败");
-                                }
-                                refreshStatus();
-                            }
-                        });
-                    }
-                });
+                connectAndStart();
             }
         });
 
@@ -270,6 +231,68 @@ public class MainActivity extends Activity {
             unregisterReceiver(logReceiver);
         } catch (Exception ignored) {
         }
+    }
+
+    /** 扫码配对(kunpay://pair?server=xx&token=xx): 自动填入并直接连接,
+     *  授权齐全时监控自动启动; 缺授权则由门禁黄条点名引导 */
+    private void handlePairing(Intent intent) {
+        if (intent == null) return;
+        android.net.Uri data = intent.getData();
+        if (data == null || !"kunpay".equals(data.getScheme()) || !"pair".equals(data.getHost())) return;
+        String sv = data.getQueryParameter("server");
+        String tk = data.getQueryParameter("token");
+        if (sv == null || tk == null || sv.isEmpty() || tk.isEmpty()) return;
+        sv = sv.trim().replaceAll("/+$", "");
+        tk = tk.trim();
+        etServer.setText(sv);
+        etToken.setText(tk);
+        prefs.edit().putString("server", sv).putString("token", tk).apply();
+        toast("✓ 配对成功,正在连接平台...");
+        connectAndStart();
+    }
+
+    /** 保存配置并连接平台; 授权齐全时自动拉起监控服务(门禁内) */
+    private void connectAndStart() {
+        String server = etServer.getText().toString().trim().replaceAll("/+$", "");
+        String token = etToken.getText().toString().trim();
+        if (server.isEmpty() || token.isEmpty()) {
+            toast("请填写平台地址与设备Token");
+            return;
+        }
+        prefs.edit().putString("server", server).putString("token", token).apply();
+        tvConn.setText("正在连接平台...");
+        Api.heartbeat(server, token, new Api.Callback() {
+            @Override
+            public void onResult(final boolean ok, final String msg) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (ok) {
+                            prefs.edit().putString("last_hb", now()).apply();
+                            tvConn.setText("✓ 平台连接成功,设备已上线 (" + now() + ")");
+                            tvConn.setTextColor(getColor(R.color.success));
+                            toast(allAuthReady() ? "连接成功,监控已启动"
+                                                 : "连接成功,完成授权后监控自动启动");
+                            ensureService();
+                        } else {
+                            tvConn.setText("✗ 连接失败: " + msg);
+                            tvConn.setTextColor(getColor(R.color.danger));
+                            toast("连接失败");
+                        }
+                        refreshStatus();
+                    }
+                });
+            }
+        });
+    }
+
+    /** APP 已在前台时再次收到配对链接(singleTop) */
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handlePairing(intent);
+        refreshStatus();
     }
 
     private boolean notifPermOk() {
