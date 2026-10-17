@@ -593,6 +593,9 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 	next := r.FormValue("next")
 	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
 		next = "/user"
+		if u.Role == "admin" {
+			next = "/admin" // 管理员登录直达后台
+		}
 	}
 	http.Redirect(w, r, next, http.StatusFound)
 }
