@@ -49,8 +49,8 @@ func TestCaptchaHTTPRoundTrip(t *testing.T) {
 	if rec3.Code != 302 {
 		t.Fatalf("正确验证码登录应 302,得到 %d, body=%s", rec3.Code, rec3.Body.String()[:minInt(200, rec3.Body.Len())])
 	}
-	if loc := rec3.Header().Get("Location"); !strings.HasPrefix(loc, "/user") {
-		t.Errorf("登录成功应跳 /user,实际 %s", loc)
+	if loc := rec3.Header().Get("Location"); !strings.HasPrefix(loc, "/admin") {
+		t.Errorf("管理员登录应直达 /admin,实际 %s", loc)
 	}
 }
 
