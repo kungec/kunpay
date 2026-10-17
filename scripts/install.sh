@@ -4,7 +4,7 @@
 #
 #  安装:   curl -fsSL https://raw.githubusercontent.com/kungec/kunpay/main/scripts/install.sh | bash
 #  卸载:   curl -fsSL https://raw.githubusercontent.com/kungec/kunpay/main/scripts/install.sh | bash -s uninstall
-#  指定版本: KUNPAY_VERSION=v1.3.2 curl -fsSL ... | bash
+#  指定版本: KUNPAY_VERSION=v1.3.3 curl -fsSL ... | bash
 #
 #  自适应: Ubuntu/Debian/CentOS/RHEL/Rocky/Alma/Fedora/openSUSE/Arch/Alpine 等
 #          x86_64 / aarch64 架构, systemd / OpenRC / SysV 服务管理

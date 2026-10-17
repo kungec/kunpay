@@ -229,6 +229,15 @@ public class MainActivity extends Activity {
         }
     }
 
+    private final android.os.Handler uiTick = new android.os.Handler();
+
+    private final Runnable uiRefresher = new Runnable() {
+        @Override public void run() {
+            refreshStatus();      // 兜底刷新: 监听断开/重连与心跳状态实时可见
+            uiTick.postDelayed(this, 5000L);
+        }
+    };
+
     @Override
     protected void onResume() {
         super.onResume();
@@ -243,6 +252,7 @@ public class MainActivity extends Activity {
         refreshListenerState();
         ensureService();
         checkAppUpdate();
+        uiTick.postDelayed(uiRefresher, 5000L);
         if (android.os.Build.VERSION.SDK_INT >= 33
                 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
                     != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -253,6 +263,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
+        uiTick.removeCallbacks(uiRefresher);
         try {
             unregisterReceiver(logReceiver);
         } catch (Exception ignored) {
@@ -429,10 +440,17 @@ public class MainActivity extends Activity {
         boolean configured = !prefs.getString("server", "").isEmpty()
                 && !prefs.getString("token", "").isEmpty();
         String last = prefs.getString("last_hb", "");
-        if (configured && !last.isEmpty()) {
+        // 监听绑定断开(系统省电策略): 心跳仍在线但通知收不到, 必须醒目提示
+        boolean listenerDown = configured && listenerEnabled()
+                && !MonitorService.listenerBound;
+        if (listenerDown) {
+            statusDot.setBackgroundResource(R.drawable.dot_warn);
+            statusText.setText("⚠ 监听已断开,重连中");
+            tvHeart.setText("心跳仍在线但通知监听被系统暂停,若持续请重新开关一次「通知使用权」");
+        } else if (configured && !last.isEmpty()) {
             statusDot.setBackgroundResource(R.drawable.dot_on);
             statusText.setText("设备在线");
-            tvHeart.setText("最近心跳 " + last + " · 30 秒/次自动保活");
+            tvHeart.setText("最近心跳 " + last + " · 30 秒/次自动保活 · 监听正常");
         } else if (configured) {
             statusDot.setBackgroundResource(R.drawable.dot_warn);
             statusText.setText("连接中...");

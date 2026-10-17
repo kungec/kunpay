@@ -4,6 +4,7 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Handler;
@@ -61,12 +62,16 @@ public class MonitorService extends NotificationListenerService {
     }
 
     private final HandlerThread worker = new HandlerThread("kunpay-worker");
-    private Handler handler;
+    Handler handler;
     private android.speech.tts.TextToSpeech tts;
     private volatile boolean ttsReady;
     private Runnable heartbeat;
     private SharedPreferences prefs;
     private int hbOkCount = 0;
+    /** 通知监听是否处于系统绑定中(挂机掉单排查的关键指标):
+     *  系统可单独断开 listener 绑定(省电策略),此时进程/心跳仍活着但通知收不到。 */
+    public volatile static boolean listenerBound = false;
+    private int hbTick = 0;
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -127,13 +132,33 @@ public class MonitorService extends NotificationListenerService {
     }
 
     /** 每 30 秒向平台发送一次心跳 */
+    /** 系统建立监听绑定 */
+    @Override
+    public void onListenerConnected() {
+        listenerBound = true;
+        log("✓ 通知监听已连接");
+    }
+
+    /** 系统断开监听绑定(省电策略/内存回收): 自动重绑, 否则进程活着也永远收不到通知 */
+    @Override
+    public void onListenerDisconnected() {
+        listenerBound = false;
+        log("⚠ 通知监听被系统断开,正在自动重连...");
+        requestRebind(new ComponentName(this, MonitorService.class));
+    }
+
     private void startHeartbeat() {
         heartbeat = new Runnable() {
             @Override
             public void run() {
                 final String server = prefs.getString("server", "");
                 final String token = prefs.getString("token", "");
+                hbTick++;
                 if (!server.isEmpty() && !token.isEmpty()) {
+                    // 兜底: 每 10 次心跳(约5分钟)重申一次监听绑定(幂等, 防极端场景静默掉线)
+                    if (hbTick % 10 == 0 && listenerBound) {
+                        requestRebind(new ComponentName(MonitorService.this, MonitorService.class));
+                    }
                     Api.heartbeat(server, token, new Api.Callback() {
                         @Override
                         public void onResult(boolean ok, String msg) {
