@@ -1176,6 +1176,29 @@ func (s *Server) handleAdminSettingsSave(w http.ResponseWriter, r *http.Request)
 		}
 		_ = s.DB.SetSetting(k, v)
 	}
+	// 前台导航: 平行数组 nav_label[]/nav_href[], 逐行校验后存 JSON(nav_present 标记表单含导航区块)
+	if r.FormValue("nav_present") == "1" {
+		labels, hrefs := r.Form["nav_label[]"], r.Form["nav_href[]"]
+		links := []NavLink{}
+		for i := 0; i < len(labels) && i < len(hrefs); i++ {
+			label := strings.TrimSpace(labels[i])
+			href := strings.TrimSpace(hrefs[i])
+			if label == "" || href == "" {
+				continue
+			}
+			if !strings.HasPrefix(href, "/") &&
+				!strings.HasPrefix(href, "http://") && !strings.HasPrefix(href, "https://") {
+				continue // 非法协议直接丢弃(防 javascript: XSS)
+			}
+			links = append(links, NavLink{Label: label, Href: href})
+			if len(links) >= 10 {
+				break
+			}
+		}
+		if b, err := json.Marshal(links); err == nil {
+			_ = s.DB.SetSetting("nav_links", string(b))
+		}
+	}
 	s.audit(r, "settings.save", "更新系统设置")
 	http.Redirect(w, r, "/admin/settings?msg="+urlEscape("设置已保存"), http.StatusFound)
 }

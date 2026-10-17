@@ -309,6 +309,66 @@ func (s *Server) render(w http.ResponseWriter, name string, status int, data any
 	}
 }
 
+// NavLink 前台顶部导航项(管理后台「系统设置 → 前台导航」可自定义)
+type NavLink struct {
+	Label  string `json:"label"`
+	Href   string `json:"href"`
+	Active bool   `json:"-"`
+}
+
+// defaultNavLinks 未配置时的内置导航
+func defaultNavLinks() []NavLink {
+	return []NavLink{
+		{Label: "首页", Href: "/"},
+		{Label: "开发文档", Href: "/doc"},
+		{Label: "支付测试", Href: "/demo"},
+		{Label: "订单查询", Href: "/check"},
+		{Label: "软件下载", Href: "/download"},
+	}
+}
+
+// parseNavLinks 解析导航 JSON; 空/损坏/含非法项时逐项过滤, 全非法回退默认
+func parseNavLinks(raw string) []NavLink {
+	if strings.TrimSpace(raw) == "" {
+		return defaultNavLinks()
+	}
+	var out []NavLink
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return defaultNavLinks()
+	}
+	clean := make([]NavLink, 0, len(out))
+	for _, l := range out {
+		l.Label = strings.TrimSpace(l.Label)
+		l.Href = strings.TrimSpace(l.Href)
+		if l.Label == "" || l.Href == "" {
+			continue
+		}
+		if runes := []rune(l.Label); len(runes) > 20 {
+			l.Label = string(runes[:20])
+		}
+		l.Href = strings.TrimRight(l.Href, "/")
+		if l.Href == "" {
+			l.Href = "/"
+		}
+		// 仅允许站内路径或 http(s) 外链(防 javascript:/data: 伪协议 XSS)
+		if !strings.HasPrefix(l.Href, "/") &&
+			!strings.HasPrefix(l.Href, "http://") && !strings.HasPrefix(l.Href, "https://") {
+			continue
+		}
+		if len(l.Href) > 300 {
+			l.Href = l.Href[:300]
+		}
+		clean = append(clean, l)
+		if len(clean) >= 10 {
+			break
+		}
+	}
+	if len(clean) == 0 {
+		return defaultNavLinks()
+	}
+	return clean
+}
+
 func (s *Server) pageData(r *http.Request) map[string]any {
 	st, _ := s.DB.AllSettings()
 	d := map[string]any{
@@ -321,6 +381,13 @@ func (s *Server) pageData(r *http.Request) map[string]any {
 		"FlashErr": "",
 		"Title":    "",
 	}
+	nav := parseNavLinks(st["nav_links"])
+	for i := range nav {
+		p := r.URL.Path
+		nav[i].Active = (nav[i].Href == "/" && p == "/") ||
+			(nav[i].Href != "/" && strings.HasPrefix(p, nav[i].Href))
+	}
+	d["NavLinks"] = nav
 	if u := s.currentUser(r); u != nil {
 		d["Me"] = u
 		d["CSRF"] = s.csrfToken(u)

@@ -5,6 +5,28 @@
     <div class="card-title">基础设置</div>
     <form method="post" action="/admin/settings/save">
       <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <input type="hidden" name="nav_present" value="1">
+      <div style="margin:6px 0 2px;font-weight:bold">前台导航(首页顶部菜单,保存后立即生效)</div>
+      <div id="navRows">
+        {{range .NavLinks}}
+        <div class="form-row nav-row">
+          <div class="form-item" style="flex:0 0 160px">
+            <label>名称(≤20字)</label>
+            <input class="input" type="text" name="nav_label[]" maxlength="20" value="{{.Label}}">
+          </div>
+          <div class="form-item" style="flex:1">
+            <label>链接(站内以 / 开头,站外填 http(s):// 完整地址)</label>
+            <input class="input" type="text" name="nav_href[]" maxlength="300" value="{{.Href}}">
+          </div>
+          <div class="form-item" style="align-self:flex-end">
+            <button type="button" class="btn btn-ghost" onclick="this.closest('.nav-row').remove()">删除</button>
+          </div>
+        </div>
+        {{end}}
+      </div>
+      <div style="margin:4px 0 10px">
+        <button type="button" class="btn btn-ghost" onclick="addNavRow()">+ 添加导航(最多 10 个)</button>
+      </div>
       <div class="form-row">
         <div class="form-item">
           <label>站点名称</label>
@@ -363,4 +385,25 @@
     <div class="alert err mt">安全提醒:管理员默认密码为 admin123,请立即在个人设置中修改!</div>
   </div>
 </div>
+<script>
+function addNavRow() {
+  var rows = document.querySelectorAll('#navRows .nav-row');
+  if (rows.length >= 10) { alert('最多 10 个导航项'); return; }
+  var div = document.createElement('div');
+  div.className = 'form-row nav-row';
+  div.innerHTML =
+    '<div class="form-item" style="flex:0 0 160px">' +
+    '<label>名称(≤20字)</label>' +
+    '<input class="input" type="text" name="nav_label[]" maxlength="20" placeholder="如:公告">' +
+    '</div>' +
+    '<div class="form-item" style="flex:1">' +
+    '<label>链接(站内以 / 开头,站外填 http(s):// 完整地址)</label>' +
+    '<input class="input" type="text" name="nav_href[]" maxlength="300" placeholder="/news 或 https://example.com">' +
+    '</div>' +
+    '<div class="form-item" style="align-self:flex-end">' +
+    '<button type="button" class="btn btn-ghost" onclick="this.closest(\'.nav-row\').remove()">删除</button>' +
+    '</div>';
+  document.getElementById('navRows').appendChild(div);
+}
+</script>
 {{end}}

@@ -17,11 +17,7 @@
       {{index .Settings "site_name"}}
     </a>
     <div class="menu">
-      <a href="/" class="{{if eq .Page "home"}}on{{end}}">首页</a>
-      <a href="/doc" class="{{if eq .Page "doc"}}on{{end}}">开发文档</a>
-      <a href="/demo" class="{{if eq .Page "demo"}}on{{end}}">支付测试</a>
-      <a href="/check" class="{{if eq .Page "order_check"}}on{{end}}">订单查询</a>
-      <a href="/download" class="{{if eq .Page "download"}}on{{end}}">软件下载</a>
+      {{range .NavLinks}}<a href="{{.Href}}"{{if .Active}} class="on"{{end}}>{{.Label}}</a>{{end}}
     </div>
     <div class="acts">
       <button class="theme-btn" id="themeBtn" title="切换深浅色" type="button"><svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></button>
@@ -37,9 +33,7 @@
     </div>
   </div>
   <div class="m-panel">
-    <a href="/" class="{{if eq .Page "home"}}on{{end}}">首页</a>
-    <a href="/doc" class="{{if eq .Page "doc"}}on{{end}}">开发文档</a>
-    <a href="/demo" class="{{if eq .Page "demo"}}on{{end}}">支付测试</a>
+    {{range .NavLinks}}<a href="{{.Href}}"{{if .Active}} class="on"{{end}}>{{.Label}}</a>{{end}}
     {{if .Me}}
     <a href="/user">进入商户中心</a>
     <div class="m-acts"><a class="btn btn-ghost" href="/logout">退出登录</a></div>
