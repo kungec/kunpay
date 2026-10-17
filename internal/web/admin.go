@@ -1135,8 +1135,11 @@ func (s *Server) handleAdminSettingsSave(w http.ResponseWriter, r *http.Request)
 		"site_url", "smtp_host", "smtp_port", "smtp_user", "smtp_pass", "smtp_tls", "smtp_from", "admin_ip_whitelist",
 		"alert_email", "device_alert", "merchant_notice", "alert_webhook", "invite_rate", "auto_settle", "circuit_breaker",
 		"backup_auto", "backup_keep", "statement_auto", "ip_blacklist", "digest_auto", "update_repo", "auto_approve_max", "auto_approve_settle", "github_proxy"}
-	// 开关类型设置: 浏览器在 checkbox 未勾选时不发送该字段,
-	// 必须将「字段不存在」解释为「用户取消勾选」→ 保存 "0"
+	// 开关类型设置: 浏览器在 checkbox 未勾选时不发送该字段。
+	// 完整表单保存(设置页, 带 settings_full 标记): 「字段不存在」=「用户取消勾选」→ "0"
+	// 部分保存(如仅改 IP 黑名单的接口调用): **不触碰**任何未出现的开关 ——
+	// 否则一次部分保存会静默关闭全部开关(真实缺陷: 曾致 register_open 等被意外清零)
+	fullForm := r.FormValue("settings_full") == "1"
 	checkboxKeys := map[string]bool{
 		"money_offset": true, "register_open": true, "invite_open": true,
 		"auto_settle": true, "circuit_breaker": true, "backup_auto": true,
@@ -1147,12 +1150,17 @@ func (s *Server) handleAdminSettingsSave(w http.ResponseWriter, r *http.Request)
 		present := r.Form[k] != nil
 
 		if checkboxKeys[k] {
-			// checkbox: 勾选 → "1"; 未勾选(字段不存在) → "0"
-			v := "0"
-			if present {
-				v = "1"
+			if fullForm {
+				// 完整表单: 勾选 → "1"; 未勾选(字段不存在) → "0"
+				v := "0"
+				if present {
+					v = "1"
+				}
+				_ = s.DB.SetSetting(k, v)
+			} else if present {
+				// 部分保存: 显式提交才开启, 不出现不改动
+				_ = s.DB.SetSetting(k, "1")
 			}
-			_ = s.DB.SetSetting(k, v)
 			continue
 		}
 

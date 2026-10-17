@@ -6,6 +6,7 @@
     <form method="post" action="/admin/settings/save">
       <input type="hidden" name="_csrf" value="{{.CSRF}}">
       <input type="hidden" name="nav_present" value="1">
+      <input type="hidden" name="settings_full" value="1">
       <div style="margin:6px 0 2px;font-weight:bold">前台导航(首页顶部菜单,保存后立即生效)</div>
       <div id="navRows">
         {{range .NavLinks}}
