@@ -27,6 +27,7 @@ public class MainActivity extends Activity {
 
     private EditText etServer, etToken;
     private TextView tvConn, tvLog, statusText, tvHeart;
+    private Button btnListener, btnBattery;
     private View statusDot;
     private Switch swAlipay, swWxpay, swQqpay;
     private SharedPreferences prefs;
@@ -60,8 +61,8 @@ public class MainActivity extends Activity {
         swQqpay = findViewById(R.id.swQqpay);
         Button btnSave = findViewById(R.id.btnSave);
         Button btnTest = findViewById(R.id.btnTest);
-        Button btnListener = findViewById(R.id.btnListener);
-        Button btnBattery = findViewById(R.id.btnBattery);
+        btnListener = findViewById(R.id.btnListener);
+        btnBattery = findViewById(R.id.btnBattery);
         View btnClear = findViewById(R.id.btnClear);
 
         // 恢复配置
@@ -234,6 +235,7 @@ public class MainActivity extends Activity {
     private final Runnable uiRefresher = new Runnable() {
         @Override public void run() {
             refreshStatus();      // 兜底刷新: 监听断开/重连与心跳状态实时可见
+            ensureService();      // 门禁复查: 授权补齐后自动启动监控(内部幂等)
             uiTick.postDelayed(this, 5000L);
         }
     };
@@ -270,11 +272,63 @@ public class MainActivity extends Activity {
         }
     }
 
+    private boolean notifPermOk() {
+        if (android.os.Build.VERSION.SDK_INT < 33) return true;
+        return checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                == android.content.pm.PackageManager.PERMISSION_GRANTED;
+    }
+
+    private boolean batteryOk() {
+        android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+        return pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
+    }
+
+    /** 启动门禁: 三项授权(通知使用权/允许通知/电池白名单)全部就绪才允许启动监控 */
+    private boolean allAuthReady() {
+        return listenerEnabled() && notifPermOk() && batteryOk();
+    }
+
+    private String missingAuth() {
+        java.util.List<String> miss = new java.util.ArrayList<>();
+        if (!listenerEnabled()) miss.add("①通知使用权");
+        if (!notifPermOk()) miss.add("②允许通知");
+        if (!batteryOk()) miss.add("③电池白名单");
+        return String.join("、", miss);
+    }
+
+    private boolean serviceStarted = false;
+
+    /** 门禁启动: 授权齐全才拉起监控服务; 缺项在「必要授权」卡黄条提示缺哪项 */
     private void ensureService() {
-        // 触发监听服务启动(已授权时),保证心跳与监听随APP开启
+        updateAuthGate();
+        if (!allAuthReady()) return;
+        if (serviceStarted) return;
         try {
             startService(new Intent(this, MonitorService.class));
+            serviceStarted = true;
         } catch (Exception ignored) {
+        }
+    }
+
+    private void updateAuthGate() {
+        android.widget.TextView gate = findViewById(R.id.authGate);
+        if (gate == null) return;
+        String miss = missingAuth();
+        if (miss.isEmpty()) {
+            gate.setVisibility(android.view.View.GONE);
+        } else {
+            gate.setText("⚠ 监控未启动 —— 还差: " + miss + "\n点上方对应按钮授权,完成后自动开始监控");
+            gate.setVisibility(android.view.View.VISIBLE);
+        }
+        // 电池白名单按钮状态化(与通知使用权按钮一致)
+        if (batteryOk()) {
+            btnBattery.setText("✓ 电池白名单");
+            btnBattery.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#E8F7F0")));
+            btnBattery.setTextColor(getColor(R.color.success));
+        } else {
+            btnBattery.setText("③ 电池白名单");
+            btnBattery.setBackgroundTintList(null);
+            btnBattery.setTextColor(Color.WHITE);
         }
     }
 
@@ -441,7 +495,8 @@ public class MainActivity extends Activity {
                 && !prefs.getString("token", "").isEmpty();
         String last = prefs.getString("last_hb", "");
         // 监听绑定断开(系统省电策略): 心跳仍在线但通知收不到, 必须醒目提示
-        boolean listenerDown = configured && listenerEnabled()
+        // 门禁拦截期间服务尚未启动, 谈不上"断开", 该提示交给必要授权卡黄条
+        boolean listenerDown = configured && serviceStarted && listenerEnabled()
                 && !MonitorService.listenerBound;
         if (listenerDown) {
             statusDot.setBackgroundResource(R.drawable.dot_warn);

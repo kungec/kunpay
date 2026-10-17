@@ -314,9 +314,22 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:lineSpacingExtra="3dp"
-                android:text="1. 授予通知使用权(监听收款通知)\n2. 加入电池优化白名单(防止后台被杀)"
+                android:text="以下 3 项授权全部完成后,监控才会启动:\n① 通知使用权(监听收款通知) ② 允许通知 ③ 电池白名单(防后台被杀)"
                 android:textColor="@color/text3"
                 android:textSize="12.5sp" />
+
+            <TextView
+                android:id="@+id/authGate"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="#FFF3E0"
+                android:padding="8dp"
+                android:text="⚠ 监控未启动"
+                android:textColor="#B26A00"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
 
             <LinearLayout
                 android:layout_width="match_parent"
