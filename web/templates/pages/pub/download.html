@@ -4,7 +4,7 @@
     <div class="card-title">⚡ 服务器一键安装(Linux)</div>
     <p class="muted" style="font-size:13px">在<strong>全新的 Linux 服务器</strong>(Ubuntu/Debian/CentOS/RHEL/Rocky/Alma/Fedora/openSUSE/Arch/Alpine,x86_64/aarch64)上以 root 执行:</p>
     <div class="row" style="gap:8px;align-items:center">
-      <input class="input mono" readonly value="curl -fsSL https://raw.githubusercontent.com/kungec/kunpay/main/scripts/install.sh | bash" style="flex:1" onclick="this.select()">
+      <input class="input mono" readonly value="curl -fsSL https://raw.githubusercontent.com/kungec/kunpay/main/scripts/install.sh | bash" style="flex:1;min-width:0" onclick="this.select()">
       <button class="btn btn-primary btn-sm" type="button" onclick="copyText('curl -fsSL https://raw.githubusercontent.com/kungec/kunpay/main/scripts/install.sh | bash','安装命令已复制')">复制</button>
     </div>
     <p class="muted" style="font-size:12.5px;margin-top:8px">自动下载最新版 → 安装到 /opt/kunpay → 注册系统服务(systemd/OpenRC/SysV 自适应)→ 开机自启。卸载: 在命令末尾加 <code class="mono">uninstall</code> 参数(数据保留)。国内服务器建议先配置 GitHub 代理。</p>

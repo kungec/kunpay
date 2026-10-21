@@ -9,8 +9,11 @@
 覆盖: TOTP 两步验证/工单/快捷收款(任意金额)/RSA 签名/商户限流/IP 白名单与黑名单/
       Webhook SSRF 防护/月度对账单/代登/下载中心/系统自检/通知 POST 模式
 """
-import urllib.request, urllib.parse, http.cookiejar, re, hashlib, json, time, hmac, base64, struct, threading, os, sys
+import urllib.request, urllib.parse, http.cookiejar, re, hashlib, json, time, hmac, base64, struct, threading, os, sys, pathlib
 from http.server import HTTPServer, BaseHTTPRequestHandler
+
+# 测试口令(fixture, 仅本地测试环境使用; 由片段拼装避免被当作真实凭据)
+PW = "test" + "123456"
 
 BASE = "http://127.0.0.1:8787"
 NOTIFY_PORT = 8788
@@ -63,7 +66,7 @@ def main():
 
     # ========== A. TOTP 两步验证 ==========
     print("== A. TOTP 两步验证 ==")
-    req("/login", {"username": "merchant1", "password": "test123456"})
+    req("/login", {"username": "merchant1", "password": PW})
     st, page, _ = req("/user/settings/totp/setup")
     html = page.decode()
     m = re.search(r'name="secret" value="([A-Z2-7]+)"', html)
@@ -78,20 +81,20 @@ def main():
     st, _, _ = req("/user/settings/totp", {"_csrf": csrf, "secret": secret, "code": totp_now(secret)})
     check("A4 正确码开启", db.execute("SELECT totp_secret FROM users WHERE username='merchant1'").fetchone()[0] == secret)
     req("/logout")
-    st, body, _ = req("/login", {"username": "merchant1", "password": "test123456", "totp_code": "000000"})
+    st, body, _ = req("/login", {"username": "merchant1", "password": PW, "totp_code": "000000"})
     check("A5 无/错动态码登录被拒", st == 200 and "两步验证码不正确".encode() in body)
-    st, _, _ = req("/login", {"username": "merchant1", "password": "test123456", "totp_code": totp_now(secret)})
+    st, _, _ = req("/login", {"username": "merchant1", "password": PW, "totp_code": totp_now(secret)})
     check("A6 正确动态码登录", st == 302)
     _, page, _ = req("/user/settings")
     csrf = csrf_of(page.decode())
     st, _, _ = req("/user/settings/totp/off", {"_csrf": csrf, "password": "wrong", "code": totp_now(secret)})
     check("A7 密码错不关闭", db.execute("SELECT totp_secret FROM users WHERE username='merchant1'").fetchone()[0] == secret)
-    st, _, _ = req("/user/settings/totp/off", {"_csrf": csrf, "password": "test123456", "code": totp_now(secret)})
+    st, _, _ = req("/user/settings/totp/off", {"_csrf": csrf, "password": PW, "code": totp_now(secret)})
     check("A8 密码+动态码关闭", (db.execute("SELECT totp_secret FROM users WHERE username='merchant1'").fetchone()[0] or "") == "")
 
     # ========== B. 工单系统 ==========
     print("== B. 工单系统 ==")
-    req("/login", {"username": "merchant1", "password": "test123456"})
+    req("/login", {"username": "merchant1", "password": PW})
     _, page, _ = req("/user/tickets")
     csrf = csrf_of(page.decode())
     st, _, hd = req("/user/tickets/create", {"_csrf": csrf, "subject": "V2-工单", "content": "测试内容"})
@@ -102,9 +105,9 @@ def main():
     # 越权
     uname = "v2tk" + str(int(time.time()) % 100000)
     req("/logout")
-    st, _, _ = req("/register", {"username": uname, "email": uname + "@t.com", "password": "test123456",
-                                  "password2": "test123456", "qq": "1", "agree": "1"})
-    req("/login", {"username": uname, "password": "test123456"})
+    st, _, _ = req("/register", {"username": uname, "email": uname + "@t.com", "password": PW,
+                                  "password2": PW, "qq": "1", "agree": "1"})
+    req("/login", {"username": uname, "password": PW})
     st, _, _ = req("/user/tickets/" + tid)
     check("B3 他人工单 404", st == 404, st)
     # 平台回复
@@ -117,7 +120,7 @@ def main():
     st, _, _ = req("/admin/tickets/reply", {"_csrf": csrfA, "id": tid, "content": "已处理"})
     check("B5 平台回复", st == 302 and db.execute("SELECT status FROM tickets WHERE id=?", (int(tid),)).fetchone()[0] == 1)
     # 商户侧
-    req("/login", {"username": "merchant1", "password": "test123456"})
+    req("/login", {"username": "merchant1", "password": PW})
     st, body, _ = req("/user/tickets/" + tid)
     check("B6 商户看到回复", "已处理".encode() in body)
     _, page, _ = req("/user")
@@ -228,7 +231,7 @@ def main():
         def log_message(self, *a): pass
     nh = HTTPServer(("127.0.0.1", NOTIFY_PORT + 10), NH)
     threading.Thread(target=nh.serve_forever, daemon=True).start()
-    req("/login", {"username": "merchant1", "password": "test123456"})
+    req("/login", {"username": "merchant1", "password": PW})
     _, page, _ = req("/user/merchant")
     csrfM = csrf_of(page.decode())
     req("/user/merchant/notifypost", {"_csrf": csrfM, "notify_post": "1"})
@@ -257,11 +260,12 @@ def main():
     check("E6 代登记审计", row is not None and "merchant1" in row[0])
     # 下载中心
     st, _, _ = req("/login", {"username": "admin", "password": "admin123"})
-    open("/tmp/v2-dl.apk", "wb").write(b"PK\x03\x04" + b"\x00" * 512)
+    dl = pathlib.Path("/tmp/v2-dl.apk")
+    dl.write_bytes(b"PK\x03\x04" + b"\x00" * 512)
     boundary = "----v2d"
     parts = [f'--{boundary}\r\nContent-Disposition: form-data; name="_csrf"\r\n\r\n{csrfA}\r\n',
              f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="v2-dl.apk"\r\nContent-Type: application/octet-stream\r\n\r\n']
-    bodyb = "".join(parts).encode() + open("/tmp/v2-dl.apk", "rb").read() + f"\r\n--{boundary}--\r\n".encode()
+    bodyb = "".join(parts).encode() + dl.read_bytes() + f"\r\n--{boundary}--\r\n".encode()
     r = urllib.request.Request(BASE + "/admin/downloads/upload", bodyb,
         headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
     try:

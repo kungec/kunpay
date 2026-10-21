@@ -5,12 +5,12 @@
     <div class="card-title">接口信息</div>
     <div class="kv">
       <span class="k">商户ID (PID)</span>
-      <span class="v mono copyable" onclick="copyText('{{.Merchant.Pid}}','商户ID已复制')">{{.Merchant.Pid}} 📋</span>
+      <span class="v mono copyable" onclick="copyText('{{.Merchant.Pid}}','商户ID已复制')">{{.Merchant.Pid}}</span>
       <span class="k">商户密钥 (KEY)</span>
-      <span class="v mono copyable" onclick="copyText('{{.Merchant.Skey}}','商户密钥已复制')">{{.Merchant.Skey}} 📋</span>
-      <span class="k">提交支付</span><span class="v mono copyable" onclick="copyText('{{.BaseURL}}/submit.php','已复制')">{{.BaseURL}}/submit.php 📋</span>
-      <span class="k">API 支付</span><span class="v mono copyable" onclick="copyText('{{.BaseURL}}/mapi.php','已复制')">{{.BaseURL}}/mapi.php 📋</span>
-      <span class="k">订单查询</span><span class="v mono copyable" onclick="copyText('{{.BaseURL}}/api.php','已复制')">{{.BaseURL}}/api.php 📋</span>
+      <span class="v mono copyable" onclick="copyText('{{.Merchant.Skey}}','商户密钥已复制')">{{.Merchant.Skey}}</span>
+      <span class="k">提交支付</span><span class="v mono copyable" onclick="copyText('{{.BaseURL}}/submit.php','已复制')">{{.BaseURL}}/submit.php</span>
+      <span class="k">API 支付</span><span class="v mono copyable" onclick="copyText('{{.BaseURL}}/mapi.php','已复制')">{{.BaseURL}}/mapi.php</span>
+      <span class="k">订单查询</span><span class="v mono copyable" onclick="copyText('{{.BaseURL}}/api.php','已复制')">{{.BaseURL}}/api.php</span>
     </div>
     <form class="form-item mt" method="post" action="/user/merchant/notifypost">
       <input type="hidden" name="_csrf" value="{{.CSRF}}">
@@ -68,16 +68,16 @@
   <div class="card">
     <div class="card-title">API 在线调试</div>
     <p class="muted" style="font-size:12.5px;margin-bottom:12px">填写参数自动生成签名请求并创建真实订单,一键跳转收银台自测整条链路。</p>
-    <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">
+    <div class="row" style="gap:8px;margin-bottom:8px">
       <select class="input" id="dbgType" style="width:110px">
         <option value="alipay">支付宝</option>
         <option value="wxpay">微信</option>
         <option value="qqpay">QQ钱包</option>
       </select>
       <input class="input" id="dbgMoney" type="text" value="1.00" placeholder="金额" style="width:90px">
-      <input class="input" id="dbgNo" type="text" placeholder="商户订单号(留空自动生成)" style="flex:1;min-width:150px">
-      <button class="btn btn-primary btn-sm" id="dbgBtn" type="button">创建测试订单</button>
     </div>
+    <input class="input" id="dbgNo" type="text" placeholder="商户订单号(留空自动生成)" style="margin-bottom:10px">
+    <button class="btn btn-primary btn-sm" id="dbgBtn" type="button" style="width:100%">创建测试订单</button>
     <div id="dbgResult" style="display:none">
       <div class="kv mb">
         <span class="k">平台订单号</span><span class="v mono" id="dbgTrade"></span>

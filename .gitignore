@@ -25,3 +25,7 @@ kunpay-monitor.json
 monitor-android/.gradle/
 monitor-android/local.properties
 monitor-android/java/com/kunpay/monitor/*.class
+
+# 工具运行时状态(不入库)
+.mimosa/
+.video_agent/

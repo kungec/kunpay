@@ -960,3 +960,9 @@ body.kp-leaving .demo-wrap, body.kp-leaving .doc-layout { opacity: .55; transiti
 }
 .update-bar a { color: #ffd76a; font-weight: 600; }
 .update-bar a:hover { color: #ffe89a; }
+
+/* ---- UI 对齐修正 ---- */
+/* 可复制值的复制图标: 伪元素永远紧跟文本末字符, 不因长值换行而掉行 */
+.copyable::after { content: "\29C9"; margin-left: 6px; opacity: .45; font-size: 12px; }
+/* flex 行内的 input 默认可收缩, 长值不再撑破容器压到相邻按钮 */
+.row > .input { min-width: 0; }

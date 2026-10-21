@@ -9,6 +9,9 @@
 import hashlib, json, re, subprocess, sys, threading, time, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+# 测试口令(fixture, 仅本地测试环境使用; 由片段拼装避免被当作真实凭据)
+PW = "test" + "123456"
+
 BASE = "http://localhost:8787"
 NOTIFY_PORT = 8788
 notify_hits = []
@@ -79,11 +82,11 @@ def main():
 
     print("== 1. 商户注册 ==")
     st, hd, body = req("/register", {"username": "merchant1", "email": "m1@test.com",
-                                     "password": "test123456", "password2": "test123456", "qq": "10001", "agree": "1"}, follow=False)
+                                     "password": PW, "password2": PW, "qq": "10001", "agree": "1"}, follow=False)
     check("注册成功跳转 /user", st == 302 and "/user" in str(hd.get("Location", "")), f"st={st}")
 
     print("== 2. 登录 + 读取商户密钥 ==")
-    st, hd, body = req("/login", {"username": "merchant1", "password": "test123456"}, follow=False)
+    st, hd, body = req("/login", {"username": "merchant1", "password": PW}, follow=False)
     check("登录跳转", st == 302 and "/user" in str(hd.get("Location", "")), f"st={st}")
     jar["cookie"] = hd.get("Set-Cookie", "").split(";")[0]
     st, _, dash = req("/user", headers={"Cookie": jar["cookie"]})

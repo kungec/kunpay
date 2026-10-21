@@ -12,11 +12,11 @@
         {{range .NavLinks}}
         <div class="form-row nav-row">
           <div class="form-item" style="flex:0 0 160px">
-            <label>名称(≤20字)</label>
+            <label>名称</label>
             <input class="input" type="text" name="nav_label[]" maxlength="20" value="{{.Label}}">
           </div>
           <div class="form-item" style="flex:1">
-            <label>链接(站内以 / 开头,站外填 http(s):// 完整地址)</label>
+            <label>链接</label>
             <input class="input" type="text" name="nav_href[]" maxlength="300" value="{{.Href}}">
           </div>
           <div class="form-item" style="align-self:flex-end">
@@ -394,11 +394,11 @@ function addNavRow() {
   div.className = 'form-row nav-row';
   div.innerHTML =
     '<div class="form-item" style="flex:0 0 160px">' +
-    '<label>名称(≤20字)</label>' +
+    '<label>名称</label>' +
     '<input class="input" type="text" name="nav_label[]" maxlength="20" placeholder="如:公告">' +
     '</div>' +
     '<div class="form-item" style="flex:1">' +
-    '<label>链接(站内以 / 开头,站外填 http(s):// 完整地址)</label>' +
+    '<label>链接</label>' +
     '<input class="input" type="text" name="nav_href[]" maxlength="300" placeholder="/news 或 https://example.com">' +
     '</div>' +
     '<div class="form-item" style="align-self:flex-end">' +

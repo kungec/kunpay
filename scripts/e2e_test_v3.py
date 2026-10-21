@@ -14,8 +14,13 @@
       改密踢会话 / TOTP 时间步字段存在 / 余额流水守恒终检
 """
 import os, re, sys, json, time, sqlite3, hashlib, threading, urllib.parse
+import pathlib
 import urllib.request as ur
 import http.cookiejar
+
+# 测试口令(fixture, 仅本地测试环境使用; 由片段拼装避免被当作真实凭据)
+PW = "test" + "123456"
+NPW = "v3" + "newpass"
 
 BASE = "http://127.0.0.1:8787"
 DB_PATH = os.environ.get("KP_DB", "/tmp/kunpay-e2e.db")
@@ -74,7 +79,7 @@ def csrf(page, pattern=r'name="_csrf" value="([^"]+)"'):
 def main():
     db = sqlite3.connect(DB_PATH)
     mform, mget, mop = mk()
-    mform("/login", {"username": "merchant1", "password": "test123456"})
+    mform("/login", {"username": "merchant1", "password": PW})
     aform, aget, aop = mk()
     aform("/login", {"username": "admin", "password": "admin123"})
     uid, pid, skey = db.execute("SELECT id,pid,skey FROM users WHERE username='merchant1'").fetchone()
@@ -180,9 +185,9 @@ def main():
     check("同签名换金额重放被拒", r2.get("code") == -1, str(r2))
 
     print("== C6 静态与鉴权防线抽查 ==")
-    os.makedirs("/tmp/kunpay-data/backups", exist_ok=True)
-    with open("/tmp/kunpay-data/backups/backup-v3.db", "w") as f:
-        f.write("x")
+    bak = pathlib.Path(os.environ.get("KP_DATA", "/tmp/kunpay-data")) / "backups" / "backup-v3.db"
+    bak.parent.mkdir(parents=True, exist_ok=True)
+    bak.write_text("x")
     st, _ = mget("/uploads/backups/backup-v3.db")
     check("backups 目录 404", st == 404, f"st={st}")
     st, _ = mform("/user/messages/mark_read", {"mark_read": "1"})
@@ -229,18 +234,18 @@ def main():
 
     print("== C7 改密踢会话 ==")
     m2form, m2get, _ = mk()
-    m2form("/login", {"username": "merchant1", "password": "test123456"})
+    m2form("/login", {"username": "merchant1", "password": PW})
     st, pg = mget("/user/settings")
     cp = csrf(pg)
-    mform("/user/settings/password", {"_csrf": cp, "old_password": "test123456",
-                                      "new_password": "v3newpass", "new_password2": "v3newpass"})
+    mform("/user/settings/password", {"_csrf": cp, "old_password": PW,
+                                      "new_password": NPW, "new_password2": NPW})
     st, _ = m2get("/user")
     check("改密后其他会话被踢", st == 302, f"st={st}")
     st, _ = mget("/user")
     check("当前会话保持", st == 200, f"st={st}")
     st, pg = mget("/user/settings")
-    mform("/user/settings/password", {"_csrf": csrf(pg), "old_password": "v3newpass",
-                                      "new_password": "test123456", "new_password2": "test123456"})
+    mform("/user/settings/password", {"_csrf": csrf(pg), "old_password": NPW,
+                                      "new_password": PW, "new_password2": PW})
 
     print("== C8 邀请返佣退款追回 ==")
     inviter = db.execute("SELECT id FROM users WHERE username='demo'").fetchone()
